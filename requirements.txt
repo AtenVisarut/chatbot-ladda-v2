@@ -3,20 +3,23 @@ fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 
-# HTTP client (compatible with supabase)
-httpx>=0.24,<0.26
+# HTTP client (compatible with all services)
+httpx>=0.28.1
 
 # Google Gemini AI (compatible with Python 3.13)
 google-generativeai==0.8.3
 
-# Supabase client
-supabase==2.3.4
+# Supabase client (updated for httpx compatibility)
+supabase>=2.10.0
 
-# OpenAI for embeddings
-openai==1.54.0
+# OpenAI for embeddings and LLM
+openai>=1.54.0
 
-# Note: LightRAG has compatibility issues
-# Using Supabase + keyword search instead (works better with Thai)
+# Sentence Transformers for E5 embeddings
+sentence-transformers>=2.2.0
+
+# LightRAG for advanced RAG
+lightrag-hku>=1.4.9
 
 # Image processing
 Pillow==11.0.0

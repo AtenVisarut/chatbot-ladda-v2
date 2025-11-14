@@ -1,26 +1,23 @@
 """
-Import CSV data to Supabase with embeddings
+Import CSV to Supabase WITH embeddings
+Complete setup in one go
 """
 import os
 import csv
 import json
+import sys
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from openai import OpenAI
 import time
 
-# Load environment variables
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize clients
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-def generate_embedding(text: str) -> list:
+def generate_embedding(text: str, openai_client: OpenAI) -> list:
     """Generate embedding using OpenAI"""
     try:
         response = openai_client.embeddings.create(
@@ -29,29 +26,40 @@ def generate_embedding(text: str) -> list:
         )
         return response.data[0].embedding
     except Exception as e:
-        print(f"Error generating embedding: {e}")
+        print(f"  ✗ Error generating embedding: {e}")
         return None
 
-def import_csv_to_supabase(csv_path: str):
-    """Import CSV data to Supabase with embeddings"""
+def import_csv_with_embeddings(csv_path: str):
+    """Import CSV data to Supabase WITH embeddings"""
     
-    print(f"Reading CSV file: {csv_path}")
+    print("=" * 60)
+    print("Import CSV to Supabase WITH Embeddings")
+    print("=" * 60)
+    
+    # Initialize clients
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    print(f"\n1. Reading CSV file: {csv_path}")
     
     with open(csv_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         rows = list(reader)
     
-    print(f"Found {len(rows)} products")
+    print(f"✓ Found {len(rows)} products")
     
     success_count = 0
     error_count = 0
+    
+    print("\n2. Processing products (generating embeddings)...")
+    print("   This will take a few minutes...")
     
     for idx, row in enumerate(rows, 1):
         try:
             # Extract key fields
             product_name = row.get('ชื่อสินค้า (ชื่อการค้า)', '').strip()
             if not product_name:
-                print(f"Row {idx}: Skipping - no product name")
+                print(f"[{idx}/{len(rows)}] Skipping - no product name")
                 continue
             
             active_ingredient = row.get('สารสําคัญ', '').strip()
@@ -62,20 +70,11 @@ def import_csv_to_supabase(csv_path: str):
             formulation = row.get('Formulation', '').strip()
             usage_rate = row.get('อัตราการใช้', '').strip()
             
-            # Create enhanced text for embedding (focus on pest control info)
-            # Extract product type
-            product_type = ""
-            if "Insecticide" in product_group or "แมลง" in target_pest or "หนอน" in target_pest or "เพลี้ย" in target_pest:
-                product_type = "ยากำจัดแมลง ศัตรูพืช"
-            elif "Fungicide" in product_group or "รา" in target_pest or "โรค" in target_pest:
-                product_type = "ยากำจัดเชื้อรา โรคพืช"
-            elif "Herbicide" in product_group or "วัชพืช" in target_pest:
-                product_type = "ยากำจัดวัชพืช"
+            print(f"[{idx}/{len(rows)}] {product_name}")
             
-            # Build comprehensive embedding text
+            # Build text for embedding
             embedding_parts = [
                 f"ชื่อสินค้า: {product_name}",
-                f"ประเภท: {product_type}" if product_type else "",
                 f"สารสำคัญ: {active_ingredient}" if active_ingredient else "",
                 f"ศัตรูพืชที่กำจัดได้: {target_pest}" if target_pest else "",
                 f"ใช้ได้กับพืช: {applicable_crops}" if applicable_crops else "",
@@ -85,11 +84,11 @@ def import_csv_to_supabase(csv_path: str):
             embedding_text = " | ".join([p for p in embedding_parts if p]).strip()
             
             # Generate embedding
-            print(f"[{idx}/{len(rows)}] Processing: {product_name}")
-            embedding = generate_embedding(embedding_text)
+            print(f"  → Generating embedding...")
+            embedding = generate_embedding(embedding_text, openai_client)
             
             if not embedding:
-                print(f"  ⚠️  Failed to generate embedding")
+                print(f"  ✗ Failed to generate embedding")
                 error_count += 1
                 continue
             
@@ -108,12 +107,13 @@ def import_csv_to_supabase(csv_path: str):
             }
             
             # Insert to Supabase
+            print(f"  → Inserting to Supabase...")
             result = supabase.table('products').insert(data).execute()
             
-            print(f"  ✓ Imported successfully")
+            print(f"  ✓ Success!")
             success_count += 1
             
-            # Rate limiting
+            # Rate limiting (OpenAI has rate limits)
             time.sleep(0.5)
             
         except Exception as e:
@@ -121,15 +121,20 @@ def import_csv_to_supabase(csv_path: str):
             error_count += 1
             continue
     
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"Import completed!")
-    print(f"Success: {success_count}")
-    print(f"Errors: {error_count}")
-    print("="*60)
+    print(f"✓ Success: {success_count}")
+    print(f"✗ Errors: {error_count}")
+    print("=" * 60)
+    
+    if success_count > 0:
+        print("\n✅ Vector Search is ready to use!")
+        print("   All products have embeddings")
+        print("   You can now start the server: python app/main.py")
+    else:
+        print("\n❌ No products were imported")
 
 if __name__ == "__main__":
-    import sys
-    
     # Check if CSV path provided as argument
     if len(sys.argv) > 1:
         csv_file = sys.argv[1]
@@ -141,7 +146,8 @@ if __name__ == "__main__":
         print(f"Usage: python {sys.argv[0]} <path_to_csv>")
         exit(1)
     
-    print("Starting CSV import to Supabase...")
-    print("="*60)
+    print("Starting CSV import with embeddings to Supabase...")
+    print("This will take approximately 2-3 minutes for 43 products")
+    print("=" * 60)
     
-    import_csv_to_supabase(csv_file)
+    import_csv_with_embeddings(csv_file)
