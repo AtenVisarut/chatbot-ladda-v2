@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+venv311/
 ENV/
 build/
 develop-eggs/
@@ -23,10 +24,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Environment
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -35,19 +36,37 @@ htmlcov/
 *.swo
 *~
 
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+README.md
+LICENSE
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Data files
+*.csv
+*.json
+*.xlsx
+Data ICPL product for iDA.csv
+
+# Logs
+*.log
+logs/
+
 # OS
 .DS_Store
 Thumbs.db
 
-# Git
-.git/
-.gitignore
-
-# Documentation
-README.md
-docs/
-
-# Scripts
-test_*.py
-setup_*.py
-populate_*.py
+# Temporary files
+*.tmp
+*.bak
+*.swp

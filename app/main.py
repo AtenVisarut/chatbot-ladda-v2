@@ -96,8 +96,8 @@ logger.info("Using Supabase Vector Search + Gemini Filtering")
 pending_image_contexts: Dict[str, Dict[str, Any]] = {}
 
 # Memory configuration
-MAX_MEMORY_MESSAGES = 10  # Keep last 10 messages for context
-MEMORY_CONTEXT_WINDOW = 5  # Use last 5 messages for context
+MAX_MEMORY_MESSAGES = 20 # Keep last 20messages for context
+MEMORY_CONTEXT_WINDOW = 10 # Use last 10messages for context
 
 async def add_to_memory(user_id: str, role: str, content: str, metadata: dict = None):
     """Add message to conversation memory in Supabase"""
@@ -255,6 +255,54 @@ class ProductRecommendation(BaseModel):
 # ============================================================================#
 # Helpers
 # ============================================================================#
+def post_process_answer(answer: str) -> str:
+    """Post-process Gemini answer for better quality"""
+    if not answer:
+        return ""
+    
+    import re
+    
+    # 1. Remove markdown formatting
+    answer = answer.replace("```", "")
+    answer = answer.replace("**", "")
+    answer = answer.replace("##", "")
+    answer = answer.replace("###", "")
+    answer = re.sub(r'\*\*([^*]+)\*\*', r'\1', answer)  # **text** → text
+    answer = re.sub(r'\*([^*]+)\*', r'\1', answer)  # *text* → text
+    
+    # 2. Fix Thai encoding issues
+    answer = re.sub(r'([ก-ฮ])Ğ([ำิีุูเแโใไ่้๊๋])', r'\1\2', answer)
+    answer = answer.replace('Ğ', '')
+    answer = answer.replace('�', '')
+    answer = answer.replace('\x00', '')
+    
+    # 3. Fix spacing issues
+    answer = re.sub(r'\s+', ' ', answer)  # Multiple spaces → single space
+    answer = answer.replace(' ,', ',')
+    answer = answer.replace(' .', '.')
+    answer = answer.replace(' :', ':')
+    answer = answer.replace('( ', '(')
+    answer = answer.replace(' )', ')')
+    
+    # 4. Fix bullet points (convert markdown to Thai style)
+    answer = re.sub(r'^\s*[-*]\s+', '• ', answer, flags=re.MULTILINE)
+    answer = re.sub(r'\n\s*[-*]\s+', '\n• ', answer)
+    
+    # 5. Ensure proper line breaks
+    answer = re.sub(r'\n{3,}', '\n\n', answer)  # Max 2 line breaks
+    
+    # 6. Remove leading/trailing whitespace
+    answer = answer.strip()
+    
+    # 7. Fix common Thai typos
+    answer = answer.replace('ต้', 'ต้')
+    answer = answer.replace('ต', 'ต')
+    
+    # 8. Ensure emoji spacing
+    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍])([ก-๙A-Za-z])', r'\1 \2', answer)
+    
+    return answer
+
 def clean_knowledge_text(text: str) -> str:
     """Clean and format knowledge text for better readability"""
     if not text:
@@ -266,11 +314,25 @@ def clean_knowledge_text(text: str) -> str:
     # Common patterns: จĞำ, ลĞำ, ทĞำ, นĞ้ำ, กĞำ
     text = re.sub(r'([ก-ฮ])Ğ([ำ])', r'\1\2', text)  # จĞำ → จำ
     text = re.sub(r'([ก-ฮ])Ğ([้])', r'\1\2', text)  # นĞ้ → น้
+    text = re.sub(r'([ก-ฮ])Ğ([ิ])', r'\1\2', text)  # กĞิ → กิ
+    text = re.sub(r'([ก-ฮ])Ğ([ี])', r'\1\2', text)  # กĞี → กี
+    text = re.sub(r'([ก-ฮ])Ğ([ุ])', r'\1\2', text)  # กĞุ → กุ
+    text = re.sub(r'([ก-ฮ])Ğ([ู])', r'\1\2', text)  # กĞู → กู
+    text = re.sub(r'([ก-ฮ])Ğ([่])', r'\1\2', text)  # กĞ่ → ก่
+    text = re.sub(r'([ก-ฮ])Ğ([้])', r'\1\2', text)  # กĞ้ → ก้
+    text = re.sub(r'([ก-ฮ])Ğ([๊])', r'\1\2', text)  # กĞ๊ → ก๊
+    text = re.sub(r'([ก-ฮ])Ğ([๋])', r'\1\2', text)  # กĞ๋ → ก๋
     text = re.sub(r'Ğ', '', text)  # Remove remaining Ğ
     
     # Fix other corrupted characters
     text = text.replace('ต้', 'ต้')  # Fix tone marks
     text = text.replace('ต', 'ต')
+    text = text.replace('�', '')  # Remove replacement character
+    text = text.replace('\x00', '')  # Remove null character
+    
+    # Fix common Thai encoding issues
+    text = text.replace('à¸', '')  # Remove Thai encoding prefix
+    text = text.replace('à¹', '')  # Remove Thai encoding prefix
     
     # Remove excessive whitespace
     text = ' '.join(text.split())
@@ -281,10 +343,11 @@ def clean_knowledge_text(text: str) -> str:
     text = text.replace(' .', '.')  # Space before period
     text = text.replace('( ', '(')  # Space after opening parenthesis
     text = text.replace(' )', ')')  # Space before closing parenthesis
+    text = text.replace(' :', ':')  # Space before colon
     
-    # Fix Thai-specific issues
-    text = text.replace('ฺ', '')  # Remove Thai character above
-    text = text.replace('์', '')  # Remove Thai character above (optional - keep for now)
+    # Fix Thai-specific issues (keep important marks)
+    # text = text.replace('ฺ', '')  # Keep Thai character above
+    # text = text.replace('์', '')  # Keep Thai character above
     
     # Remove multiple consecutive spaces
     text = re.sub(r'\s+', ' ', text)
@@ -294,6 +357,11 @@ def clean_knowledge_text(text: str) -> str:
     
     # Remove leading/trailing whitespace
     text = text.strip()
+    
+    # Remove lines with only special characters
+    lines = text.split('\n')
+    cleaned_lines = [line for line in lines if line.strip() and not re.match(r'^[^\w\s]+$', line.strip())]
+    text = '\n'.join(cleaned_lines)
     
     return text
 
@@ -706,6 +774,447 @@ def build_recommendations_from_data(products_data: List[Dict]) -> List[ProductRe
 
 
 # ============================================================================#
+# Core: Intent-based Product Recommendation (NEW)
+# ============================================================================#
+async def recommend_products_by_intent(question: str, keywords: dict) -> str:
+    """แนะนำผลิตภัณฑ์ตาม intent ของผู้ใช้ (เพิ่มผลผลิต, แก้ปัญหา, ฯลฯ)"""
+    try:
+        intent = keywords.get('intent')
+        logger.info(f"🎯 Intent-based recommendation: {intent}")
+        logger.info(f"📝 Keywords: crops={keywords.get('crops')}, pests={keywords.get('pests')}")
+        
+        if not supabase_client:
+            logger.error("❌ Supabase client not available")
+            return await answer_product_question(question, keywords)
+        
+        if not e5_model:
+            logger.error("❌ E5 model not available")
+            return await answer_product_question(question, keywords)
+        
+        intent = keywords.get("intent")
+        crops = keywords.get("crops", [])
+        pests = keywords.get("pests", [])
+        
+        # Build search query based on intent
+        search_queries = []
+        
+        if intent == "increase_yield":
+            # เพิ่มผลผลิต
+            if crops:
+                for crop in crops[:2]:
+                    search_queries.append(f"เพิ่มผลผลิต {crop}")
+                    search_queries.append(f"ปุ๋ยบำรุง {crop}")
+                    search_queries.append(f"ฮอร์โมน {crop}")
+            else:
+                search_queries.append("เพิ่มผลผลิต ปุ๋ย ฮอร์โมน")
+        
+        elif intent == "solve_problem":
+            # แก้ปัญหาศัตรูพืช
+            if pests and crops:
+                for pest in pests[:2]:
+                    for crop in crops[:2]:
+                        search_queries.append(f"กำจัด {pest} {crop}")
+            elif pests:
+                for pest in pests[:2]:
+                    search_queries.append(f"กำจัด {pest}")
+            elif crops:
+                for crop in crops[:2]:
+                    search_queries.append(f"ป้องกันโรค {crop}")
+        
+        elif intent == "general_care":
+            # ดูแลทั่วไป
+            if crops:
+                for crop in crops[:2]:
+                    search_queries.append(f"ดูแล {crop}")
+                    search_queries.append(f"บำรุง {crop}")
+        
+        else:
+            # Default: product inquiry
+            if crops:
+                search_queries.append(f"ผลิตภัณฑ์ {crops[0]}")
+            if pests:
+                search_queries.append(f"กำจัด {pests[0]}")
+        
+        # Vector search for each query
+        all_products = []
+        logger.info(f"🔍 Searching with {len(search_queries)} queries: {search_queries[:3]}")
+        
+        for query in search_queries[:3]:  # Top 3 queries
+            try:
+                logger.info(f"   → Query: '{query}'")
+                query_embedding = e5_model.encode(f"query: {query}", normalize_embeddings=True).tolist()
+                
+                result = supabase_client.rpc(
+                    'match_products',
+                    {
+                        'query_embedding': query_embedding,
+                        'match_threshold': 0.25,  # Lower threshold for more results
+                        'match_count': 10
+                    }
+                ).execute()
+                
+                if result.data:
+                    all_products.extend(result.data)
+                    logger.info(f"   ✓ Found {len(result.data)} products")
+                else:
+                    logger.warning(f"   ⚠️ No products found")
+            except Exception as e:
+                logger.error(f"   ❌ Vector search failed: {e}", exc_info=True)
+        
+        # Remove duplicates
+        seen = set()
+        unique_products = []
+        for p in all_products:
+            pname = p.get('product_name', '')
+            if pname and pname not in seen:
+                seen.add(pname)
+                unique_products.append(p)
+        
+        logger.info(f"📦 Total products: {len(all_products)}, Unique: {len(unique_products)}")
+        
+        if not unique_products:
+            # Fallback to keyword search
+            logger.warning("⚠️ No products from vector search, trying keyword search")
+            return await answer_product_question(question, keywords)
+        
+        # Log product names
+        product_names = [p.get('product_name', 'N/A') for p in unique_products[:5]]
+        logger.info(f"📋 Top products: {', '.join(product_names)}")
+        
+        # Use Gemini to filter and create natural response
+        products_text = ""
+        for idx, p in enumerate(unique_products[:15], 1):  # Top 15 for Gemini
+            products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
+            products_text += f"\n    สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
+            products_text += f"\n    ศัตรูพืช: {p.get('target_pest', 'N/A')[:100]}"
+            products_text += f"\n    ใช้กับพืช: {p.get('applicable_crops', 'N/A')[:80]}"
+            products_text += f"\n    อัตราใช้: {p.get('usage_rate', 'N/A')}"
+            products_text += f"\n    Similarity: {p.get('similarity', 0):.0%}\n"
+        
+        # Create intent-specific prompt
+        if intent == "increase_yield":
+            prompt = f"""คุณคือผู้เชี่ยวชาญด้านการเพิ่มผลผลิตพืช
+
+คำถามจากเกษตรกร: {question}
+
+ผลิตภัณฑ์ที่พบในระบบ:
+{products_text}
+
+🎯 **ภารกิจ**: แนะนำผลิตภัณฑ์เพื่อเพิ่มผลผลิต
+
+📋 **คำแนะนำในการตอบ**:
+1. **เลือกผลิตภัณฑ์ที่เหมาะสม** 3-5 รายการ:
+   - ปุ๋ยบำรุง (NPK, ปุ๋ยอินทรีย์)
+   - ฮอร์โมนเร่งการเจริญเติบโต
+   - สารเสริมภูมิคุ้มกัน
+   - ผลิตภัณฑ์ที่ช่วยเพิ่มคุณภาพผลผลิต
+
+2. **จัดกลุ่มผลิตภัณฑ์**:
+   - กลุ่มที่ 1: ปุ๋ยบำรุง (เพิ่มการเจริญเติบโต)
+   - กลุ่มที่ 2: ฮอร์โมน/PGR (เพิ่มผลผลิต)
+   - กลุ่มที่ 3: ป้องกันโรค (รักษาคุณภาพ)
+
+3. **แสดงรายละเอียด**:
+   - ชื่อผลิตภัณฑ์
+   - ประโยชน์ (เพิ่มผลผลิตอย่างไร)
+   - วิธีใช้และเวลาที่เหมาะสม
+   - ผลลัพธ์ที่คาดหวัง
+
+4. **เพิ่มคำแนะนำ**:
+   - ควรใช้ร่วมกันอย่างไร
+   - ช่วงเวลาที่เหมาะสม (ก่อนออกดอก, ติดผล)
+   - ข้อควรระวัง
+
+5. **ใช้ภาษาง่ายๆ** พร้อม emoji (🌱 💪 ⭐ ✅)
+6. **ไม่ใช้ markdown** - ตอบเป็นข้อความธรรมดา
+
+⚠️ **สำคัญ**:
+- เลือกเฉพาะผลิตภัณฑ์ที่เกี่ยวข้องกับการเพิ่มผลผลิต
+- ถ้าถามเกี่ยวกับพืชเฉพาะ ให้เลือกที่ใช้กับพืชนั้นได้
+- ห้ามแนะนำยากำจัดศัตรูพืช (ยกเว้นเป็นส่วนเสริม)
+
+ตอบคำถาม:"""
+        
+        elif intent == "solve_problem":
+            prompt = f"""คุณคือผู้เชี่ยวชาญด้านการแก้ปัญหาศัตรูพืช
+
+คำถามจากเกษตรกร: {question}
+
+ผลิตภัณฑ์ที่พบในระบบ:
+{products_text}
+
+🎯 **ภารกิจ**: แนะนำผลิตภัณฑ์เพื่อแก้ปัญหาศัตรูพืช
+
+📋 **คำแนะนำในการตอบ**:
+1. **วิเคราะห์ปัญหา**:
+   - ศัตรูพืชที่พบ: {', '.join(pests) if pests else 'ไม่ระบุ'}
+   - พืชที่ปลูก: {', '.join(crops) if crops else 'ไม่ระบุ'}
+
+2. **เลือกผลิตภัณฑ์ที่เหมาะสม** 3-5 รายการ:
+   - ต้องกำจัดศัตรูพืชที่ระบุได้
+   - ต้องใช้กับพืชที่ระบุได้
+   - จัดลำดับตามความเหมาะสม
+
+3. **แสดงรายละเอียด**:
+   - ชื่อผลิตภัณฑ์
+   - สารสำคัญ
+   - ศัตรูพืชที่กำจัดได้
+   - อัตราการใช้
+   - วิธีใช้ให้ได้ผล
+
+4. **เพิ่มเคล็ดลับ**:
+   - เวลาที่เหมาะสมในการพ่น
+   - จำนวนครั้งที่ควรพ่น
+   - การสลับสารเพื่อป้องกันการดื้อยา
+   - ข้อควรระวัง
+
+5. **ใช้ภาษาง่ายๆ** พร้อม emoji (💊 🐛 ⚡ ✅)
+6. **ไม่ใช้ markdown** - ตอบเป็นข้อความธรรมดา
+
+⚠️ **สำคัญ**:
+- เลือกเฉพาะผลิตภัณฑ์ที่กำจัดศัตรูพืชที่ระบุได้
+- ถ้าระบุพืช ต้องเลือกที่ใช้กับพืชนั้นได้
+- ห้ามแนะนำผลิตภัณฑ์ที่ไม่เกี่ยวข้อง
+
+ตอบคำถาม:"""
+        
+        else:
+            # General product inquiry
+            prompt = f"""คุณคือผู้เชี่ยวชาญด้านผลิตภัณฑ์เกษตรของ ICP Ladda
+
+คำถามจากเกษตรกร: {question}
+
+ผลิตภัณฑ์ที่พบในระบบ:
+{products_text}
+
+🎯 **ภารกิจ**: แนะนำผลิตภัณฑ์ที่เหมาะสม
+
+📋 **คำแนะนำในการตอบ**:
+1. **เลือกผลิตภัณฑ์ที่เหมาะสม** 3-5 รายการ
+2. **จัดลำดับ** ตามความเหมาะสม
+3. **แสดงรายละเอียด** ครบถ้วน
+4. **เพิ่มคำแนะนำ** การใช้งาน
+5. **ใช้ภาษาง่ายๆ** พร้อม emoji
+6. **ไม่ใช้ markdown**
+
+ตอบคำถาม:"""
+        
+        # Check if Gemini is available
+        if not gemini_model:
+            logger.warning("Gemini model not available, using simple format")
+            return await format_product_list_simple(unique_products[:5], question, intent)
+        
+        try:
+            response = gemini_model.generate_content(prompt)
+            answer = response.text.strip()
+            answer = answer.replace("```", "").replace("**", "").replace("##", "")
+            
+            # Add footer
+            answer += "\n\n" + "="*40
+            answer += "\n📚 ดูรายละเอียดผลิตภัณฑ์ทั้งหมด:"
+            answer += "\n🔗 https://www.icpladda.com/about/"
+            answer += "\n\n💡 หากต้องการข้อมูลเพิ่มเติม กรุณาถามได้เลยค่ะ 😊"
+            
+            logger.info(f"✓ Intent-based answer generated ({intent})")
+            return answer
+            
+        except Exception as e:
+            logger.error(f"Gemini generation failed: {e}", exc_info=True)
+            # Fallback to simple product list
+            return await format_product_list_simple(unique_products[:5], question, intent)
+        
+    except Exception as e:
+        logger.error(f"Error in intent-based recommendation: {e}", exc_info=True)
+        return await answer_product_question(question, keywords)
+
+async def format_product_list_simple(products: list, question: str, intent: str) -> str:
+    """Format product list as simple fallback"""
+    if intent == "increase_yield":
+        header = "🌱 ผลิตภัณฑ์แนะนำสำหรับเพิ่มผลผลิต:\n"
+    elif intent == "solve_problem":
+        header = "💊 ผลิตภัณฑ์แนะนำสำหรับแก้ปัญหาศัตรูพืช:\n"
+    else:
+        header = "📦 ผลิตภัณฑ์แนะนำ:\n"
+    
+    response = header
+    for idx, p in enumerate(products, 1):
+        response += f"\n{idx}. {p.get('product_name', 'N/A')}"
+        if p.get('active_ingredient'):
+            response += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
+        if p.get('target_pest'):
+            pest = p.get('target_pest')[:80] + "..." if len(p.get('target_pest', '')) > 80 else p.get('target_pest', '')
+            response += f"\n   ศัตรูพืช: {pest}"
+        if p.get('applicable_crops'):
+            crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
+            response += f"\n   ใช้กับพืช: {crops}"
+        if p.get('usage_rate'):
+            response += f"\n   อัตราใช้: {p.get('usage_rate')}"
+        response += "\n"
+        if p.get('active_ingredient'):
+            response += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
+        if p.get('target_pest'):
+            pest = p.get('target_pest')[:80] + "..." if len(p.get('target_pest', '')) > 80 else p.get('target_pest', '')
+            response += f"\n   ศัตรูพืช: {pest}"
+        if p.get('applicable_crops'):
+            crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
+            response += f"\n   ใช้กับพืช: {crops}"
+        if p.get('usage_rate'):
+            response += f"\n   อัตราใช้: {p.get('usage_rate')}"
+        response += "\n"
+    
+    response += "\n📚 ดูรายละเอียดเพิ่มเติม: https://www.icpladda.com/about/"
+    return response
+
+# ============================================================================#
+# Core: Product-specific Q&A
+# ============================================================================#
+async def answer_product_question(question: str, keywords: dict) -> str:
+    """Answer product-specific questions with high accuracy"""
+    try:
+        logger.info(f"Product-specific query: {question[:50]}...")
+        
+        if not supabase_client:
+            return "ขออภัยค่ะ ระบบไม่พร้อมใช้งานในขณะนี้"
+        
+        products_data = []
+        
+        # Search by pest/disease
+        if keywords["pests"]:
+            for pest in keywords["pests"][:2]:
+                result = supabase_client.table('products')\
+                    .select('*')\
+                    .ilike('target_pest', f'%{pest}%')\
+                    .limit(5)\
+                    .execute()
+                if result.data:
+                    products_data.extend(result.data)
+        
+        # Search by crop
+        if keywords["crops"]:
+            for crop in keywords["crops"][:2]:
+                result = supabase_client.table('products')\
+                    .select('*')\
+                    .ilike('applicable_crops', f'%{crop}%')\
+                    .limit(5)\
+                    .execute()
+                if result.data:
+                    products_data.extend(result.data)
+        
+        # Search by product name
+        if keywords["products"]:
+            for prod in keywords["products"]:
+                if len(prod) > 3:
+                    result = supabase_client.table('products')\
+                        .select('*')\
+                        .ilike('product_name', f'%{prod}%')\
+                        .limit(5)\
+                        .execute()
+                    if result.data:
+                        products_data.extend(result.data)
+        
+        # If no specific keywords, get general products
+        if not products_data:
+            result = supabase_client.table('products')\
+                .select('*')\
+                .limit(10)\
+                .execute()
+            if result.data:
+                products_data = result.data
+        
+        if not products_data:
+            return "ขออภัยค่ะ ไม่พบผลิตภัณฑ์ที่เกี่ยวข้อง กรุณาระบุชื่อพืชหรือศัตรูพืชที่ต้องการกำจัดค่ะ 🌱"
+        
+        # Remove duplicates
+        seen = set()
+        unique_products = []
+        for p in products_data:
+            pname = p.get('product_name', '')
+            if pname and pname not in seen:
+                seen.add(pname)
+                unique_products.append(p)
+        
+        # Use Gemini to filter and format response
+        products_text = ""
+        for idx, p in enumerate(unique_products[:10], 1):
+            products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
+            products_text += f"\n    สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
+            products_text += f"\n    ศัตรูพืช: {p.get('target_pest', 'N/A')[:100]}"
+            products_text += f"\n    ใช้กับพืช: {p.get('applicable_crops', 'N/A')[:80]}"
+            products_text += f"\n    อัตราใช้: {p.get('usage_rate', 'N/A')}"
+            products_text += "\n"
+        
+        prompt = f"""คุณคือผู้เชี่ยวชาญด้านผลิตภัณฑ์ป้องกันกำจัดศัตรูพืชของ ICP Ladda
+
+คำถามจากเกษตรกร: {question}
+
+ผลิตภัณฑ์ที่พบในระบบ:
+{products_text}
+
+คำแนะนำในการตอบ:
+1. **วิเคราะห์คำถาม** - เข้าใจว่าเกษตรกรต้องการอะไร
+2. **เลือกผลิตภัณฑ์ที่เหมาะสม** - เลือก 3-5 รายการที่ตรงที่สุด
+3. **จัดลำดับ** - ผลิตภัณฑ์ที่เหมาะสมที่สุดก่อน
+4. **แสดงรายละเอียด**:
+   - ชื่อผลิตภัณฑ์
+   - สารสำคัญ
+   - ศัตรูพืชที่กำจัดได้
+   - พืชที่ใช้ได้
+   - อัตราการใช้
+   - วิธีใช้โดยย่อ
+5. **เพิ่มคำแนะนำ**:
+   - อ่านฉลากก่อนใช้
+   - ใช้อุปกรณ์ป้องกันตัว
+   - ทดสอบในพื้นที่เล็กก่อน
+6. **ใช้ภาษาง่ายๆ** พร้อม emoji (💊 🌱 ✅ ⚠️)
+7. **ไม่ใช้ markdown** - ตอบเป็นข้อความธรรมดา
+
+⚠️ **เกณฑ์การเลือก**:
+- ถ้าถามเกี่ยวกับพืชเฉพาะ → เลือกเฉพาะที่ใช้กับพืชนั้นได้
+- ถ้าถามเกี่ยวกับศัตรูพืช → เลือกที่กำจัดศัตรูพืชนั้นได้
+- ถ้าถามทั่วไป → แนะนำผลิตภัณฑ์ยอดนิยม 3-5 รายการ
+
+ตอบคำถาม:"""
+
+        try:
+            response = gemini_model.generate_content(prompt)
+            answer = response.text.strip()
+            answer = answer.replace("```", "").replace("**", "").replace("##", "")
+            
+            # Add footer
+            answer += "\n\n" + "="*40
+            answer += "\n📚 ดูรายละเอียดผลิตภัณฑ์ทั้งหมด:"
+            answer += "\n🔗 https://www.icpladda.com/about/"
+            answer += "\n\n💡 หากต้องการข้อมูลเพิ่มเติม กรุณาถามได้เลยค่ะ 😊"
+            
+            logger.info("✓ Product answer generated successfully")
+            return answer
+            
+        except Exception as e:
+            logger.error(f"Gemini generation failed: {e}")
+            # Fallback: return top 3 products directly
+            response = "💊 ผลิตภัณฑ์แนะนำจาก ICP Ladda:\n"
+            for idx, p in enumerate(unique_products[:3], 1):
+                response += f"\n{idx}. {p.get('product_name')}"
+                if p.get('active_ingredient'):
+                    response += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
+                if p.get('target_pest'):
+                    pest = p.get('target_pest')[:80] + "..." if len(p.get('target_pest', '')) > 80 else p.get('target_pest', '')
+                    response += f"\n   ศัตรูพืช: {pest}"
+                if p.get('applicable_crops'):
+                    crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
+                    response += f"\n   ใช้กับพืช: {crops}"
+                if p.get('usage_rate'):
+                    response += f"\n   อัตราใช้: {p.get('usage_rate')}"
+                response += "\n"
+            
+            response += "\n📚 ดูรายละเอียดเพิ่มเติม: https://www.icpladda.com/about/"
+            return response
+        
+    except Exception as e:
+        logger.error(f"Error in product Q&A: {e}", exc_info=True)
+        return "ขออภัยค่ะ ไม่สามารถค้นหาผลิตภัณฑ์ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ 🙏"
+
+# ============================================================================#
 # Core: Smart Q&A - Answer questions using Knowledge Base
 # ============================================================================#
 async def answer_question_with_knowledge(question: str) -> str:
@@ -769,60 +1278,191 @@ async def answer_question_with_knowledge(question: str) -> str:
             logger.warning(f"Vector search failed: {e}")
             return await answer_with_keyword_search(question)
         
-        # 3. Search for relevant products
+        # 3. Search for relevant products (Enhanced)
         products_info = ""
         try:
             # Extract keywords for product search
             keywords = extract_keywords_from_question(question)
-            if keywords:
-                product_result = supabase_client.table('products')\
-                    .select('product_name, active_ingredient, target_pest, how_to_use , usage_rate')\
-                    .ilike('target_pest', f'%{keywords[0]}%')\
-                    .limit(3)\
-                    .execute()
+            products_data = []
+            
+            # Strategy 1: Search by pest/disease
+            if keywords["pests"]:
+                for pest in keywords["pests"][:2]:  # Top 2 pests
+                    result = supabase_client.table('products')\
+                        .select('product_name, active_ingredient, target_pest, applicable_crops, how_to_use, usage_rate')\
+                        .ilike('target_pest', f'%{pest}%')\
+                        .limit(5)\
+                        .execute()
+                    if result.data:
+                        products_data.extend(result.data)
+            
+            # Strategy 2: Search by crop
+            if keywords["crops"]:
+                for crop in keywords["crops"][:2]:  # Top 2 crops
+                    result = supabase_client.table('products')\
+                        .select('product_name, active_ingredient, target_pest, applicable_crops, how_to_use, usage_rate')\
+                        .ilike('applicable_crops', f'%{crop}%')\
+                        .limit(5)\
+                        .execute()
+                    if result.data:
+                        products_data.extend(result.data)
+            
+            # Strategy 3: Search by product name (if asking about specific product)
+            if keywords["products"]:
+                for prod in keywords["products"][:2]:
+                    if len(prod) > 3:  # Skip short words like "ยา", "ใช้"
+                        result = supabase_client.table('products')\
+                            .select('product_name, active_ingredient, target_pest, applicable_crops, how_to_use, usage_rate')\
+                            .ilike('product_name', f'%{prod}%')\
+                            .limit(5)\
+                            .execute()
+                        if result.data:
+                            products_data.extend(result.data)
+            
+            # Remove duplicates and format
+            if products_data:
+                seen = set()
+                unique_products = []
+                for p in products_data:
+                    pname = p.get('product_name', '')
+                    if pname and pname not in seen:
+                        seen.add(pname)
+                        unique_products.append(p)
                 
-                if product_result.data:
-                    products_list = []
-                    for p in product_result.data:
-                        products_list.append(
-                            f"- {p.get('product_name')}: {p.get('active_ingredient', 'N/A')}"
-                        )
-                    products_info = "\n".join(products_list)
+                # Limit to top 5 products
+                products_list = []
+                for p in unique_products[:5]:
+                    prod_text = f"\n📦 {p.get('product_name')}"
+                    if p.get('active_ingredient'):
+                        prod_text += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
+                    if p.get('target_pest'):
+                        pest_short = p.get('target_pest')[:80] + "..." if len(p.get('target_pest', '')) > 80 else p.get('target_pest', '')
+                        prod_text += f"\n   ศัตรูพืช: {pest_short}"
+                    if p.get('applicable_crops'):
+                        crops_short = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
+                        prod_text += f"\n   ใช้กับพืช: {crops_short}"
+                    if p.get('usage_rate'):
+                        prod_text += f"\n   อัตราใช้: {p.get('usage_rate')}"
+                    products_list.append(prod_text)
+                
+                products_info = "\n".join(products_list)
+                logger.info(f"Found {len(unique_products)} relevant products")
         except Exception as e:
             logger.warning(f"Product search failed: {e}")
         
         # 4. Use Gemini to generate natural answer
-        prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชและศัตรูพืชของกรมวิชาการเกษตรไทย มีประสบการณ์ 20 ปี
+        # Detect if this is a product-focused query
+        keywords = extract_keywords_from_question(question)
+        is_product_query = keywords["is_product_query"] or any(word in question.lower() for word in ["ผลิตภัณฑ์", "สินค้า", "ยา", "แนะนำ", "ใช้อะไร", "พ่นอะไร"])
+        
+        if is_product_query and products_info:
+            # Product-focused response
+            prompt = f"""คุณคือผู้เชี่ยวชาญด้านผลิตภัณฑ์ป้องกันกำจัดศัตรูพืชของ ICP Ladda
 
 คำถามจากเกษตรกร: {question}
 
-ความรู้จากฐานข้อมูล:
-{combined_knowledge}
-
 ผลิตภัณฑ์ที่เกี่ยวข้อง:
-{products_info if products_info else "ไม่มีข้อมูลผลิตภัณฑ์"}
+{products_info}
+
+ความรู้เพิ่มเติม:
+{combined_knowledge if combined_knowledge else "ไม่มีข้อมูลเพิ่มเติม"}
 
 คำแนะนำในการตอบ:
-1. **อ่านความรู้ทั้งหมดอย่างละเอียด** แล้วสรุปเป็นคำตอบที่เข้าใจง่าย
-2. **จัดระเบียบคำตอบ** ให้มีหัวข้อชัดเจน เช่น:
-   - สาเหตุ/ลักษณะ
-   - วิธีป้องกัน
-   - วิธีกำจัด/รักษา
-   - ผลิตภัณฑ์แนะนำ (ถ้ามี)
-3. **ให้ข้อมูลเฉพาะเจาะจง** ที่ตอบคำถามโดยตรง
-4. **ใช้ภาษาง่ายๆ** ที่เกษตรกรเข้าใจได้
-5. **เพิ่ม emoji** ให้น่าอ่าน (🌱 🐛 🍄 💊 ⚠️)
-6. **จบด้วยคำแนะนำเพิ่มเติม** หรือข้อควรระวัง
+1. **เน้นผลิตภัณฑ์เป็นหลัก** - แนะนำผลิตภัณฑ์ที่ตรงกับคำถามมากที่สุด
+2. **จัดลำดับความเหมาะสม** - ผลิตภัณฑ์ที่เหมาะสมที่สุดก่อน
+3. **ระบุรายละเอียดสำคัญ**:
+   - ชื่อผลิตภัณฑ์
+   - สารสำคัญ
+   - ศัตรูพืชที่กำจัดได้
+   - พืชที่ใช้ได้
+   - อัตราการใช้
+   - วิธีใช้โดยย่อ
+4. **เพิ่มคำแนะนำ** เช่น:
+   - ควรอ่านฉลากก่อนใช้
+   - ทดสอบในพื้นที่เล็กก่อน
+   - ใช้อุปกรณ์ป้องกันตัว
+5. **ใช้ภาษาง่ายๆ** ที่เกษตรกรเข้าใจได้
+6. **เพิ่ม emoji** ให้น่าอ่าน (💊 🌱 ✅ ⚠️)
 7. **ตอบเป็นภาษาไทยเท่านั้น** ไม่ใช้ markdown
 
+⚠️ **สำคัญ**: 
+- ถ้าถามเกี่ยวกับพืชเฉพาะ (เช่น ทุเรียน ข้าว มะม่วง) ให้เลือกเฉพาะผลิตภัณฑ์ที่ใช้กับพืชนั้นได้
+- ถ้าถามเกี่ยวกับศัตรูพืชเฉพาะ ให้เลือกผลิตภัณฑ์ที่กำจัดศัตรูพืชนั้นได้
+- ห้ามแนะนำผลิตภัณฑ์ที่ไม่เกี่ยวข้อง
+
 ตอบคำถาม:"""
+        else:
+            # General knowledge response with enhanced filtering
+            prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชและศัตรูพืชของกรมวิชาการเกษตรไทย มีประสบการณ์ 20 ปี
+
+🎯 **คำถามจากเกษตรกร**: {question}
+
+📚 **ความรู้จากฐานข้อมูล**:
+{combined_knowledge}
+
+💊 **ผลิตภัณฑ์ที่เกี่ยวข้อง**:
+{products_info if products_info else "ไม่มีข้อมูลผลิตภัณฑ์"}
+
+📋 **คำแนะนำในการตอบ**:
+
+1. **วิเคราะห์และกรองข้อมูล**:
+   - อ่านความรู้ทั้งหมดอย่างละเอียด
+   - เลือกเฉพาะข้อมูลที่เกี่ยวข้องกับคำถามโดยตรง
+   - ตัดข้อมูลที่ไม่เกี่ยวข้องออก
+   - แก้ไขตัวอักษรที่ผิดพลาด (เช่น จĞำ → จำ, ต้ → ต้)
+
+2. **จัดระเบียบคำตอบ**:
+   - เริ่มด้วยคำตอบโดยตรง (ตอบคำถามก่อน)
+   - แบ่งเป็นหัวข้อชัดเจน:
+     • ลักษณะ/อาการ (ถ้าเกี่ยวข้อง)
+     • สาเหตุ (ถ้าเกี่ยวข้อง)
+     • วิธีป้องกัน
+     • วิธีกำจัด/รักษา
+     • ผลิตภัณฑ์แนะนำ (ถ้ามี)
+
+3. **ให้ข้อมูลที่ถูกต้องและเฉพาะเจาะจง**:
+   - ตอบเฉพาะสิ่งที่ถูกถาม
+   - ใช้ข้อมูลจากฐานข้อมูลเท่านั้น
+   - ห้ามสร้างข้อมูลเอง
+   - ถ้าไม่มีข้อมูล ให้บอกตรงๆ
+
+4. **ใช้ภาษาที่ถูกต้องและเข้าใจง่าย**:
+   - แก้ไขตัวอักษรที่ผิดพลาดทั้งหมด
+   - ใช้ภาษาไทยที่ถูกต้อง
+   - หลีกเลี่ยงศัพท์เทคนิคที่ยากเกินไป
+   - อธิบายให้เกษตรกรเข้าใจได้
+
+5. **จัดรูปแบบให้อ่านง่าย**:
+   - ใช้ emoji ให้เหมาะสม (🌱 🐛 🍄 💊 ⚠️ ✅)
+   - แบ่งย่อหน้าชัดเจน
+   - ใช้ bullet points (•) แทน markdown
+   - ไม่ใช้ markdown (**, ##, ```)
+
+6. **เพิ่มคุณค่า**:
+   - เพิ่มเคล็ดลับที่เป็นประโยชน์
+   - ข้อควรระวัง
+   - คำแนะนำเพิ่มเติม
+
+⚠️ **ข้อห้าม**:
+- ห้ามใช้ markdown (**, ##, ```)
+- ห้ามสร้างข้อมูลเอง
+- ห้ามตอบนอกเรื่อง
+- ห้ามใช้ตัวอักษรที่ผิดพลาด (ต้องแก้ไขให้ถูกต้อง)
+
+✅ **ตัวอย่างการแก้ไขตัวอักษร**:
+- จĞำ → จำ
+- ต้ → ต้
+- ลĞำ → ลำ
+- นĞ้ำ → น้ำ
+
+ตอบคำถาม (ภาษาไทยที่ถูกต้อง ไม่ใช้ markdown):"""
 
         try:
             response = gemini_model.generate_content(prompt)
             answer = response.text.strip()
             
-            # Clean up markdown if any
-            answer = answer.replace("```", "").replace("**", "")
+            # Post-process answer for better quality
+            answer = post_process_answer(answer)
             
             logger.info("✓ Answer generated successfully")
             return answer
@@ -842,15 +1482,35 @@ async def answer_with_keyword_search(question: str) -> str:
         # Extract main keywords
         keywords = extract_keywords_from_question(question)
         
-        if not keywords:
+        if not keywords["pests"] and not keywords["crops"] and not keywords["products"]:
             return "ขออภัยค่ะ ฉันไม่เข้าใจคำถาม กรุณาถามใหม่อีกครั้งหรือส่งรูปภาพพืชที่มีปัญหามาให้ฉันตรวจสอบค่ะ 🌱"
         
         # Search in knowledge table
+        search_term = keywords["pests"][0] if keywords["pests"] else (keywords["crops"][0] if keywords["crops"] else keywords["products"][0])
+        
         result = supabase_client.table('knowledge')\
             .select('content')\
-            .ilike('content', f'%{keywords[0]}%')\
+            .ilike('content', f'%{search_term}%')\
             .limit(2)\
             .execute()
+        
+        # Also search products
+        products_result = None
+        if keywords["pests"] or keywords["crops"]:
+            if keywords["pests"]:
+                products_result = supabase_client.table('products')\
+                    .select('product_name, active_ingredient, target_pest, applicable_crops')\
+                    .ilike('target_pest', f'%{keywords["pests"][0]}%')\
+                    .limit(3)\
+                    .execute()
+            elif keywords["crops"]:
+                products_result = supabase_client.table('products')\
+                    .select('product_name, active_ingredient, target_pest, applicable_crops')\
+                    .ilike('applicable_crops', f'%{keywords["crops"][0]}%')\
+                    .limit(3)\
+                    .execute()
+        
+        response_parts = []
         
         if result.data:
             # Clean and format knowledge
@@ -861,8 +1521,25 @@ async def answer_with_keyword_search(question: str) -> str:
                 if cleaned:
                     cleaned_items.append(cleaned[:300])
             
-            knowledge = "\n\n".join(cleaned_items)
-            return f"📚 ข้อมูลที่เกี่ยวข้อง:\n\n{knowledge}\n\n💡 หากต้องการข้อมูลเพิ่มเติม กรุณาถามคำถามที่เฉพาะเจาะจงมากขึ้นค่ะ"
+            if cleaned_items:
+                knowledge = "\n\n".join(cleaned_items)
+                response_parts.append(f"📚 ข้อมูลที่เกี่ยวข้อง:\n\n{knowledge}")
+        
+        if products_result and products_result.data:
+            products_text = "\n\n💊 ผลิตภัณฑ์แนะนำ:\n"
+            for idx, p in enumerate(products_result.data, 1):
+                products_text += f"\n{idx}. {p.get('product_name')}"
+                if p.get('active_ingredient'):
+                    products_text += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
+                if p.get('applicable_crops'):
+                    crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
+                    products_text += f"\n   ใช้กับพืช: {crops}"
+            response_parts.append(products_text)
+        
+        if response_parts:
+            response = "\n\n".join(response_parts)
+            response += "\n\n💡 หากต้องการข้อมูลเพิ่มเติม กรุณาถามคำถามที่เฉพาะเจาะจงมากขึ้นค่ะ"
+            return response
         else:
             return "ขออภัยค่ะ ไม่พบข้อมูลที่เกี่ยวข้อง กรุณาลองถามคำถามอื่นหรือส่งรูปภาพพืชที่มีปัญหามาให้ฉันตรวจสอบค่ะ 🌱"
             
@@ -870,26 +1547,80 @@ async def answer_with_keyword_search(question: str) -> str:
         logger.error(f"Keyword search failed: {e}")
         return "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งค่ะ"
 
-def extract_keywords_from_question(question: str) -> list:
-    """Extract main keywords from question"""
-    # Common disease/pest keywords
-    keywords = [
-        "เพลี้ยไฟ", "เพลี้ยอ่อน", "เพลี้ย", "หนอน", "แมลง",
-        "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา",
-        "ไวรัส", "โรคใบด่าง", "โรคใบหงิก",
-        "วัชพืช", "หญ้า",
-        "โรคพืช", "ศัตรูพืช",
-        "ทุเรียน", "มะม่วง", "ข้าว", "พืชผัก"
-    ]
-    
-    found_keywords = []
+def extract_keywords_from_question(question: str) -> dict:
+    """Extract main keywords from question with categories"""
     question_lower = question.lower()
     
-    for keyword in keywords:
-        if keyword in question_lower:
-            found_keywords.append(keyword)
+    # Pest/Disease keywords (expanded)
+    pest_keywords = [
+        "เพลี้ยไฟ", "เพลี้ยอ่อน", "เพลี้ย", "หนอน", "แมลง", "ด้วงงวง",
+        "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา", "แอนแทรคโนส",
+        "ไวรัส", "โรคใบด่าง", "โรคใบหงิก",
+        "วัชพืช", "หญ้า", "ผักบุ้ง", "หญ้าคา",
+        "โรคพืช", "ศัตรูพืช", "ไร", "เพลี้ยแป้ง", "หนอนกระทู้ข้าว",
+        "จักจั่น", "หนอนเจาะ", "หนอนกอ", "หนอนใย", "ด้วง", "มด", "ปลวก",
+        "เพลี้ยจักจั่น", "แมลงวันผล", "แมลงหวี่ขาว", "ทริปส์"
+    ]
     
-    return found_keywords[:3]  # Return top 3
+    # Crop keywords (expanded)
+    crop_keywords = [
+        "ทุเรียน", "มะม่วง", "ข้าว", "พืชผัก", "ผัก", "ผลไม้",
+        "มะนาว", "ส้ม", "กล้วย", "มะพร้าว", "ยางพารา", "ปาล์ม",
+        "ข้าวโพด", "อ้อย", "มันสำปะหลัง", "ถั่ว", "พริก", "มะเขือเทศ",
+        "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "ฝรั่ง", "ชมพู่"
+    ]
+    
+    # Product-related keywords
+    product_keywords = [
+        "ผลิตภัณฑ์", "สินค้า", "ยา", "สาร", "ปุ๋ย",
+        "icp", "ladda", "icpl", "ไอซีพี", "ลัดดา",
+        "โมเดิน", "ไดอะซินอน", "อิมิดาโคลพริด", "ไซเพอร์เมทริน",
+        "แนะนำ", "ใช้", "พ่น", "ฉีด", "กำจัด", "ป้องกัน"
+    ]
+    
+    # Intent keywords (NEW)
+    intent_keywords = {
+        "increase_yield": ["เพิ่มผลผลิต", "ผลผลิตสูง", "ผลผลิตมาก", "ผลผลิตดี", "ผลผลิตเยอะ", "ผลผลิตขึ้น", "ผลผลิตดีขึ้น", "ผลผลิตเพิ่ม"],
+        "solve_problem": ["แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม"],
+        "general_care": ["ดูแล", "บำรุง", "เลี้ยง", "ปลูก", "ใส่ปุ๋ย"],
+        "product_inquiry": ["มีอะไรบ้าง", "มีไหม", "แนะนำ", "ควรใช้", "ใช้อะไร", "ซื้อ"]
+    }
+    
+    found = {
+        "pests": [],
+        "crops": [],
+        "products": [],
+        "intent": None,  # NEW: detect user intent
+        "is_product_query": False
+    }
+    
+    # Extract pests
+    for keyword in pest_keywords:
+        if keyword in question_lower:
+            found["pests"].append(keyword)
+    
+    # Extract crops
+    for keyword in crop_keywords:
+        if keyword in question_lower:
+            found["crops"].append(keyword)
+    
+    # Extract product-related
+    for keyword in product_keywords:
+        if keyword in question_lower:
+            found["products"].append(keyword)
+            found["is_product_query"] = True
+    
+    # Detect intent (NEW)
+    for intent, keywords in intent_keywords.items():
+        for keyword in keywords:
+            if keyword in question_lower:
+                found["intent"] = intent
+                found["is_product_query"] = True
+                break
+        if found["intent"]:
+            break
+    
+    return found
 
 # ============================================================================#
 # Core: Retrieve knowledge from knowledge table (Vector Search)
@@ -1157,7 +1888,7 @@ async def handle_natural_conversation(user_id: str, text: str, reply_token: str)
         context = await get_conversation_context(user_id)
         
         # Build prompt for Gemini
-        prompt = f"""คุณคือ AI ผู้ช่วยด้านโรคพืชและศัตรูพืชที่เป็นมิตร ชื่อ "ดอกไม้" 🌸
+        prompt = f"""คุณคือ AI ผู้ช่วยด้านโรคพืชและศัตรูพืชที่เป็นมิตร ชื่อ "ICP LADDA"
 
 🎯 **บทบาท**:
 - ช่วยเหลือเกษตรกรเรื่องโรคพืช ศัตรูพืช และการใช้ผลิตภัณฑ์
@@ -1385,11 +2116,44 @@ async def webhook(
                             await reply_line(reply_token, help_message)
                         
                         # Check if it's a specific question that needs knowledge base
-                        elif any(q in text_lower for q in ["?", "ยังไง", "อย่างไร", "ทำไม", "คือ", "หมายถึง", "ได้ไหม", "ใช้", "กำจัด", "ป้องกัน", "รักษา"]):
-                            # This is a question - use Smart Q&A with knowledge base
-                            logger.info(f"Processing Q&A with knowledge: {text[:50]}...")
+                        elif any(q in text_lower for q in ["?", "ยังไง", "อย่างไร", "ทำไม", "คือ", "หมายถึง", "ได้ไหม", "ใช้", "กำจัด", "ป้องกัน", "รักษา", "แนะนำ", "เพิ่ม", "แก้"]):
+                            # This is a question - check if it's product-focused
+                            logger.info(f"Processing Q&A: {text[:50]}...")
                             try:
-                                answer = await answer_question_with_knowledge(text)
+                                # Extract keywords to determine query type
+                                keywords = extract_keywords_from_question(text)
+                                
+                                # Check intent
+                                intent = keywords.get("intent")
+                                
+                                # Check if this is a product-focused query
+                                is_product_query = (
+                                    keywords["is_product_query"] or 
+                                    intent in ["increase_yield", "solve_problem", "general_care", "product_inquiry"] or
+                                    any(word in text_lower for word in [
+                                        "ผลิตภัณฑ์", "สินค้า", "ยา", "สาร", "แนะนำ", 
+                                        "ใช้อะไร", "พ่นอะไร", "ฉีดอะไร", "ซื้อ",
+                                        "icp", "ladda", "icpl", "ไอซีพี", "ลัดดา",
+                                        "มีอะไรบ้าง", "มีไหม", "ขาย",
+                                        "เพิ่มผลผลิต", "ผลผลิต", "แก้ปัญหา"
+                                    ]) or
+                                    (keywords["crops"] and any(word in text_lower for word in ["ใช้", "แนะนำ", "ดี", "เหมาะ", "เพิ่ม", "ผลผลิต"]))
+                                )
+                                
+                                if is_product_query:
+                                    # Check if it's intent-based query (increase yield, solve problem)
+                                    if intent in ["increase_yield", "solve_problem", "general_care"]:
+                                        logger.info(f"→ Intent-based query detected: {intent}")
+                                        answer = await recommend_products_by_intent(text, keywords)
+                                    else:
+                                        # Use product-specific Q&A
+                                        logger.info("→ Product-focused query detected")
+                                        answer = await answer_product_question(text, keywords)
+                                else:
+                                    # Use general knowledge Q&A
+                                    logger.info("→ General knowledge query")
+                                    answer = await answer_question_with_knowledge(text)
+                                
                                 await add_to_memory(user_id, "user", text)
                                 await add_to_memory(user_id, "assistant", answer)
                                 await reply_line(reply_token, answer)
