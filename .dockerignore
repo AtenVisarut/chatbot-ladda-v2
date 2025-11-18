@@ -1,33 +1,49 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
 # Python
-__pycache__/
+__pycache__
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 venv/
 venv311/
+env/
 ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+dist/
+build/
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Data files (ไม่ต้อง deploy)
+*.csv
+*.pdf
+*.xlsx
+*.xls
+Data*.csv
+data/
+
+# Documentation (ไม่ต้อง deploy)
+*.md
+docs/
+RAILWAY*.md
+RENDER*.md
+DEPLOYMENT*.md
+QUICK*.md
+CLEANUP*.md
+PERFORMANCE*.md
+PROJECT*.md
+NETLIFY*.md
+
+# Tests (ไม่ต้อง deploy)
+tests/
+test_*.py
+*_test.py
+
+# Scripts (ไม่ต้อง deploy)
+scripts/
 
 # IDE
 .vscode/
@@ -36,37 +52,24 @@ wheels/
 *.swo
 *~
 
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Documentation
-*.md
-docs/
-README.md
-LICENSE
-
-# Tests
-tests/
-test_*.py
-*_test.py
-
-# Data files
-*.csv
-*.json
-*.xlsx
-Data ICPL product for iDA.csv
-
-# Logs
-*.log
-logs/
-
 # OS
 .DS_Store
 Thumbs.db
 
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
 # Temporary files
+tmp/
+temp/
 *.tmp
-*.bak
-*.swp
+
+# Config files ที่ไม่ใช้
+render.yaml
+fly.toml

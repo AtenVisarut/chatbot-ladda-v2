@@ -2,10 +2,16 @@
 nixPkgs = ["python311"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = [
+  "pip install --no-cache-dir -r requirements.txt"
+]
 
 [phases.build]
-cmds = ["python -c \"from sentence_transformers import SentenceTransformer; print('Downloading E5 model...'); SentenceTransformer('intfloat/multilingual-e5-base'); print('E5 model ready!')\""]
+cmds = [
+  "python -c \"from sentence_transformers import SentenceTransformer; print('Downloading E5 model...'); model = SentenceTransformer('intfloat/multilingual-e5-base'); print('E5 model ready!')\"",
+  "find /root/.cache -type f -name '*.pyc' -delete",
+  "find /root/.cache -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true"
+]
 
 [start]
 cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
