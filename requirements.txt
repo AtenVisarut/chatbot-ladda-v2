@@ -18,9 +18,6 @@ openai>=1.54.0
 # Sentence Transformers for E5 embeddings
 sentence-transformers>=2.2.0
 
-# LightRAG for advanced RAG
-lightrag-hku>=1.4.9
-
 # Image processing
 Pillow==11.0.0
 
@@ -29,6 +26,9 @@ python-dotenv==1.0.1
 
 # Utilities
 python-multipart==0.0.12
+
+# Rate limiting
+slowapi==0.1.9
 
 # Additional dependencies
 requests==2.32.3

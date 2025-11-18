@@ -3,10 +3,10 @@ services:
     name: line-plant-bot
     env: python
     region: singapore
-    plan: starter
+    plan: free  # เปลี่ยนเป็น free สำหรับทดสอบ (หรือใช้ starter ถ้าต้องการ always-on)
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
+    startCommand: ./start.sh
+    healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

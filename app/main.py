@@ -6,7 +6,9 @@ Production-grade FastAPI implementation with Multi-Agent System
 import os
 import logging
 import time
+import asyncio
 from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -21,6 +23,9 @@ import google.generativeai as genai
 from PIL import Image
 import io
 from sentence_transformers import SentenceTransformer
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Load environment variables
 load_dotenv()
@@ -32,14 +37,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# LightRAG - removed (not used)
-
 # Initialize FastAPI app
 app = FastAPI(
     title="LINE Plant Disease Detection Bot",
     description="AI-powered plant disease detection with Multi-Agent System",
     version="1.0.0"
 )
+
+# Initialize Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ============================================================================#
 # ENVIRONMENT / SERVICES
@@ -89,15 +97,200 @@ if SUPABASE_URL and SUPABASE_KEY:
 logger.info("Using Supabase Vector Search + Gemini Filtering")
 
 # ============================================================================#
-# Memory System (Supabase-based)
+# Memory System (Supabase-based) + Caching + Cleanup
 # ============================================================================#
 # In-memory store for pending image contexts awaiting user symptom input
 # Keyed by user_id -> dict with image_bytes and reply_token (optional)
 pending_image_contexts: Dict[str, Dict[str, Any]] = {}
 
+# Cache configuration
+CACHE_TTL = 3600  # 1 hour
+PENDING_CONTEXT_TTL = 300  # 5 minutes
+MAX_CACHE_SIZE = 1000  # Maximum cache entries
+
+# Detection cache (image hash -> result)
+detection_cache: Dict[str, Dict[str, Any]] = {}
+
+# Product recommendation cache (disease_name -> products)
+product_cache: Dict[str, Dict[str, Any]] = {}
+
+# Knowledge cache (query -> knowledge)
+knowledge_cache: Dict[str, Dict[str, Any]] = {}
+
+# Rate limiting per user
+user_request_counts: Dict[str, List[float]] = {}
+USER_RATE_LIMIT = 10  # requests per minute
+USER_RATE_WINDOW = 60  # seconds
+
 # Memory configuration
 MAX_MEMORY_MESSAGES = 20 # Keep last 20messages for context
 MEMORY_CONTEXT_WINDOW = 10 # Use last 10messages for context
+
+# ============================================================================#
+# Cache Helper Functions
+# ============================================================================#
+def get_image_hash(image_bytes: bytes) -> str:
+    """Generate hash for image caching"""
+    return hashlib.md5(image_bytes).hexdigest()
+
+def get_cache_key(prefix: str, key: str) -> str:
+    """Generate cache key with prefix"""
+    return f"{prefix}:{key}"
+
+async def get_from_cache(cache_dict: dict, key: str) -> Optional[Any]:
+    """Get item from cache if not expired"""
+    if key not in cache_dict:
+        return None
+    
+    entry = cache_dict[key]
+    if time.time() - entry.get("timestamp", 0) > CACHE_TTL:
+        # Expired, remove it
+        del cache_dict[key]
+        return None
+    
+    logger.info(f"✓ Cache hit: {key[:50]}")
+    return entry.get("data")
+
+async def set_to_cache(cache_dict: dict, key: str, data: Any):
+    """Set item to cache with timestamp"""
+    # Check cache size limit
+    if len(cache_dict) >= MAX_CACHE_SIZE:
+        # Remove oldest entries (simple FIFO)
+        oldest_keys = sorted(cache_dict.keys(), key=lambda k: cache_dict[k].get("timestamp", 0))[:100]
+        for old_key in oldest_keys:
+            del cache_dict[old_key]
+        logger.info(f"Cache cleanup: removed {len(oldest_keys)} old entries")
+    
+    cache_dict[key] = {
+        "data": data,
+        "timestamp": time.time()
+    }
+    logger.info(f"✓ Cache set: {key[:50]}")
+
+async def cleanup_expired_cache():
+    """Clean up expired cache entries"""
+    current_time = time.time()
+    
+    # Cleanup detection cache
+    expired_keys = [k for k, v in detection_cache.items() if current_time - v.get("timestamp", 0) > CACHE_TTL]
+    for key in expired_keys:
+        del detection_cache[key]
+    
+    # Cleanup product cache
+    expired_keys = [k for k, v in product_cache.items() if current_time - v.get("timestamp", 0) > CACHE_TTL]
+    for key in expired_keys:
+        del product_cache[key]
+    
+    # Cleanup knowledge cache
+    expired_keys = [k for k, v in knowledge_cache.items() if current_time - v.get("timestamp", 0) > CACHE_TTL]
+    for key in expired_keys:
+        del knowledge_cache[key]
+    
+    # Cleanup pending contexts
+    expired_users = [
+        user_id for user_id, ctx in pending_image_contexts.items()
+        if current_time - ctx.get("timestamp", 0) > PENDING_CONTEXT_TTL
+    ]
+    for user_id in expired_users:
+        del pending_image_contexts[user_id]
+    
+    if expired_keys or expired_users:
+        logger.info(f"Cache cleanup: removed {len(expired_keys)} cache entries, {len(expired_users)} pending contexts")
+
+async def get_cache_stats() -> dict:
+    """Get cache statistics"""
+    return {
+        "detection_cache_size": len(detection_cache),
+        "product_cache_size": len(product_cache),
+        "knowledge_cache_size": len(knowledge_cache),
+        "pending_contexts": len(pending_image_contexts),
+        "total_memory_items": len(detection_cache) + len(product_cache) + len(knowledge_cache) + len(pending_image_contexts)
+    }
+
+# ============================================================================#
+# Rate Limiting Helper Functions
+# ============================================================================#
+async def check_user_rate_limit(user_id: str) -> bool:
+    """Check if user exceeded rate limit"""
+    current_time = time.time()
+    
+    # Initialize user if not exists
+    if user_id not in user_request_counts:
+        user_request_counts[user_id] = []
+    
+    # Remove old timestamps outside the window
+    user_request_counts[user_id] = [
+        ts for ts in user_request_counts[user_id]
+        if current_time - ts < USER_RATE_WINDOW
+    ]
+    
+    # Check if exceeded limit
+    if len(user_request_counts[user_id]) >= USER_RATE_LIMIT:
+        logger.warning(f"Rate limit exceeded for user {user_id[:8]}...")
+        return False
+    
+    # Add current request
+    user_request_counts[user_id].append(current_time)
+    return True
+
+async def cleanup_rate_limit_data():
+    """Clean up old rate limit data"""
+    current_time = time.time()
+    users_to_remove = []
+    
+    for user_id, timestamps in user_request_counts.items():
+        # Remove old timestamps
+        user_request_counts[user_id] = [
+            ts for ts in timestamps
+            if current_time - ts < USER_RATE_WINDOW
+        ]
+        
+        # If no recent requests, remove user
+        if not user_request_counts[user_id]:
+            users_to_remove.append(user_id)
+    
+    for user_id in users_to_remove:
+        del user_request_counts[user_id]
+    
+    if users_to_remove:
+        logger.info(f"Rate limit cleanup: removed {len(users_to_remove)} inactive users")
+
+# ============================================================================#
+# Background Tasks
+# ============================================================================#
+async def periodic_cleanup():
+    """Run periodic cleanup tasks"""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            logger.info("Running periodic cleanup...")
+            await cleanup_expired_cache()
+            await cleanup_rate_limit_data()
+            
+            # Log stats
+            stats = await get_cache_stats()
+            logger.info(f"Cache stats: {stats}")
+            
+        except Exception as e:
+            logger.error(f"Error in periodic cleanup: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on startup"""
+    logger.info("Starting background tasks...")
+    asyncio.create_task(periodic_cleanup())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("Shutting down gracefully...")
+    # Clear all caches
+    detection_cache.clear()
+    product_cache.clear()
+    knowledge_cache.clear()
+    pending_image_contexts.clear()
+    user_request_counts.clear()
+    logger.info("All caches cleared")
 
 async def add_to_memory(user_id: str, role: str, content: str, metadata: dict = None):
     """Add message to conversation memory in Supabase"""
@@ -249,6 +442,7 @@ class ProductRecommendation(BaseModel):
     target_pest: Optional[str] = ""
     applicable_crops: Optional[str] = ""
     how_to_use: Optional[str] = ""
+    usage_period: Optional[str] = ""
     usage_rate: Optional[str] = ""
     score: float = 0.0
 
@@ -392,6 +586,15 @@ async def get_image_content_from_line(message_id: str) -> bytes:
 # ============================================================================#
 async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = None) -> DiseaseDetectionResult:
     logger.info("Starting pest/disease detection with Gemini Vision")
+    
+    # Check cache first (only if no extra user info)
+    if not extra_user_info:
+        image_hash = get_image_hash(image_bytes)
+        cached_result = await get_from_cache(detection_cache, image_hash)
+        if cached_result:
+            logger.info("✓ Using cached detection result")
+            return DiseaseDetectionResult(**cached_result)
+    
     try:
         # Convert bytes to PIL Image for Gemini
         image = Image.open(io.BytesIO(image_bytes))
@@ -520,6 +723,11 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         
         logger.info(f"Pest/Disease detected: {result.disease_name} (Type: {pest_type}, Confidence: {confidence})")
         
+        # Cache the result (only if no extra user info)
+        if not extra_user_info:
+            image_hash = get_image_hash(image_bytes)
+            await set_to_cache(detection_cache, image_hash, result.dict())
+        
         # Log detection for analysis (optional - can be used to improve accuracy)
         try:
             import datetime
@@ -543,7 +751,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         raise HTTPException(status_code=500, detail=f"Detection failed: {str(e)}")
 
 # ============================================================================#
-# Core: Retrieve product recommendations (LightRAG or Supabase fallback)
+# Core: Retrieve product recommendations (Supabase Vector Search)
 # ============================================================================#
 async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) -> List[ProductRecommendation]:
     """
@@ -559,6 +767,13 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         disease_name = disease_info.disease_name
         logger.info(f"📝 Searching products for: {disease_name}")
+        
+        # Check cache first
+        cache_key = f"products:{disease_name}"
+        cached_products = await get_from_cache(product_cache, cache_key)
+        if cached_products:
+            logger.info("✓ Using cached product recommendations")
+            return [ProductRecommendation(**p) for p in cached_products]
         
         # Strategy 1: Vector search by disease name (most accurate)
         try:
@@ -652,7 +867,13 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
             return []
         
         logger.info(f"Total products found: {len(matches_data)}")
-        return build_recommendations_from_data(matches_data[:6])
+        recommendations = build_recommendations_from_data(matches_data[:6])
+        
+        # Cache the results
+        if recommendations:
+            await set_to_cache(product_cache, cache_key, [r.dict() for r in recommendations])
+        
+        return recommendations
 
     except Exception as e:
         logger.error(f"Product search failed: {e}", exc_info=True)
@@ -720,6 +941,7 @@ async def filter_products_with_gemini(disease_name: str, raw_analysis: str, prod
                                 target_pest=product.get('target_pest', ''),
                                 applicable_crops=product.get('applicable_crops', ''),
                                 how_to_use=product.get('how_to_use', ''),
+                                usage_period=product.get('usage_period', ''),
                                 usage_rate=product.get('usage_rate', ''),
                                 score=product.get('similarity', 0.8)
                             )
@@ -764,6 +986,7 @@ def build_recommendations_from_data(products_data: List[Dict]) -> List[ProductRe
             target_pest=pest,
             applicable_crops=product.get("applicable_crops", ""),
             how_to_use=product.get("how_to_use", ""),
+            usage_period=product.get("usage_period", ""),
             usage_rate=product.get("usage_rate", ""),
             score=product.get("similarity", 0.7)
         )
@@ -888,6 +1111,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
             products_text += f"\n    สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
             products_text += f"\n    ศัตรูพืช: {p.get('target_pest', 'N/A')[:100]}"
             products_text += f"\n    ใช้กับพืช: {p.get('applicable_crops', 'N/A')[:80]}"
+            products_text += f"\n    ช่วงการใช้: {p.get('usage_period', 'N/A')}"
             products_text += f"\n    อัตราใช้: {p.get('usage_rate', 'N/A')}"
             products_text += f"\n    Similarity: {p.get('similarity', 0):.0%}\n"
         
@@ -1047,6 +1271,8 @@ async def format_product_list_simple(products: list, question: str, intent: str)
         if p.get('applicable_crops'):
             crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
             response += f"\n   ใช้กับพืช: {crops}"
+        if p.get('usage_period'):
+            response += f"\n   ช่วงการใช้: {p.get('usage_period')}"
         if p.get('usage_rate'):
             response += f"\n   อัตราใช้: {p.get('usage_rate')}"
         response += "\n"
@@ -1058,6 +1284,8 @@ async def format_product_list_simple(products: list, question: str, intent: str)
         if p.get('applicable_crops'):
             crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
             response += f"\n   ใช้กับพืช: {crops}"
+        if p.get('usage_period'):
+            response += f"\n   ช่วงการใช้: {p.get('usage_period')}"
         if p.get('usage_rate'):
             response += f"\n   อัตราใช้: {p.get('usage_rate')}"
         response += "\n"
@@ -1140,6 +1368,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
             products_text += f"\n    สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
             products_text += f"\n    ศัตรูพืช: {p.get('target_pest', 'N/A')[:100]}"
             products_text += f"\n    ใช้กับพืช: {p.get('applicable_crops', 'N/A')[:80]}"
+            products_text += f"\n    ช่วงการใช้: {p.get('usage_period', 'N/A')}"
             products_text += f"\n    อัตราใช้: {p.get('usage_rate', 'N/A')}"
             products_text += "\n"
         
@@ -1203,6 +1432,8 @@ async def answer_product_question(question: str, keywords: dict) -> str:
                 if p.get('applicable_crops'):
                     crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
                     response += f"\n   ใช้กับพืช: {crops}"
+                if p.get('usage_period'):
+                    response += f"\n   ช่วงการใช้: {p.get('usage_period')}"
                 if p.get('usage_rate'):
                     response += f"\n   อัตราใช้: {p.get('usage_rate')}"
                 response += "\n"
@@ -1246,7 +1477,7 @@ async def answer_question_with_knowledge(question: str) -> str:
                 'match_knowledge',
                 {
                     'query_embedding': query_embedding,
-                    'match_threshold': 0.3,  # Lower threshold for more results
+                    'match_threshold': 0.6,  # Lower threshold for more results
                     'match_count': 10  # Get more candidates
                 }
             ).execute()
@@ -1341,6 +1572,8 @@ async def answer_question_with_knowledge(question: str) -> str:
                     if p.get('applicable_crops'):
                         crops_short = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
                         prod_text += f"\n   ใช้กับพืช: {crops_short}"
+                    if p.get('usage_period'):
+                        prod_text += f"\n   ช่วงการใช้: {p.get('usage_period')}"
                     if p.get('usage_rate'):
                         prod_text += f"\n   อัตราใช้: {p.get('usage_rate')}"
                     products_list.append(prod_text)
@@ -1817,6 +2050,58 @@ async def generate_final_response(
         if knowledge:
             header += f"📚 ความรู้เพิ่มเติม:\n{knowledge}\n\n"
 
+        # ตรวจสอบว่าเป็นกรณีที่ไม่ควรแนะนำสินค้า
+        disease_name_lower = disease_info.disease_name.lower()
+        
+        # กรณีที่ 1: ไม่พบปัญหา/โรค
+        if "ไม่พบปัญหา" in disease_name_lower or "ไม่พบโรค" in disease_name_lower:
+            body = "✅ **ข่าวดี!** พืชของคุณดูสุขภาพดี ไม่พบปัญหาที่น่ากังวล\n\n"
+            body += "� ด**คำแนะนำในการดูแล**:\n"
+            body += "• รักษาความชื้นในดินให้เหมาะสม\n"
+            body += "• ให้ปุ๋ยตามกำหนดเวลา\n"
+            body += "• ตรวจสอบพืชเป็นประจำ\n"
+            body += "• ระวังการเปลี่ยนแปลงของสภาพอากาศ\n\n"
+            body += "🌱 **การป้องกัน**:\n"
+            body += "• รักษาความสะอาดรอบแปลง\n"
+            body += "• ตัดใบแก่หรือเสียหายออก\n"
+            body += "• ระบายน้ำให้ดี\n"
+            body += "• หมั่นสังเกตอาการผิดปกติ\n\n"
+            body += "📸 หากพบอาการผิดปกติในภายหลัง สามารถส่งรูปมาให้ฉันตรวจสอบได้เลยค่ะ 😊"
+            return header + body
+        
+        # กรณีที่ 2: ไม่สามารถวิเคราะห์ได้ / ภาพไม่ชัด / ไม่พบพืช
+        if any(keyword in disease_name_lower for keyword in [
+            "ไม่สามารถวิเคราะห์",
+            "ไม่พบพืช",
+            "ภาพไม่ชัด",
+            "ไม่ชัดเจน",
+            "ไม่สามารถระบุ"
+        ]):
+            body = "⚠️ **ไม่สามารถวิเคราะห์ได้**\n\n"
+            body += "📸 **เพื่อผลการวิเคราะห์ที่แม่นยำ กรุณา**:\n\n"
+            body += "1️⃣ **ถ่ายรูปให้ชัดเจน**\n"
+            body += "   • ใช้แสงสว่างเพียงพอ (แสงธรรมชาติดีที่สุด)\n"
+            body += "   • ไม่เบลอ ไม่สั่น\n"
+            body += "   • โฟกัสที่บริเวณที่มีปัญหา\n\n"
+            body += "2️⃣ **ถ่ายใกล้พอ**\n"
+            body += "   • เห็นรายละเอียดของใบ/ลำต้น/ผล\n"
+            body += "   • เห็นอาการชัดเจน (จุด, แผล, สี)\n"
+            body += "   • ระยะ 20-50 ซม. จากพืช\n\n"
+            body += "3️⃣ **ถ่ายส่วนที่มีปัญหา**\n"
+            body += "   • ใบที่เสียหาย\n"
+            body += "   • บริเวณที่มีแมลง\n"
+            body += "   • ส่วนที่เปลี่ยนสี\n\n"
+            body += "4️⃣ **ถ่ายหลายมุม** (ถ้าเป็นไปได้)\n"
+            body += "   • มุมใกล้ (Close-up)\n"
+            body += "   • มุมกลาง (ใบทั้งใบ)\n"
+            body += "   • มุมไกล (ต้นทั้งต้น)\n\n"
+            body += "💡 **เคล็ดลับ**:\n"
+            body += "• ถ่ายในเวลา 8-10 โมงเช้า หรือ 3-5 โมงเย็น\n"
+            body += "• หลีกเลี่ยงแสงแดดจ้าจนเกินไป\n"
+            body += "• ถ้ามีแมลง พยายามถ่ายให้เห็นแมลงด้วย\n\n"
+            body += "📤 **พร้อมแล้ว?** ส่งรูปใหม่มาให้ฉันวิเคราะห์อีกครั้งนะคะ 😊"
+            return header + body
+        
         if not recommendations:
             body = "⚠️ ขณะนี้ยังไม่มีข้อมูลผลิตภัณฑ์ที่ตรงกับอาการในฐานข้อมูลของเรา\n\n"
             body += "แนะนำ: เก็บตัวอย่างหรือปรึกษาผู้เชี่ยวชาญก่อนใช้สารป้องกันกำจัด\n\n"
@@ -1988,16 +2273,51 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    cache_stats = await get_cache_stats()
     return {
         "status": "healthy",
         "services": {
             "gemini": "ok" if GEMINI_API_KEY else "not_configured",
             "supabase": "ok" if supabase_client else "not_configured",
             "line": "ok" if LINE_CHANNEL_ACCESS_TOKEN else "not_configured"
+        },
+        "cache": cache_stats,
+        "rate_limiting": {
+            "active_users": len(user_request_counts),
+            "user_limit": f"{USER_RATE_LIMIT} requests per {USER_RATE_WINDOW}s"
         }
     }
 
+@app.get("/cache/stats")
+async def cache_stats():
+    """Get detailed cache statistics"""
+    stats = await get_cache_stats()
+    return {
+        "cache_stats": stats,
+        "cache_config": {
+            "ttl_seconds": CACHE_TTL,
+            "max_size": MAX_CACHE_SIZE,
+            "pending_context_ttl": PENDING_CONTEXT_TTL
+        },
+        "rate_limiting": {
+            "active_users": len(user_request_counts),
+            "user_limit": USER_RATE_LIMIT,
+            "window_seconds": USER_RATE_WINDOW
+        }
+    }
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear all caches (admin endpoint - should be protected in production)"""
+    detection_cache.clear()
+    product_cache.clear()
+    knowledge_cache.clear()
+    pending_image_contexts.clear()
+    logger.info("All caches cleared manually")
+    return {"status": "success", "message": "All caches cleared"}
+
 @app.post("/webhook")
+@limiter.limit("30/minute")  # Global rate limit: 30 requests per minute per IP
 async def webhook(
     request: Request,
     x_line_signature: str = Header(None, alias="X-Line-Signature")
@@ -2013,6 +2333,23 @@ async def webhook(
         for event in events:
             event_type = event.get("type")
             reply_token = event.get("replyToken")
+            
+            # Get user ID for rate limiting
+            user_id = event.get("source", {}).get("userId")
+            
+            # Check user-specific rate limit
+            if user_id and not await check_user_rate_limit(user_id):
+                rate_limit_message = (
+                    "⚠️ คุณส่งคำขอมากเกินไปค่ะ\n\n"
+                    f"กรุณารอ {USER_RATE_WINDOW} วินาที แล้วลองใหม่อีกครั้งนะคะ 🙏\n\n"
+                    "เพื่อประสิทธิภาพที่ดี แนะนำให้:\n"
+                    "• ส่งรูปที่ชัดเจน 1 รูปต่อครั้ง\n"
+                    "• รอผลการวิเคราะห์ก่อนส่งรูปใหม่\n"
+                    "• ถามคำถามที่เฉพาะเจาะจง"
+                )
+                await reply_line(reply_token, rate_limit_message)
+                continue
+            
             if event_type == "message":
                 message = event.get("message", {})
                 message_type = message.get("type")
@@ -2023,10 +2360,11 @@ async def webhook(
                         image_bytes = await get_image_content_from_line(message_id)
                         user_id = event.get("source", {}).get("userId") or event.get("source", {}).get("userId")
                         if user_id:
-                            # store pending context
+                            # store pending context with timestamp
                             pending_image_contexts[user_id] = {
                                 "image_bytes": image_bytes,
-                                "reply_token": reply_token
+                                "reply_token": reply_token,
+                                "timestamp": time.time()
                             }
                         ask_message = (
                             "✅ ได้รับรูปแล้วค่ะ\n\n"
@@ -2057,7 +2395,26 @@ async def webhook(
                         try:
                             # Run detection with extra user-provided observations
                             disease_result = await detect_disease(image_bytes, extra_user_info=text)
-                            recommendations = await retrieve_product_recommendation(disease_result)
+                            
+                            # ตรวจสอบว่าควรแนะนำสินค้าหรือไม่
+                            disease_name_lower = disease_result.disease_name.lower()
+                            
+                            # ไม่แนะนำสินค้าในกรณีเหล่านี้
+                            skip_product_recommendation = any(keyword in disease_name_lower for keyword in [
+                                "ไม่พบปัญหา",
+                                "ไม่พบโรค",
+                                "ไม่สามารถวิเคราะห์",
+                                "ไม่พบพืช",
+                                "ภาพไม่ชัด",
+                                "ไม่ชัดเจน",
+                                "ไม่สามารถระบุ"
+                            ])
+                            
+                            if skip_product_recommendation:
+                                recommendations = []
+                            else:
+                                recommendations = await retrieve_product_recommendation(disease_result)
+                            
                             final_message = await generate_final_response(disease_result, recommendations)
                             await reply_line(reply_token, final_message)
                         except Exception as e:
