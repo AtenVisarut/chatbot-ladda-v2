@@ -267,6 +267,18 @@ class AnalyticsTracker:
             elif error_rate > 10 or avg_response_time > 5000:
                 health_status = "degraded"
 
+            # Get user statistics (provinces)
+            users_result = self.supabase.table('users').select('province').execute()
+            users_data = users_result.data if users_result.data else []
+            
+            province_counter = {}
+            for user in users_data:
+                province = user.get('province')
+                if province:
+                    province_counter[province] = province_counter.get(province, 0) + 1
+            
+            top_provinces = sorted(province_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+
             return {
                 "overview": {
                     "unique_users": len(unique_users),
@@ -293,6 +305,10 @@ class AnalyticsTracker:
                 "pest_types": [
                     {"type": ptype, "count": count} 
                     for ptype, count in top_pest_types
+                ],
+                "top_provinces": [
+                    {"name": name, "count": count} 
+                    for name, count in top_provinces
                 ],
                 "top_errors": [
                     {"type": etype, "count": count} 

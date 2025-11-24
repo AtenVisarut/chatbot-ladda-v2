@@ -579,6 +579,11 @@
                 <h2>💊 ผลิตภัณฑ์ที่แนะนำบ่อยที่สุด</h2>
                 <div id="topProducts">กำลังโหลด...</div>
             </div>
+            
+            <div class="list-container">
+                <h2>📍 จังหวัดที่มีผู้ใช้งานมากที่สุด (Top 5)</h2>
+                <div id="topProvinces">กำลังโหลด...</div>
+            </div>
         </div>
         
         <div class="list-container">
@@ -680,6 +685,12 @@
                 
                 // Update top products
                 updateList('topProducts', currentData.top_products, currentData.overview.images_analyzed);
+                
+                // Update top provinces
+                // Note: For provinces, we calculate percentage based on total users with province data, 
+                // but here we can just use the max count for the bar width or total unique users.
+                // Let's use total unique users as the base for percentage.
+                updateList('topProvinces', currentData.top_provinces, currentData.overview.unique_users);
                 
                 // Update pest types
                 updateList('pestTypes', currentData.pest_types, currentData.overview.images_analyzed);

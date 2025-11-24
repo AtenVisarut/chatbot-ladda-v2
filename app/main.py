@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import time
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -267,6 +268,7 @@ async def get_alerts(request: Request):
 
 @app.post("/webhook")
 async def callback(request: Request, x_line_signature: str = Header(None)):
+    start_time = time.time()
     if not x_line_signature:
         raise HTTPException(status_code=400, detail="Missing X-Line-Signature header")
     
@@ -517,7 +519,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         
                         # Track analytics
                         if analytics_tracker:
-                            await analytics_tracker.track_question(user_id, text)
+                            response_time = (time.time() - start_time) * 1000
+                            await analytics_tracker.track_question(
+                                user_id=user_id, 
+                                question=text,
+                                response_time_ms=response_time
+                            )
 
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
