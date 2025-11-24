@@ -110,3 +110,25 @@ Thumbs.db
 Data ICPL product for iDA.csv
 test_*.py
 *_test.py
+
+# Exclude documentation and analysis files
+*.md
+!README.md
+!DEPLOYMENT_GUIDE.md
+
+# Exclude verification and debug scripts
+verify_*.py
+debug_*.py
+check_schema.py
+
+# Exclude local scripts
+deploy.bat
+start.sh
+
+# Exclude Docker (if using Buildpacks/Procfile)
+Dockerfile
+docker-compose.yml
+.dockerignore
+fly.toml
+railway.json
+nixpacks.toml

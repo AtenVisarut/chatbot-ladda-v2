@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy only necessary files
 COPY app/ ./app/
+COPY templates/ ./templates/
 
 # Download E5 model during build
 RUN python -c "from sentence_transformers import SentenceTransformer; \
@@ -37,9 +38,9 @@ RUN find /usr/local/lib/python3.11 -type d -name '__pycache__' -exec rm -rf {} +
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check (use httpx instead of requests - already installed)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/')"
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/', timeout=5)"
 
 # Start command
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,228 @@
+import re
+from typing import List, Dict
+
+def post_process_answer(answer: str) -> str:
+    """Post-process Gemini answer for better quality"""
+    if not answer:
+        return ""
+    
+    # 1. Remove markdown formatting
+    answer = answer.replace("```", "")
+    answer = answer.replace("**", "")
+    answer = answer.replace("##", "")
+    answer = answer.replace("###", "")
+    answer = re.sub(r'\*\*([^*]+)\*\*', r'\1', answer)  # **text** → text
+    answer = re.sub(r'\*([^*]+)\*', r'\1', answer)  # *text* → text
+    
+    # 2. Fix Thai encoding issues
+    answer = re.sub(r'([ก-ฮ])Ğ([ำิีุูเแโใไ่้๊๋])', r'\1\2', answer)
+    answer = answer.replace('Ğ', '')
+    answer = answer.replace('', '')
+    answer = answer.replace('\x00', '')
+    
+    # 3. Fix spacing issues
+    answer = re.sub(r'\s+', ' ', answer)  # Multiple spaces → single space
+    answer = answer.replace(' ,', ',')
+    answer = answer.replace(' .', '.')
+    answer = answer.replace(' :', ':')
+    answer = answer.replace('( ', '(')
+    answer = answer.replace(' )', ')')
+    
+    # 4. Fix bullet points (convert markdown to Thai style)
+    answer = re.sub(r'^\s*[-*]\s+', '• ', answer, flags=re.MULTILINE)
+    answer = re.sub(r'\n\s*[-*]\s+', '\n• ', answer)
+    
+    # 5. Ensure proper line breaks
+    answer = re.sub(r'\n{3,}', '\n\n', answer)  # Max 2 line breaks
+    
+    # 6. Remove leading/trailing whitespace
+    answer = answer.strip()
+    
+    # 7. Fix common Thai typos
+    answer = answer.replace('ต้', 'ต้')
+    answer = answer.replace('ต', 'ต')
+    
+    # 8. Ensure emoji spacing
+    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍])([ก-๙A-Za-z])', r'\1 \2', answer)
+    
+    return answer
+
+def clean_knowledge_text(text: str) -> str:
+    """Clean and format knowledge text for better readability"""
+    if not text:
+        return ""
+    
+    # Fix encoding issues - remove corrupted characters
+    # Common patterns: จĞำ, ลĞำ, ทĞำ, นĞ้ำ, กĞำ
+    text = re.sub(r'([ก-ฮ])Ğ([ำ])', r'\1\2', text)  # จĞำ → จำ
+    text = re.sub(r'([ก-ฮ])Ğ([้])', r'\1\2', text)  # นĞ้ → น้
+    text = re.sub(r'([ก-ฮ])Ğ([ิ])', r'\1\2', text)  # กĞิ → กิ
+    text = re.sub(r'([ก-ฮ])Ğ([ี])', r'\1\2', text)  # กĞี → กี
+    text = re.sub(r'([ก-ฮ])Ğ([ุ])', r'\1\2', text)  # กĞุ → กุ
+    text = re.sub(r'([ก-ฮ])Ğ([ู])', r'\1\2', text)  # กĞู → กู
+    text = re.sub(r'([ก-ฮ])Ğ([่])', r'\1\2', text)  # กĞ่ → ก่
+    text = re.sub(r'([ก-ฮ])Ğ([้])', r'\1\2', text)  # กĞ้ → ก้
+    text = re.sub(r'([ก-ฮ])Ğ([๊])', r'\1\2', text)  # กĞ๊ → ก๊
+    text = re.sub(r'([ก-ฮ])Ğ([๋])', r'\1\2', text)  # กĞ๋ → ก๋
+    text = re.sub(r'Ğ', '', text)  # Remove remaining Ğ
+    
+    # Fix other corrupted characters
+    text = text.replace('ต้', 'ต้')  # Fix tone marks
+    text = text.replace('ต', 'ต')
+    text = text.replace('', '')  # Remove replacement character
+    text = text.replace('\x00', '')  # Remove null character
+    
+    # Fix common Thai encoding issues
+    text = text.replace('à¸', '')  # Remove Thai encoding prefix
+    text = text.replace('à¹', '')  # Remove Thai encoding prefix
+    
+    # Remove excessive whitespace
+    text = ' '.join(text.split())
+    
+    # Fix common issues
+    text = text.replace('  ', ' ')  # Double spaces
+    text = text.replace(' ,', ',')  # Space before comma
+    text = text.replace(' .', '.')  # Space before period
+    text = text.replace('( ', '(')  # Space after opening parenthesis
+    text = text.replace(' )', ')')  # Space before closing parenthesis
+    text = text.replace(' :', ':')  # Space before colon
+    
+    # Fix Thai-specific issues (keep important marks)
+    # text = text.replace('ฺ', '')  # Keep Thai character above
+    # text = text.replace('์', '')  # Keep Thai character above
+    
+    # Remove multiple consecutive spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Ensure proper sentence spacing
+    text = re.sub(r'([.!?])\s*([A-Za-zก-๙])', r'\1 \2', text)
+    
+    # Remove leading/trailing whitespace
+    text = text.strip()
+    
+    # Remove lines with only special characters
+    lines = text.split('\n')
+    cleaned_lines = [line for line in lines if line.strip() and not re.match(r'^[^\w\s]+$', line.strip())]
+    text = '\n'.join(cleaned_lines)
+    
+    return text
+
+def extract_product_names_from_answer(answer: str) -> List[str]:
+    """Extract product names from answer text"""
+    
+    # Common patterns for product names in Thai answers
+    products = []
+    
+    # Pattern 1: "1. ชื่อผลิตภัณฑ์" or "• ชื่อผลิตภัณฑ์"
+    pattern1 = r'(?:^\d+\.|^•)\s*([^\n]+?)(?:\n|$)'
+    matches1 = re.findall(pattern1, answer, re.MULTILINE)
+    
+    # Pattern 2: Look for common product keywords
+    product_keywords = [
+        r'โมเดิน\s*\d+\s*[A-Z]+',
+        r'ไดอะซินอน\s*\d+\s*[A-Z]+',
+        r'อิมิดาโคลพริด\s*\d+\s*[A-Z]+',
+        r'ไซเพอร์เมทริน\s*\d+\s*[A-Z]+',
+        r'คลอร์ไพริฟอส\s*\d+\s*[A-Z]+',
+        r'แมนโคเซบ\s*\d+\s*[A-Z]+',
+        r'คาร์เบนดาซิม\s*\d+\s*[A-Z]+',
+    ]
+    
+    for pattern in product_keywords:
+        matches = re.findall(pattern, answer, re.IGNORECASE)
+        products.extend(matches)
+    
+    # Pattern 3: Text between "ชื่อผลิตภัณฑ์:" and newline
+    pattern3 = r'ชื่อผลิตภัณฑ์[:\s]+([^\n]+)'
+    matches3 = re.findall(pattern3, answer)
+    products.extend(matches3)
+    
+    # Clean up and deduplicate
+    cleaned_products = []
+    seen = set()
+    for product in products:
+        # Remove extra whitespace and special chars
+        cleaned = re.sub(r'\s+', ' ', product.strip())
+        cleaned = re.sub(r'^[•\-\*\d\.]+\s*', '', cleaned)
+        
+        # Skip if too short or already seen
+        if len(cleaned) > 5 and cleaned not in seen:
+            seen.add(cleaned)
+            cleaned_products.append(cleaned)
+    
+    return cleaned_products[:10]  # Max 10 products
+
+def extract_keywords_from_question(question: str) -> dict:
+    """Extract main keywords from question with categories"""
+    question_lower = question.lower()
+    
+    # Pest/Disease keywords (expanded)
+    pest_keywords = [
+        "เพลี้ยไฟ", "เพลี้ยอ่อน", "เพลี้ย", "หนอน", "แมลง", "ด้วงงวง",
+        "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา", "แอนแทรคโนส",
+        "ไวรัส", "โรคใบด่าง", "โรคใบหงิก",
+        "วัชพืช", "หญ้า", "ผักบุ้ง", "หญ้าคา",
+        "โรคพืช", "ศัตรูพืช", "ไร", "เพลี้ยแป้ง", "หนอนกระทู้ข้าว",
+        "จักจั่น", "หนอนเจาะ", "หนอนกอ", "หนอนใย", "ด้วง", "มด", "ปลวก",
+        "เพลี้ยจักจั่น", "แมลงวันผล", "แมลงหวี่ขาว", "ทริปส์"
+    ]
+    
+    # Crop keywords (expanded)
+    crop_keywords = [
+        "ทุเรียน", "มะม่วง", "ข้าว", "พืชผัก", "ผัก", "ผลไม้",
+        "มะนาว", "ส้ม", "กล้วย", "มะพร้าว", "ยางพารา", "ปาล์ม",
+        "ข้าวโพด", "อ้อย", "มันสำปะหลัง", "ถั่ว", "พริก", "มะเขือเทศ",
+        "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "ฝรั่ง", "ชมพู่"
+    ]
+    
+    # Product-related keywords
+    product_keywords = [
+        "ผลิตภัณฑ์", "สินค้า", "ยา", "สาร", "ปุ๋ย",
+        "icp", "ladda", "icpl", "ไอซีพี", "ลัดดา",
+        "โมเดิน", "ไดอะซินอน", "อิมิดาโคลพริด", "ไซเพอร์เมทริน",
+        "แนะนำ", "ใช้", "พ่น", "ฉีด", "กำจัด", "ป้องกัน"
+    ]
+    
+    # Intent keywords (NEW)
+    intent_keywords = {
+        "increase_yield": ["เพิ่มผลผลิต", "ผลผลิตสูง", "ผลผลิตมาก", "ผลผลิตดี", "ผลผลิตเยอะ", "ผลผลิตขึ้น", "ผลผลิตดีขึ้น", "ผลผลิตเพิ่ม"],
+        "solve_problem": ["แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม"],
+        "general_care": ["ดูแล", "บำรุง", "เลี้ยง", "ปลูก", "ใส่ปุ๋ย"],
+        "product_inquiry": ["มีอะไรบ้าง", "มีไหม", "แนะนำ", "ควรใช้", "ใช้อะไร", "ซื้อ"]
+    }
+    
+    found = {
+        "pests": [],
+        "crops": [],
+        "products": [],
+        "intent": None,  # NEW: detect user intent
+        "is_product_query": False
+    }
+    
+    # Extract pests
+    for keyword in pest_keywords:
+        if keyword in question_lower:
+            found["pests"].append(keyword)
+    
+    # Extract crops
+    for keyword in crop_keywords:
+        if keyword in question_lower:
+            found["crops"].append(keyword)
+    
+    # Extract product-related
+    for keyword in product_keywords:
+        if keyword in question_lower:
+            found["products"].append(keyword)
+            found["is_product_query"] = True
+    
+    # Detect intent (NEW)
+    for intent, keywords in intent_keywords.items():
+        for keyword in keywords:
+            if keyword in question_lower:
+                found["intent"] = intent
+                found["is_product_query"] = True
+                break
+        if found["intent"]:
+            break
+    
+    return found

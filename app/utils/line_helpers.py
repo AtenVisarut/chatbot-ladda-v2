@@ -1,0 +1,102 @@
+import logging
+import hmac
+import hashlib
+import base64
+import httpx
+from typing import Union, Dict, List
+from app.config import LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN
+
+logger = logging.getLogger(__name__)
+
+def verify_line_signature(body: bytes, signature: str) -> bool:
+    if not LINE_CHANNEL_SECRET:
+        logger.warning("LINE_CHANNEL_SECRET not set, skipping signature verification")
+        return True
+    hash_digest = hmac.new(
+        LINE_CHANNEL_SECRET.encode('utf-8'),
+        body,
+        hashlib.sha256
+    ).digest()
+    expected_signature = base64.b64encode(hash_digest).decode('utf-8')
+    return hmac.compare_digest(signature, expected_signature)
+
+async def get_image_content_from_line(message_id: str) -> bytes:
+    url = f"https://api-data.line.me/v2/bot/message/{message_id}/content"
+    headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+        return response.content
+
+async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], with_sticker: bool = False) -> None:
+    """Reply to LINE with text message, dict, list of messages, and optionally a sticker"""
+    try:
+        logger.info(f"Replying to LINE token: {reply_token[:10]}...")
+        url = "https://api.line.me/v2/bot/message/reply"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+        }
+        
+        # Build messages array
+        messages = []
+        if isinstance(message, str):
+            messages.append({"type": "text", "text": message})
+        elif isinstance(message, dict):
+            messages.append(message)
+        elif isinstance(message, list):
+            messages.extend(message)
+            
+        # Add sticker if requested
+        if with_sticker:
+            # Use LINE's free sticker packages
+            # Package 446: Brown & Cony's Friendly Stickers
+            sticker_message = {
+                "type": "sticker",
+                "packageId": "446",
+                "stickerId": "1988"  # Thumbs up sticker
+            }
+            messages.append(sticker_message)
+        
+        payload = {"replyToken": reply_token, "messages": messages}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+        logger.info("Reply sent to LINE")
+    except Exception as e:
+        logger.error(f"Error sending LINE reply: {e}", exc_info=True)
+        # Don't raise exception here to avoid crashing the webhook handler
+
+async def push_line(user_id: str, message: str, with_sticker: bool = False) -> None:
+    """Push message to LINE user (use when reply token is already consumed)"""
+    try:
+        logger.info(f"Pushing message to LINE user: {user_id[:10]}...")
+        url = "https://api.line.me/v2/bot/message/push"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+        }
+        
+        # Build messages array
+        messages = [{"type": "text", "text": message}]
+        
+        # Add sticker if requested
+        if with_sticker:
+            sticker_message = {
+                "type": "sticker",
+                "packageId": "446",
+                "stickerId": "1988"
+            }
+            messages.append(sticker_message)
+        
+        payload = {"to": user_id, "messages": messages}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+        logger.info("Push message sent to LINE")
+    except Exception as e:
+        logger.error(f"Error sending LINE push message: {e}", exc_info=True)
+        # Don't raise exception here to avoid crashing the webhook handler
+

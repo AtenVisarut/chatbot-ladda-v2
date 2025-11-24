@@ -6,14 +6,13 @@ pydantic==2.9.2
 # HTTP client (compatible with all services)
 httpx>=0.28.1
 
-# Google Gemini AI (compatible with Python 3.13)
-google-generativeai==0.8.3
+# OpenAI (compatible with Python 3.13)
+openai>=1.54.0
 
 # Supabase client (updated for httpx compatibility)
 supabase>=2.10.0
 
-# OpenAI for embeddings and LLM
-openai>=1.54.0
+
 
 # Sentence Transformers for E5 embeddings
 sentence-transformers>=2.2.0
@@ -35,3 +34,5 @@ requests==2.32.3
 
 # ไม่ต้องใช้ pandas - ใช้ built-in csv module แทน
 # ไม่ต้องใช้ PDF libraries - ใช้ CSV เท่านั้น
+itsdangerous==2.2.0
+line-bot-sdk>=3.0.0
