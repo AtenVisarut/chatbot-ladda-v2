@@ -126,8 +126,11 @@ deploy.bat
 start.sh
 
 # Exclude Docker (if using Buildpacks/Procfile)
-Dockerfile
 docker-compose.yml
+.dockerignore
+fly.toml
+railway.json
+nixpacks.toml
 .dockerignore
 fly.toml
 railway.json
