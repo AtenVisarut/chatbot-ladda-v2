@@ -2,6 +2,7 @@ import logging
 import asyncio
 import json
 import time
+import os
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -121,9 +122,14 @@ async def lifespan(app_instance: FastAPI):
     logger.info(f"Analytics: {'✓' if analytics_tracker else '✗'}")
     logger.info("=" * 60)
     
-    # Start background tasks
-    logger.info("Starting background tasks...")
-    cleanup_task = asyncio.create_task(periodic_cleanup())
+    # Start background tasks only when explicitly enabled (not recommended on serverless)
+    RUN_BACKGROUND_TASKS = os.getenv("RUN_BACKGROUND_TASKS", "0") == "1"
+    cleanup_task = None
+    if RUN_BACKGROUND_TASKS:
+        logger.info("Starting background tasks...")
+        cleanup_task = asyncio.create_task(periodic_cleanup())
+    else:
+        logger.info("RUN_BACKGROUND_TASKS not set or false — skipping background tasks (serverless mode)")
     
     yield
     
