@@ -1,23 +1,18 @@
-# FastAPI and server
+# FastAPI and server (lightweight versions)
 fastapi==0.115.0
-uvicorn[standard]==0.32.0
+uvicorn==0.32.0
 pydantic==2.9.2
 
-# HTTP client (compatible with all services)
-httpx>=0.28.1
+# HTTP client
+httpx==0.28.1
 
-# OpenAI (compatible with Python 3.13)
-openai>=1.54.0
+# OpenAI
+openai==1.54.0
 
-# Supabase client (updated for httpx compatibility)
-supabase>=2.10.0
+# Supabase client
+supabase==2.10.0
 
-
-
-# Sentence Transformers removed (using OpenAI Embeddings)
-# sentence-transformers>=2.2.0
-
-# Image processing
+# Image processing (lightweight)
 Pillow==11.0.0
 
 # Environment variables
@@ -29,10 +24,8 @@ python-multipart==0.0.12
 # Rate limiting
 slowapi==0.1.9
 
-# Additional dependencies
-requests==2.32.3
-
-# ไม่ต้องใช้ pandas - ใช้ built-in csv module แทน
-# ไม่ต้องใช้ PDF libraries - ใช้ CSV เท่านั้น
+# Security
 itsdangerous==2.2.0
-line-bot-sdk>=3.0.0
+
+# LINE Bot SDK
+line-bot-sdk==3.0.0
