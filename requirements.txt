@@ -13,7 +13,7 @@ openai==1.54.0
 supabase==2.10.0
 
 # Image processing (lightweight)
-Pillow==11.0.0
+Pillow==10.4.0
 
 # Environment variables
 python-dotenv==1.0.1
