@@ -1,7 +1,7 @@
 import logging
 import json
 from typing import List, Dict, Optional
-from app.services.services import supabase_client, e5_model, openai_client
+from app.services.services import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import clean_knowledge_text, post_process_answer
 
@@ -25,10 +25,16 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
         
         relevant_docs = []
         
-        # Strategy 1: Vector Search (if E5 available)
-        if e5_model:
+        # Strategy 1: Vector Search (using OpenAI Embeddings)
+        if openai_client:
             try:
-                query_embedding = e5_model.encode(f"query: {question}", normalize_embeddings=True).tolist()
+                # Generate embedding using OpenAI
+                response = await openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=question,
+                    encoding_format="float"
+                )
+                query_embedding = response.data[0].embedding
                 
                 result = supabase_client.rpc(
                     'match_knowledge',
@@ -41,7 +47,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                 
                 if result.data:
                     relevant_docs.extend(result.data)
-                    logger.info(f"✓ Found {len(result.data)} docs via vector search")
+                    logger.info(f"✓ Found {len(result.data)} docs via vector search (OpenAI)")
             except Exception as e:
                 logger.warning(f"Vector search failed: {e}")
         

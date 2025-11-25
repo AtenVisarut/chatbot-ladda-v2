@@ -4,7 +4,6 @@ Handles LINE user profile tracking and database operations
 """
 
 import logging
-from datetime import datetime
 from typing import Optional, Dict
 import httpx
 from app.services.services import supabase_client
@@ -70,7 +69,7 @@ async def get_user(user_id: str) -> Optional[Dict]:
 
 async def upsert_user(user_id: str, profile_data: Dict) -> bool:
     """
-    Create or update user record
+    Create or update user record (simplified for registration schema)
     
     Args:
         user_id: LINE user ID
@@ -81,45 +80,14 @@ async def upsert_user(user_id: str, profile_data: Dict) -> bool:
             logger.error("Supabase client not available")
             return False
         
-        # Check if user exists
-        existing_user = await get_user(user_id)
+        # Simple upsert with only columns that exist in the table
+        data = {
+            "line_user_id": user_id,
+            "display_name": profile_data.get('displayName', 'Unknown')
+        }
         
-        now = datetime.now().isoformat()
-        
-        if existing_user:
-            # Update existing user
-            data = {
-                "display_name": profile_data.get('displayName', existing_user.get('display_name')),
-                "picture_url": profile_data.get('pictureUrl'),
-                "status_message": profile_data.get('statusMessage'),
-                "last_seen_at": now,
-                "total_interactions": existing_user.get('total_interactions', 0) + 1,
-                "updated_at": now
-            }
-            
-            supabase_client.table('users')\
-                .update(data)\
-                .eq('line_user_id', user_id)\
-                .execute()
-            
-            logger.info(f"✓ Updated user {user_id} (interactions: {data['total_interactions']})")
-        else:
-            # Create new user
-            data = {
-                "line_user_id": user_id,
-                "display_name": profile_data.get('displayName', 'Unknown'),
-                "picture_url": profile_data.get('pictureUrl'),
-                "status_message": profile_data.get('statusMessage'),
-                "first_seen_at": now,
-                "last_seen_at": now,
-                "total_interactions": 1,
-                "created_at": now,
-                "updated_at": now
-            }
-            
-            supabase_client.table('users').insert(data).execute()
-            
-            logger.info(f"✓ Created new user {user_id}: {data['display_name']}")
+        supabase_client.table('users').upsert(data).execute()
+        logger.info(f"✓ Upserted user {user_id}: {data['display_name']}")
         
         return True
         
@@ -129,32 +97,22 @@ async def upsert_user(user_id: str, profile_data: Dict) -> bool:
 
 
 async def update_last_seen(user_id: str) -> bool:
-    """Update user's last seen timestamp and increment interaction count"""
+    """Update user's last interaction (simplified)"""
     try:
         if not supabase_client:
             return False
         
         existing_user = await get_user(user_id)
         if not existing_user:
-            logger.warning(f"User {user_id} not found for last_seen update")
+            logger.warning(f"User {user_id} not found for update")
             return False
         
-        now = datetime.now().isoformat()
-        
-        supabase_client.table('users')\
-            .update({
-                "last_seen_at": now,
-                "total_interactions": existing_user.get('total_interactions', 0) + 1,
-                "updated_at": now
-            })\
-            .eq('line_user_id', user_id)\
-            .execute()
-        
-        logger.debug(f"✓ Updated last_seen for {user_id}")
+        # Just verify user exists
+        logger.debug(f"✓ Verified user {user_id} exists")
         return True
         
     except Exception as e:
-        logger.error(f"Error updating last_seen for {user_id}: {e}")
+        logger.error(f"Error updating user {user_id}: {e}")
         return False
 
 
@@ -174,7 +132,7 @@ async def ensure_user_exists(user_id: str) -> bool:
         user = await get_user(user_id)
         
         if user:
-            # User exists, just update last_seen
+            # User exists
             await update_last_seen(user_id)
             return True
         

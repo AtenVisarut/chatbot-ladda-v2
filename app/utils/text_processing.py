@@ -155,40 +155,77 @@ def extract_product_names_from_answer(answer: str) -> List[str]:
 def extract_keywords_from_question(question: str) -> dict:
     """Extract main keywords from question with categories"""
     question_lower = question.lower()
+    # Normalize simple punctuation to spaces for better matching
+    question_norm = re.sub(r'[\.,\?\!\:\;\(\)\/]',' ', question_lower)
     
     # Pest/Disease keywords (expanded)
     pest_keywords = [
+        # Thai
         "เพลี้ยไฟ", "เพลี้ยอ่อน", "เพลี้ย", "หนอน", "แมลง", "ด้วงงวง",
         "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา", "แอนแทรคโนส",
         "ไวรัส", "โรคใบด่าง", "โรคใบหงิก",
         "วัชพืช", "หญ้า", "ผักบุ้ง", "หญ้าคา",
         "โรคพืช", "ศัตรูพืช", "ไร", "เพลี้ยแป้ง", "หนอนกระทู้ข้าว",
         "จักจั่น", "หนอนเจาะ", "หนอนกอ", "หนอนใย", "ด้วง", "มด", "ปลวก",
-        "เพลี้ยจักจั่น", "แมลงวันผล", "แมลงหวี่ขาว", "ทริปส์"
+        "เพลี้ยจักจั่น", "แมลงวันผล", "แมลงหวี่ขาว", "ทริปส์",
+        # English
+        "aphid", "thrips", "whitefly", "moth", "caterpillar", "worm", "beetle",
+        "mildew", "powdery mildew", "rust", "fungus", "fungal", "anthracnose",
+        "virus", "viral", "disease", "weed", "grass", "mite", "borer", "leaf miner",
+        "insect", "pest", "armyworm", "thrips"
     ]
     
     # Crop keywords (expanded)
     crop_keywords = [
+        # Thai
         "ทุเรียน", "มะม่วง", "ข้าว", "พืชผัก", "ผัก", "ผลไม้",
         "มะนาว", "ส้ม", "กล้วย", "มะพร้าว", "ยางพารา", "ปาล์ม",
         "ข้าวโพด", "อ้อย", "มันสำปะหลัง", "ถั่ว", "พริก", "มะเขือเทศ",
-        "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "ฝรั่ง", "ชมพู่"
+        "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "ฝรั่ง", "ชมพู่",
+        # English
+        "durian", "mango", "rice", "vegetable", "vegetables", "fruit",
+        "lime", "orange", "banana", "coconut", "rubber", "palm",
+        "corn", "sugarcane", "cassava", "peanut", "chilli", "tomato",
+        "longan", "lychee", "rambutan", "mangosteen", "guava"
     ]
     
     # Product-related keywords
     product_keywords = [
+        # Thai
         "ผลิตภัณฑ์", "สินค้า", "ยา", "สาร", "ปุ๋ย",
         "icp", "ladda", "icpl", "ไอซีพี", "ลัดดา",
         "โมเดิน", "ไดอะซินอน", "อิมิดาโคลพริด", "ไซเพอร์เมทริน",
-        "แนะนำ", "ใช้", "พ่น", "ฉีด", "กำจัด", "ป้องกัน"
+        "แนะนำ", "ใช้", "พ่น", "ฉีด", "กำจัด", "ป้องกัน",
+        # English
+        "product", "products", "fertilizer", "pesticide", "insecticide", "fungicide", "recommend"
     ]
     
     # Intent keywords (NEW)
     intent_keywords = {
-        "increase_yield": ["เพิ่มผลผลิต", "ผลผลิตสูง", "ผลผลิตมาก", "ผลผลิตดี", "ผลผลิตเยอะ", "ผลผลิตขึ้น", "ผลผลิตดีขึ้น", "ผลผลิตเพิ่ม"],
-        "solve_problem": ["แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม"],
-        "general_care": ["ดูแล", "บำรุง", "เลี้ยง", "ปลูก", "ใส่ปุ๋ย"],
-        "product_inquiry": ["มีอะไรบ้าง", "มีไหม", "แนะนำ", "ควรใช้", "ใช้อะไร", "ซื้อ"]
+        "increase_yield": [
+            # Thai
+            "เพิ่มผลผลิต", "ผลผลิตสูง", "ผลผลิตมาก", "ผลผลิตดี", "ผลผลิตเยอะ", "ผลผลิตขึ้น", "ผลผลิตดีขึ้น", "ผลผลิตเพิ่ม",
+            # English
+            "increase yield", "higher yield", "more yield", "increase production", "boost yield", "increase harvest"
+        ],
+        "solve_problem": [
+            # Thai
+            "แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม",
+            # English
+            "solve problem", "control", "kill", "manage pest", "prevent", "control pest", "treat"
+        ],
+        "general_care": [
+            # Thai
+            "ดูแล", "บำรุง", "เลี้ยง", "ปลูก", "ใส่ปุ๋ย",
+            # English
+            "care", "fertilize", "general care", "maintenance", "nurture"
+        ],
+        "product_inquiry": [
+            # Thai
+            "มีอะไรบ้าง", "มีไหม", "แนะนำ", "ควรใช้", "ใช้อะไร", "ซื้อ",
+            # English
+            "what products", "what is available", "recommend product", "recommend", "what to use", "is there"
+        ]
     }
     
     found = {
@@ -201,24 +238,25 @@ def extract_keywords_from_question(question: str) -> dict:
     
     # Extract pests
     for keyword in pest_keywords:
-        if keyword in question_lower:
+        if keyword in question_norm:
             found["pests"].append(keyword)
     
     # Extract crops
     for keyword in crop_keywords:
-        if keyword in question_lower:
+        if keyword in question_norm:
             found["crops"].append(keyword)
     
     # Extract product-related
     for keyword in product_keywords:
-        if keyword in question_lower:
+        if keyword in question_norm:
             found["products"].append(keyword)
             found["is_product_query"] = True
     
     # Detect intent (NEW)
+    # Detect intent (MATCH ON NORMALIZED TEXT)
     for intent, keywords in intent_keywords.items():
         for keyword in keywords:
-            if keyword in question_lower:
+            if keyword in question_norm:
                 found["intent"] = intent
                 found["is_product_query"] = True
                 break

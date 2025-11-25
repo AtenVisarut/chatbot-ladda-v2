@@ -14,8 +14,8 @@ supabase>=2.10.0
 
 
 
-# Sentence Transformers for E5 embeddings
-sentence-transformers>=2.2.0
+# Sentence Transformers removed (using OpenAI Embeddings)
+# sentence-transformers>=2.2.0
 
 # Image processing
 Pillow==11.0.0

@@ -1,7 +1,6 @@
 import logging
 from supabase import create_client, Client
 
-from sentence_transformers import SentenceTransformer
 from app.config import OPENAI_API_KEY, SUPABASE_URL, SUPABASE_KEY
 from app.analytics import AnalyticsTracker, AlertManager
 
@@ -14,13 +13,8 @@ if OPENAI_API_KEY:
     openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     logger.info("OpenAI initialized successfully")
 
-# Initialize E5 model for embeddings (768 dimensions)
+# E5 model removed - using OpenAI embeddings instead
 e5_model = None
-try:
-    e5_model = SentenceTransformer('intfloat/multilingual-e5-base')
-    logger.info("E5 model initialized successfully (768 dimensions)")
-except Exception as e:
-    logger.warning(f"E5 model initialization failed: {e}")
 
 # Initialize Supabase (fallback)
 supabase_client: Client = None

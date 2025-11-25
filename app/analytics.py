@@ -185,6 +185,11 @@ class AnalyticsTracker:
             response_times = []
             error_types = {}
             daily_activity = {}
+            # Additional per-day metrics
+            daily_users_sets = {}
+            daily_response_times_by_day = {}
+            daily_requests_by_day = {}
+            daily_errors_by_day = {}
             
             for event in events:
                 user_id = event.get('user_id')
@@ -228,13 +233,36 @@ class AnalyticsTracker:
                     error_type = event.get('error_type', 'unknown')
                     error_types[error_type] = error_types.get(error_type, 0) + 1
                 
-                # Track daily activity
+                # Track daily activity and per-day aggregates
                 created_at = event.get('created_at')
                 if created_at:
                     try:
                         # Parse date (YYYY-MM-DD)
                         date_str = datetime.fromisoformat(created_at).strftime('%Y-%m-%d')
+                        # total events per day
                         daily_activity[date_str] = daily_activity.get(date_str, 0) + 1
+
+                        # unique users per day
+                        if user_id:
+                            if date_str not in daily_users_sets:
+                                daily_users_sets[date_str] = set()
+                            daily_users_sets[date_str].add(user_id)
+
+                        # requests (image_analysis + question) per day
+                        if event_type in ('image_analysis', 'question'):
+                            daily_requests_by_day[date_str] = daily_requests_by_day.get(date_str, 0) + 1
+
+                        # response times per day
+                        response_time = event.get('response_time_ms', 0)
+                        if response_time and event_type in ('image_analysis', 'question'):
+                            if date_str not in daily_response_times_by_day:
+                                daily_response_times_by_day[date_str] = []
+                            daily_response_times_by_day[date_str].append(response_time)
+
+                        # errors per day
+                        if event_type == 'error':
+                            daily_errors_by_day[date_str] = daily_errors_by_day.get(date_str, 0) + 1
+
                     except:
                         pass
             
@@ -279,6 +307,19 @@ class AnalyticsTracker:
             
             top_provinces = sorted(province_counter.items(), key=lambda x: x[1], reverse=True)[:5]
 
+            # Prepare daily series: avg response time and error rate per day
+            daily_response_time_avg = {}
+            for d, times in daily_response_times_by_day.items():
+                daily_response_time_avg[d] = round(sum(times) / len(times), 2) if times else 0
+
+            daily_error_rate_percent = {}
+            for d, err_count in daily_errors_by_day.items():
+                reqs = daily_requests_by_day.get(d, 0)
+                daily_error_rate_percent[d] = round((err_count / reqs * 100) if reqs > 0 else 0, 2)
+
+            # daily unique users
+            daily_unique_users = {d: len(s) for d, s in daily_users_sets.items()}
+
             return {
                 "overview": {
                     "unique_users": len(unique_users),
@@ -315,6 +356,10 @@ class AnalyticsTracker:
                     for etype, count in top_errors
                 ],
                 "daily_activity": dict(sorted(daily_activity.items())),
+                "daily_requests": dict(sorted(daily_requests_by_day.items())),
+                "daily_users": dict(sorted(daily_unique_users.items())),
+                "daily_response_time": dict(sorted(daily_response_time_avg.items())),
+                "daily_error_rate": dict(sorted(daily_error_rate_percent.items())),
                 "date_range": {
                     "start": start_date.isoformat(),
                     "end": end_date.isoformat(),

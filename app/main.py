@@ -34,6 +34,11 @@ from app.services.services import (
     analytics_tracker,
     alert_manager
 )
+from app.services.welcome import (
+    get_welcome_message,
+    get_usage_guide,
+    get_product_catalog_message
+)
 from app.services.cache import (
     cleanup_expired_cache,
     get_cache_stats,
@@ -352,8 +357,25 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # ============================================================================#
                 from app.services.registration import registration_manager
                 
+                logger.info(f"🟢 Checking registration for text: '{text}'")
+                
+                # 0. Check for usage guide request
+                if text in ["วิธีใช้งาน", "วิธีใช้", "ช่วยเหลือ", "help"]:
+                    logger.info(f"🟢 User {user_id} requested usage guide")
+                    usage_guide = get_usage_guide()
+                    await reply_line(reply_token, usage_guide)
+                    return JSONResponse(content={"status": "success"})
+                
+                # 0.1 Check for product catalog request
+                if text in ["ดูผลิตภัณฑ์", "ผลิตภัณฑ์", "สินค้า", "products"]:
+                    logger.info(f"🟢 User {user_id} requested product catalog")
+                    catalog = get_product_catalog_message()
+                    await reply_line(reply_token, catalog)
+                    return JSONResponse(content={"status": "success"})
+                
                 # 1. Check if user wants to start registration
                 if text == "ลงทะเบียน":
+                    logger.info(f"🟢 User {user_id} wants to start registration")
                     reg_message = await registration_manager.start_registration(user_id)
                     # Already a dict, no need to convert
                     await reply_line(reply_token, reg_message)
@@ -361,7 +383,9 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 
                 # 2. Check if user is in registration process
                 reg_state = await registration_manager.get_registration_state(user_id)
+                logger.info(f"🟢 Registration state for {user_id}: {reg_state}")
                 if reg_state:
+                    logger.info(f"🟢 User {user_id} is in registration, handling input")
                     response_msg = await registration_manager.handle_registration_input(user_id, text)
                     # Already a dict, no need to convert
                     await reply_line(reply_token, response_msg)

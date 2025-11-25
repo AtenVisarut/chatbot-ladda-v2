@@ -59,9 +59,12 @@ class RegistrationManager:
     async def set_registration_state(self, user_id: str, state: str):
         """Set registration state for user"""
         try:
+            from datetime import datetime, timedelta
+            expires_at = (datetime.now() + timedelta(hours=1)).isoformat()
             supabase_client.table("cache").upsert({
                 "key": f"{self.state_key_prefix}{user_id}",
-                "value": state
+                "value": state,
+                "expires_at": expires_at
             }).execute()
         except Exception as e:
             logger.error(f"Error setting registration state: {e}")
@@ -85,9 +88,12 @@ class RegistrationManager:
         """Save registration data"""
         try:
             import json
+            from datetime import datetime, timedelta
+            expires_at = (datetime.now() + timedelta(hours=1)).isoformat()
             supabase_client.table("cache").upsert({
                 "key": f"{self.data_key_prefix}{user_id}",
-                "value": json.dumps(data, ensure_ascii=False)
+                "value": json.dumps(data, ensure_ascii=False),
+                "expires_at": expires_at
             }).execute()
         except Exception as e:
             logger.error(f"Error setting registration data: {e}")
@@ -131,8 +137,10 @@ class RegistrationManager:
 
     async def start_registration(self, user_id: str) -> Dict:
         """Start registration flow"""
+        logger.info(f"🔵 Starting registration for user: {user_id}")
         await self.set_registration_state(user_id, REGISTRATION_STATES["ASK_NAME"])
         await self.set_registration_data(user_id, {})
+        logger.info(f"🔵 Registration state set to ASK_NAME for user: {user_id}")
         
         return self._create_text_message(
             text="📝 ลงทะเบียนเกษตรกร\n\n"
@@ -150,6 +158,8 @@ class RegistrationManager:
     ) -> Dict:
         """Handle user input during registration"""
         
+        logger.info(f"🔵 Handling registration input for {user_id}: {user_input}")
+        
         # Check for cancellation
         if user_input.strip() in ["ยกเลิก", "cancel", "ไม่ต้องการ"]:
             await self.clear_registration(user_id)
@@ -157,6 +167,8 @@ class RegistrationManager:
         
         state = await self.get_registration_state(user_id)
         data = await self.get_registration_data(user_id)
+        
+        logger.info(f"🔵 Current state: {state}, Data: {data}")
         
         if state == REGISTRATION_STATES["ASK_NAME"]:
             return await self._handle_name(user_id, user_input, data)
@@ -282,18 +294,25 @@ class RegistrationManager:
     async def _complete_registration(self, user_id: str, data: Dict) -> Dict:
         """Save registration data to database"""
         try:
-            # Update user record
+            logger.info(f"🔵 Completing registration for {user_id}")
+            logger.info(f"🔵 Data to save: {data}")
+            
+            # Upsert user record (create if not exists, update if exists)
             update_data = {
-                "display_name": data.get("full_name"),  # Use display_name instead of full_name
+                "line_user_id": user_id,  # Primary key for upsert
+                "display_name": data.get("full_name"),
                 "phone_number": data.get("phone_number"),
                 "province": data.get("province"),
                 "crops_grown": data.get("crops_grown", []),
                 "registration_completed": True
             }
             
-            supabase_client.table("users").update(update_data).eq(
-                "line_user_id", user_id
+            logger.info(f"🔵 Upserting to Supabase: {update_data}")
+            result = supabase_client.table("users").upsert(
+                update_data,
+                on_conflict="line_user_id"
             ).execute()
+            logger.info(f"🔵 Supabase result: {result}")
             
             # Track registration event
             if analytics_tracker:

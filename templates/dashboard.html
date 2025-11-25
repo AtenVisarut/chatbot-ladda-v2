@@ -592,6 +592,24 @@
                 กำลังโหลด...
             </div>
         </div>
+
+        <div class="chart-container">
+            <h2>📈 Trend Charts</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
+                <div>
+                    <canvas id="chartUsers" class="chart"></canvas>
+                </div>
+                <div>
+                    <canvas id="chartRequests" class="chart"></canvas>
+                </div>
+                <div>
+                    <canvas id="chartResponseTime" class="chart"></canvas>
+                </div>
+                <div>
+                    <canvas id="chartErrorRate" class="chart"></canvas>
+                </div>
+            </div>
+        </div>
         
         <div class="list-container">
             <h2>🔍 ประเภทศัตรูพืช</h2>
@@ -629,9 +647,12 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         let currentData = null;
         let previousData = null;
+        // Hold chart instances so we can update/destroy
+        window.trendCharts = window.trendCharts || {};
         
         async function loadDashboard() {
             try {
@@ -700,6 +721,9 @@
                 
                 // Update performance metrics
                 updatePerformanceMetrics(currentData);
+
+                // Render trend charts
+                renderTrendCharts(currentData);
                 
                 // Update timestamp
                 const rangeText = days == 1 ? 'วันนี้' : `${days} วันที่แล้ว`;
@@ -887,6 +911,67 @@
             });
             
             container.innerHTML = html;
+        }
+
+        function renderTrendCharts(data) {
+            try {
+                const labels = Object.keys(data.daily_activity).sort();
+
+                // Users
+                const usersData = labels.map(d => data.daily_users && data.daily_users[d] ? data.daily_users[d] : 0);
+
+                // Requests
+                const requestsData = labels.map(d => data.daily_requests && data.daily_requests[d] ? data.daily_requests[d] : 0);
+
+                // Response time (ms)
+                const responseData = labels.map(d => data.daily_response_time && data.daily_response_time[d] ? data.daily_response_time[d] : 0);
+
+                // Error rate (%)
+                const errorData = labels.map(d => data.daily_error_rate && data.daily_error_rate[d] ? data.daily_error_rate[d] : 0);
+
+                const ctxUsers = document.getElementById('chartUsers').getContext('2d');
+                const ctxRequests = document.getElementById('chartRequests').getContext('2d');
+                const ctxResp = document.getElementById('chartResponseTime').getContext('2d');
+                const ctxErr = document.getElementById('chartErrorRate').getContext('2d');
+
+                // Helper to create/update charts
+                function createOrUpdate(id, ctx, cfg) {
+                    if (window.trendCharts[id]) {
+                        window.trendCharts[id].data = cfg.data;
+                        window.trendCharts[id].options = cfg.options || window.trendCharts[id].options;
+                        window.trendCharts[id].update();
+                    } else {
+                        window.trendCharts[id] = new Chart(ctx, cfg);
+                    }
+                }
+
+                createOrUpdate('users', ctxUsers, {
+                    type: 'line',
+                    data: { labels: labels, datasets: [{ label: 'Unique Users', data: usersData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3 }] },
+                    options: { responsive: true, plugins: { legend: { display: true } } }
+                });
+
+                createOrUpdate('requests', ctxRequests, {
+                    type: 'line',
+                    data: { labels: labels, datasets: [{ label: 'Requests', data: requestsData, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', tension: 0.3 }] },
+                    options: { responsive: true }
+                });
+
+                createOrUpdate('response', ctxResp, {
+                    type: 'line',
+                    data: { labels: labels, datasets: [{ label: 'Avg Response Time (ms)', data: responseData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', tension: 0.3 }] },
+                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                });
+
+                createOrUpdate('error', ctxErr, {
+                    type: 'line',
+                    data: { labels: labels, datasets: [{ label: 'Error Rate (%)', data: errorData, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3 }] },
+                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                });
+
+            } catch (err) {
+                console.error('Failed to render trend charts:', err);
+            }
         }
         
         // Export to CSV

@@ -7,7 +7,7 @@ import logging
 import json
 from typing import List, Dict
 from app.models import DiseaseDetectionResult, ProductRecommendation
-from app.services.services import supabase_client, e5_model, openai_client
+from app.services.services import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question
 
@@ -38,11 +38,15 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         
         # Strategy 1: Vector search by disease name (most accurate)
         try:
-            if e5_model:
-                # Generate embedding for disease name
-                query_text = f"query: {disease_name}"
-                query_embedding = e5_model.encode(query_text, normalize_embeddings=True).tolist()
-                logger.info("✓ Product query embedding generated")
+            if openai_client:
+                # Generate embedding for disease name using OpenAI
+                response = await openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=disease_name,
+                    encoding_format="float"
+                )
+                query_embedding = response.data[0].embedding
+                logger.info("✓ Product query embedding generated (OpenAI)")
                 
                 # Vector search in products table
                 result = supabase_client.rpc(
@@ -81,7 +85,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                 else:
                     logger.info("No products found via vector search, trying keyword search")
             else:
-                logger.warning("E5 model not available, using keyword search")
+                logger.warning("OpenAI client not available, using keyword search")
         except Exception as e:
             logger.warning(f"Vector search failed: {e}, trying keyword search")
         
@@ -190,8 +194,8 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
             logger.error("❌ Supabase client not available")
             return await answer_product_question(question, keywords)
         
-        if not e5_model:
-            logger.error("❌ E5 model not available")
+        if not openai_client:
+            logger.error("❌ OpenAI client not available")
             return await answer_product_question(question, keywords)
         
         intent = keywords.get("intent")
@@ -208,6 +212,11 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                     search_queries.append(f"เพิ่มผลผลิต {crop}")
                     search_queries.append(f"ปุ๋ยบำรุง {crop}")
                     search_queries.append(f"ฮอร์โมน {crop}")
+                    # English variants for English crop names
+                    if any(c.isalpha() for c in crop):
+                        search_queries.append(f"increase yield {crop}")
+                        search_queries.append(f"fertilizer for {crop}")
+                        search_queries.append(f"plant hormone {crop}")
             else:
                 search_queries.append("เพิ่มผลผลิต ปุ๋ย ฮอร์โมน")
         
@@ -217,12 +226,20 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                 for pest in pests[:2]:
                     for crop in crops[:2]:
                         search_queries.append(f"กำจัด {pest} {crop}")
+                        # English variants
+                        if any(c.isalpha() for c in crop) or any(c.isalpha() for c in pest):
+                            search_queries.append(f"control {pest} {crop}")
+                            search_queries.append(f"manage {pest} on {crop}")
             elif pests:
                 for pest in pests[:2]:
                     search_queries.append(f"กำจัด {pest}")
+                    if any(c.isalpha() for c in pest):
+                        search_queries.append(f"control {pest}")
             elif crops:
                 for crop in crops[:2]:
                     search_queries.append(f"ป้องกันโรค {crop}")
+                    if any(c.isalpha() for c in crop):
+                        search_queries.append(f"prevent disease {crop}")
         
         elif intent == "general_care":
             # ดูแลทั่วไป
@@ -245,7 +262,14 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         for query in search_queries[:3]:  # Top 3 queries
             try:
                 logger.info(f"   → Query: '{query}'")
-                query_embedding = e5_model.encode(f"query: {query}", normalize_embeddings=True).tolist()
+                
+                # Generate embedding using OpenAI
+                response = await openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=query,
+                    encoding_format="float"
+                )
+                query_embedding = response.data[0].embedding
                 
                 result = supabase_client.rpc(
                     'match_products',
@@ -393,7 +417,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are a strict product assistant. ONLY recommend products from the provided list. Never create or suggest products not in the list."},
                     {"role": "user", "content": prompt}
@@ -565,10 +589,10 @@ async def answer_product_question(question: str, keywords: dict) -> str:
    - อ่านฉลากก่อนใช้
    - ใช้อุปกรณ์ป้องกันตัว
    - ทดสอบในพื้นที่เล็กก่อน
-6. **ใช้ภาษาง่ายๆ** พร้อม emoji (💊 🌱 ✅ ⚠️)
+6. **ใช้ภาษาง่ายๆ** 
 7. **ไม่ใช้ markdown** - ตอบเป็นข้อความธรรมดา
 
-⚠️ **เกณฑ์การเลือก**:
+**เกณฑ์การเลือก**:
 - ถ้าถามเกี่ยวกับพืชเฉพาะ → เลือกเฉพาะที่ใช้กับพืชนั้นได้
 - ถ้าถามเกี่ยวกับศัตรูพืช → เลือกที่กำจัดศัตรูพืชนั้นได้
 - ถ้าถามทั่วไป → แนะนำผลิตภัณฑ์ยอดนิยม 3-5 รายการ
@@ -577,7 +601,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
 
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an agricultural product expert."},
                     {"role": "user", "content": prompt}

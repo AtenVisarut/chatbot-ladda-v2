@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 from app.models import DiseaseDetectionResult, ProductRecommendation
-from app.services.knowledge_base import retrieve_knowledge_from_knowledge_table
 from app.services.services import openai_client
 from app.utils.response_template import build_simple_response
 
@@ -13,7 +12,7 @@ async def generate_final_response(
     extra_user_info: Optional[str] = None
 ) -> str:
     """
-    Generate final response using GPT-4o-mini (AI-powered)
+    Generate final response using GPT-4o- (AI-powered)
     
     Includes:
     - Symptoms (อาการที่เกิด)
@@ -21,10 +20,10 @@ async def generate_final_response(
     - Product Recommendations (คำแนะนำผลิตภัณฑ์)
     """
     try:
-        logger.info("Generating response using GPT-4o-mini")
+        logger.info("Generating response using GPT-4o")
         
-        # Get knowledge from database
-        knowledge_text = await retrieve_knowledge_from_knowledge_table(disease_info.disease_name)
+        # Knowledge base table removed - using GPT knowledge instead
+        knowledge_text = None
         
         # Prepare product list text
         products_text = ""
@@ -64,7 +63,7 @@ async def generate_final_response(
             product_section_prompt = ""
             products_list_prompt = ""
 
-        prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชของ ICP Ladda
+        prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชและศัตรูพืชประสบการณ์20ปี ของ ICP LADDA  
 หน้าที่ของคุณคือแจ้งผลการตรวจโรคพืชและแนะนำวิธีรักษาให้กับเกษตรกร
 
 ข้อมูลการตรวจ:
@@ -94,7 +93,7 @@ async def generate_final_response(
 
         # Call GPT
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful agricultural expert assistant."},
                 {"role": "user", "content": prompt}
@@ -110,10 +109,11 @@ async def generate_final_response(
         
         # Append Static Footer (Important Notes & Links)
         final_response += "\n\n" + "="*30
-        final_response += "\n**หมายเหตุสำคัญ**:"
-        final_response += "\n• ✅ ปรับอัตรา/ปริมาณตามฉลากจริงก่อนใช้ทุกครั้ง"
-        final_response += "\n• ✅ ควรปรึกษาผู้เชี่ยวชาญก่อนใช้"
-        final_response += "\n• ✅ ทดสอบในพื้นที่เล็กก่อนพ่นทั้งแปลง"
+        final_response += "\n*หมายเหตุสำคัญ*"
+        final_response += "\n• เป็นแค่การวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้"
+        final_response += "\n• ปรับอัตรา/ปริมาณตามฉลากจริงก่อนใช้ทุกครั้ง"
+        final_response += "\n• ควรสอบถามร้านค้าตัวแทนจำหน่ายเพื่อแนะนำเพิ่มเติม"
+        final_response += "\n• ทดสอบในพื้นที่เล็กก่อนพ่นทั้งแปลง"
         
         final_response += "\n\n📚 ดูรายละเอียดผลิตภัณฑ์ทั้งหมด:"
         final_response += "\n🔗 https://www.icpladda.com/about/"
