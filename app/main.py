@@ -3,6 +3,7 @@ import asyncio
 import json
 import time
 import os
+import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -568,5 +569,9 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    # อ่าน Port จาก Environment Variable ที่ Cloud Platform (Fly.io/Vercel) ส่งมา 
+    # และใช้ 8080 เป็นค่า Default (ตามที่ Fly.io แนะนำ)
+    port = int(os.environ.get("PORT", 8080))
+    
+    # รัน Uvicorn ด้วยค่า Port ที่อ่านได้
+    uvicorn.run('app.main:app', host='0.0.0.0', port=port, reload=True)
