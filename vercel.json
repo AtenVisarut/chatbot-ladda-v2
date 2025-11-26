@@ -3,7 +3,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "app/main.py"
+      "dest": "api/index.py"
     }
   ],
   "env": {
@@ -13,7 +13,7 @@
     "PYTHONDONTWRITEBYTECODE": "1"
   },
   "functions": {
-    "app/main.py": {
+    "api/index.py": {
       "memory": 1024,
       "maxDuration": 60
     }
