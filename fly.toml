@@ -1,0 +1,19 @@
+# fly.toml app configuration file generated for chatbot-ladda on 2024-11-26
+
+app = "chatbot-ladda-aivip" # เปลี่ยนเป็นชื่อแอพของคุณที่ไม่ซ้ำกับคนอื่น
+primary_region = "sin" # Singapore (ใกล้ไทยที่สุด)
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

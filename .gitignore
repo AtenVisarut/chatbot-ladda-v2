@@ -115,6 +115,7 @@ test_*.py
 *.md
 !README.md
 !DEPLOYMENT_GUIDE.md
+!FLY_IO_DEPLOYMENT.md
 
 # Exclude verification and debug scripts
 verify_*.py
@@ -128,10 +129,5 @@ start.sh
 # Exclude Docker (if using Buildpacks/Procfile)
 docker-compose.yml
 .dockerignore
-fly.toml
-railway.json
-nixpacks.toml
-.dockerignore
-fly.toml
 railway.json
 nixpacks.toml
