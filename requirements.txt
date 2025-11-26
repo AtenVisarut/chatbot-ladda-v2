@@ -4,13 +4,13 @@ uvicorn==0.32.0
 pydantic==2.9.2
 
 # HTTP client
-httpx==0.28.1
+# httpx==0.28.1  <-- ***ลบออก หรือ คอมเมนต์ไว้***
 
 # OpenAI
 openai==1.54.0
 
-# Supabase client
-supabase==2.10.0
+# Supabase client (ลดเวอร์ชันลงเพื่อเลี่ยง Conflict)
+supabase==2.8.0 
 
 # Image processing (lightweight)
 Pillow==10.4.0
