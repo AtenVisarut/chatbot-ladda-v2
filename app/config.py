@@ -14,8 +14,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # Admin Authentication
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ladda")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ladda123")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
 # Cache configuration
