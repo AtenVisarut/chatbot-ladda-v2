@@ -11,11 +11,5 @@
     "UV_NO_CACHE": "1",
     "PIP_NO_CACHE_DIR": "1",
     "PYTHONDONTWRITEBYTECODE": "1"
-  },
-  "functions": {
-    "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
   }
 }
