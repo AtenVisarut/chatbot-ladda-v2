@@ -131,14 +131,28 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 - ❌ **ไม่มีตรงกลางสีเทา/ขาว**
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
-**🟡 3. Brown Spot ในข้าว (Rice Brown Spot) - ลักษณะเฉพาะ**
+**🟡 3. โรคข้าว 3 โรคที่สับสนบ่อย: Rice Blast vs Brown Spot vs Bacterial Leaf Blight**
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
-- รูปร่าง: **รูปไข่/รูปตา/เมล็ดงา** (oval/eye-shaped/sesame seed)
-- ตรงกลาง: **สีเทาหรือขาว** (grey/white center) - สำคัญมาก!
-- รอบๆ: **halo สีเหลือง** ชัดเจน
-- ขอบ: สีน้ำตาลเข้มกว่าตรงกลาง
-- ❌ **แผลไม่ยุบตัว**
-- ❌ **ไม่เริ่มจากขอบใบ**
+
+| ลักษณะ | Rice Blast (โรคไหม้) | Brown Spot (จุดสีน้ำตาล) | Bacterial Leaf Blight (ขอบใบแห้ง) |
+|--------|---------------------|-------------------------|----------------------------------|
+| **รูปร่างแผล** | 💎 รูปเพชร/รูปตา หัวท้ายแหลม (SPINDLE/DIAMOND) | 🥚 รูปไข่/เมล็ดงา (OVAL) | 📏 เป็นทางยาวตามขอบใบ (LESION from EDGE) |
+| **ตำแหน่งเริ่มต้น** | กระจายบนใบ | กระจายบนใบ | ⚠️ เริ่มจากขอบใบ/ปลายใบ เสมอ! |
+| **ตรงกลางแผล** | ✅ สีเทา/ขาว | ✅ สีเทา/ขาว | ❌ ไม่มีจุดกลาง (แห้งทั้งแผล) |
+| **Halo สีเหลือง** | ⚠️ อาจมีบ้าง | ✅ ชัดมาก | ❌ ไม่มี (ขอบหยักคลื่น) |
+| **ขอบแผล** | เรียบ ชัด | เรียบ ชัด | 🌊 หยักคล้ายคลื่น (WAVY) |
+| **อาการเพิ่มเติม** | คอรวงเน่า รวงหัก | เมล็ดด่าง | ใบม้วนตามยาว แห้งสีฟาง |
+| **หยดน้ำยาง** | ❌ ไม่มี | ❌ ไม่มี | ✅ มี bacterial ooze สีเหลือง |
+
+**🎯 วิธีจำง่ายสำหรับโรคข้าว:**
+- **แผลรูปเพชร/ตา หัวท้ายแหลม** = **Rice Blast (โรคไหม้)** 💎
+- **จุดรูปไข่ + ตรงกลางสีเทา + halo เหลืองชัด** = **Brown Spot** 🥚
+- **แห้งจากขอบใบ/ปลายใบ + ขอบหยักคลื่น + ใบม้วน** = **Bacterial Leaf Blight (ขอบใบแห้ง)** 📏
+
+**⚠️ ข้อควรระวัง:**
+- Rice Blast: แผลขยายตามแนวยาวของใบ (ไม่กลม) เหมือนรูปเรือ
+- Brown Spot: จุดกระจายทั่วใบ ไม่รวมกัน แต่ละจุดมีขอบชัด
+- Bacterial Leaf Blight: แผลจะลามจากขอบ/ปลายเข้าสู่กลางใบ ไม่ใช่เป็นจุดแยก
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 **🟢 4. กฎแมลง:**
@@ -307,6 +321,32 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                 if "ขาด" not in disease_name.lower() and "blight" not in disease_name.lower():
                     logger.info("🔧 User mentioned leaf edge burn → checking K deficiency")
                     description += " | ⚠️ หมายเหตุ: อาจเป็นอาการขาดโพแทสเซียม (K) ด้วย"
+
+            # =================================================================
+            # แก้ไขการสับสนโรคข้าว 3 โรค: Rice Blast vs Brown Spot vs BLB
+            # =================================================================
+            is_rice = "ข้าว" in lowered or "rice" in lowered
+
+            # Rice Blast detection
+            if is_rice and ("รูปเพชร" in lowered or "รูปตา" in lowered or "หัวแหลม" in lowered or "ท้ายแหลม" in lowered or "spindle" in lowered or "diamond" in lowered or "คอรวง" in lowered or "รวงหัก" in lowered):
+                if "brown spot" in disease_name.lower() or "จุดสีน้ำตาล" in disease_name:
+                    logger.info("🔧 Adjusting: Rice + spindle/diamond shape → Rice Blast, not Brown Spot")
+                    disease_name = "โรคไหม้ข้าว (Rice Blast)"
+                    pest_type = "เชื้อรา"
+
+            # Brown Spot detection (รูปไข่ + ตรงกลางสีเทา + halo เหลือง)
+            if is_rice and ("รูปไข่" in lowered or "oval" in lowered) and ("กลางสีเทา" in lowered or "กลางขาว" in lowered or "halo" in lowered):
+                if "blast" in disease_name.lower() or "ไหม้" in disease_name or "blight" in disease_name.lower() or "ขอบใบแห้ง" in disease_name:
+                    logger.info("🔧 Adjusting: Rice + oval + grey center + halo → Brown Spot")
+                    disease_name = "โรคจุดสีน้ำตาลข้าว (Rice Brown Spot)"
+                    pest_type = "เชื้อรา"
+
+            # Bacterial Leaf Blight detection (เริ่มจากขอบใบ + ขอบหยัก/คลื่น + ใบม้วน)
+            if is_rice and ("ขอบใบ" in lowered or "ปลายใบ" in lowered) and ("แห้ง" in lowered or "หยัก" in lowered or "คลื่น" in lowered or "ม้วน" in lowered or "wavy" in lowered):
+                if "brown spot" in disease_name.lower() or "จุดสีน้ำตาล" in disease_name or "blast" in disease_name.lower() or "ไหม้" in disease_name:
+                    logger.info("🔧 Adjusting: Rice + edge lesion + wavy margin → Bacterial Leaf Blight")
+                    disease_name = "โรคขอบใบแห้งข้าว (Bacterial Leaf Blight)"
+                    pest_type = "แบคทีเรีย"
 
         # Build raw_analysis for downstream use
         raw_parts = [f"{pest_type}: {description}"]
