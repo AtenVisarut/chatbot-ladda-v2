@@ -10,6 +10,16 @@ from fastapi import HTTPException
 from app.models import DiseaseDetectionResult
 from app.services.services import openai_client
 from app.services.cache import get_image_hash, get_from_cache, set_to_cache
+from app.services.disease_database import (
+    generate_disease_prompt_section,
+    get_disease_info,
+    get_severity_description,
+    FUNGAL_DISEASES,
+    BACTERIAL_DISEASES,
+    VIRAL_DISEASES,
+    INSECT_PESTS,
+    NUTRIENT_DEFICIENCIES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,74 +55,121 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 
         # -----------------------------------------------------------------
         # Prompt – includes mission, step‑by‑step analysis, categories, warnings
-        # and concrete examples to help the model differentiate similar diseases.
+        # and comprehensive disease/pest database for accurate identification.
         # -----------------------------------------------------------------
-        prompt_text = """คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืชไทย ประสบการณ์ 20 ปี
 
-🎯 **ภารกิจ**:  วิเคราะห์ภาพพืชเพื่อตรวจจับโรค, ศัตรูพืช, วัชพืช ให้แม่นยำที่สุดโดยอ้างอิงจากลักษณะอาการ สี ขนาด และตำแหน่ง
+        # สร้าง prompt section จากฐานข้อมูล
+        disease_database_section = generate_disease_prompt_section()
 
-ห้ามเดา — หากไม่มีหลักฐานชัดเจนในภาพ ต้องลดความเชื่อมั่น (confidence ต่ำ)
+        prompt_text = f"""คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืชไทย ประสบการณ์ 20 ปี
 
-──────────────────────────────────────────────
-📌 สิ่งที่ต้องตรวจสอบอย่างละเอียด (Critical Checkpoints)
-1) **ลักษณะแผล (Lesion Characteristics)**:
-   - **รูปร่าง**: กลม/รี (Oval), รูปตา (Eye-shaped), หรือรูปร่างไม่แน่นอน (Irregular)
-   - **สี**: สีน้ำตาลเข้ม, สีเทากลางแผล, สีดำ, หรือมีวงสีเหลืองล้อมรอบ (Halo)
-   - **พื้นผิว**: ยุบตัวลง (Sunken), นูนขึ้น, หรือเป็นผง
-2) **การกระจายตัว**: กระจายทั่วใบ, เป็นกลุ่ม, หรือเริ่มจากขอบใบ
+🎯 **ภารกิจ**: วิเคราะห์ภาพพืชเพื่อตรวจจับโรค, ศัตรูพืช, วัชพืช, หรืออาการขาดธาตุ ให้แม่นยำที่สุด
+โดยอ้างอิงจากลักษณะอาการ สี ขนาด ตำแหน่ง และเปรียบเทียบกับฐานข้อมูลด้านล่าง
 
-──────────────────────────────────────────────
-⚠️ กฎการแยกแยะโรคที่สำคัญ (Differentiation Rules)
+⚠️ **ห้ามเดา** — หากไม่มีหลักฐานชัดเจนในภาพ ต้องลดความเชื่อมั่น (confidence ต่ำ)
 
-1. **โรคใบจุดสีน้ำตาล (Brown Spot) vs แอนแทรคโนส (Anthracnose)**
-   - **Brown Spot (ใบจุดสีน้ำตาล)**:
-     - แผลมักเป็นรูป **"ไข่" หรือ "เมล็ดงา" (Oval/Sesame seed shape)**
-     - สีน้ำตาลเข้ม **มักมีจุดสีเทาหรือขาวตรงกลาง (Grey/White center)**
-     - **มีวงสีเหลืองล้อมรอบ (Yellow halo)** ชัดเจน
-     - ขนาดแผลสม่ำเสมอ กระจายทั่วใบ
-   - **Anthracnose (แอนแทรคโนส)**:
-     - แผลมักมี **รูปร่างไม่แน่นอน (Irregular)** หรือกลมซ้อนกัน
-     - ลักษณะ **ยุบตัวลง (Sunken)** ชัดเจน
-     - สีน้ำตาลดำ หรือมี **วงซ้อนกันเป็นชั้นๆ (Concentric rings)**
-     - อาจพบ **เมือกเยิ้มสีส้ม/ชมพู (Spore masses)** ในสภาพชื้น
+══════════════════════════════════════════════════════════════════
+📌 **ขั้นตอนการวิเคราะห์** (ทำตามลำดับ)
 
-2. **กฎอื่นๆ**:
-   - ห้ามสรุปว่าเป็น “เพลี้ยไฟ” หากแมลง **มีสีเขียว**
-   - ถ้าลักษณะเหมือนอาการขาดธาตุ (ใบเหลืองเป็นขอบ) → ให้ระบุว่า “อาจเป็นอาการขาดธาตุ”
+**ขั้นที่ 1: สำรวจภาพรวม**
+- ระบุชนิดพืช (ถ้าเป็นไปได้)
+- สังเกตส่วนที่มีปัญหา: ใบอ่อน/ใบแก่/ใต้ใบ/ก้าน/ลำต้น/ผล/ราก/ดอก
 
-──────────────────────────────────────────────
-📚 ตัวอย่าง pattern ที่ใช้ตัดสิน
-- **Brown Spot**: จุดสีน้ำตาล รูปไข่ มีสีเทากลางแผล มีวงเหลืองล้อม
-- **Anthracnose**: แผลยุบตัว สีคล้ำ ขอบชัด อาจมีวงซ้อน
-- **Downy Mildew**: คราบเทา/ขาวใต้ใบ ใบเหลืองเป็นปื้น
-- **Powdery Mildew**: ผงขาวบนใบ/ยอด
-- **เพลี้ยอ่อน**: ตัวอวบ สีเขียว/เหลือง อยู่เป็นกลุ่ม
-- **เพลี้ยจักจั่น**: ตัวลิ่ม สีเขียวสด เคลื่อนที่เร็ว
+**ขั้นที่ 2: วิเคราะห์ลักษณะแผล (Lesion Characteristics)**
+- **รูปร่าง**: กลม/รี (Oval), รูปตา (Eye-shaped), หรือรูปร่างไม่แน่นอน (Irregular)
+- **สี**: สีน้ำตาลเข้ม, สีเทากลางแผล, สีดำ, หรือมีวงสีเหลืองล้อมรอบ (Halo)
+- **พื้นผิว**: ยุบตัวลง (Sunken), นูนขึ้น, หรือเป็นผง
+- **ขอบแผล**: คม/ไม่ชัด/มี halo
+- **ตำแหน่ง**: กระจาย/เป็นกลุ่ม/ตามเส้นใบ/ขอบใบ/ปลายใบ
+- **ลักษณะพิเศษ**: ผงขาว/ราเทา/ใยรา/จุดดำ/ตุ่ม/รู/รอยขูด/เปียกน้ำ
 
-──────────────────────────────────────────────
-📤 ให้ตอบเป็น JSON เท่านั้น (ต้องเป็น JSON ที่ถูกต้อง)
+**ขั้นที่ 3: ตรวจหาแมลง** (ถ้ามี)
+- สี: เขียว/เหลือง/ดำ/ขาว/ส้ม/แดง
+- ขนาด: เล็กมาก(<1มม.)/เล็ก(1-3มม.)/กลาง(3-10มม.)/ใหญ่(>10มม.)
+- รูปร่าง: อวบกลม/เรียวยาว/ลิ่ม/แบน/มีปีก
+- พฤติกรรม: อยู่นิ่ง/เคลื่อนที่เร็ว/กระโดด/บิน
+- ร่องรอย: มูล/ไข่/ใย/รอยกัด/เส้นทางในใบ
 
-{
-  "disease_name": "ชื่อเฉพาะ เช่น โรคใบจุดสีน้ำตาล, แอนแทรคโนส, เพลี้ยอ่อน, อื่นๆ",
-  "pest_type": "เชื้อรา/แมลง/ไวรัส/วัชพืช/ขาดธาตุ/unknown",
+**ขั้นที่ 4: เปรียบเทียบกับฐานข้อมูล**
+ดูรายการโรค/แมลง/อาการขาดธาตุด้านล่าง และเลือกที่ตรงที่สุด
+
+══════════════════════════════════════════════════════════════════
+📚 **ฐานข้อมูลโรค/แมลง/อาการขาดธาตุ**
+
+{disease_database_section}
+
+══════════════════════════════════════════════════════════════════
+⚠️ **กฎการแยกแยะโรคที่สำคัญ** (Differentiation Rules)
+
+**1. โรคใบจุดสีน้ำตาล (Brown Spot) vs แอนแทรคโนส (Anthracnose)**
+- **Brown Spot (ใบจุดสีน้ำตาล)**:
+  - แผลมักเป็นรูป **"ไข่" หรือ "เมล็ดงา" (Oval/Sesame seed shape)**
+  - สีน้ำตาลเข้ม **มักมีจุดสีเทาหรือขาวตรงกลาง (Grey/White center)**
+  - **มีวงสีเหลืองล้อมรอบ (Yellow halo)** ชัดเจน
+  - ขนาดแผลสม่ำเสมอ กระจายทั่วใบ
+- **Anthracnose (แอนแทรคโนส)**:
+  - แผลมักมี **รูปร่างไม่แน่นอน (Irregular)** หรือกลมซ้อนกัน
+  - ลักษณะ **ยุบตัวลง (Sunken)** ชัดเจน
+  - สีน้ำตาลดำ หรือมี **วงซ้อนกันเป็นชั้นๆ (Concentric rings)**
+  - อาจพบ **เมือกเยิ้มสีส้ม/ชมพู (Spore masses)** ในสภาพชื้น
+
+**2. กฎแมลง:**
+- ❌ ห้ามสรุปว่าเป็น "เพลี้ยไฟ (Thrips)" หากแมลง **มีสีเขียว**
+- ✅ แมลงสีเขียว → ตรวจสอบ: เพลี้ยอ่อน (ตัวอวบ) หรือ เพลี้ยจักจั่น (ตัวเรียว กระโดด)
+- ✅ แมลงสีขาวบินเป็นกลุ่ม → แมลงหวี่ขาว
+- ✅ ตัวขาวมีผงแป้ง → เพลี้ยแป้ง
+- ✅ ตุ่ม/เกล็ดไม่เคลื่อนที่ → เพลี้ยหอย
+
+**3. โรคเชื้อรา:**
+- จุดกลมมีวงซ้อน + สีเทากลาง + halo เหลือง → Brown Spot / Leaf Spot
+- แผลขอบคมตามขอบใบ ยุบตัว → Anthracnose
+- ผงขาวบนใบ → Powdery Mildew
+- ขนราใต้ใบ → Downy Mildew
+- ตุ่มส้ม/สนิม → Rust
+
+**4. อาการขาดธาตุ:**
+- ใบล่างเหลืองทั้งแผ่น → ขาด N
+- ใบเหลืองระหว่างเส้น เส้นใบเขียว + ใบล่าง → ขาด Mg
+- ใบเหลืองระหว่างเส้น เส้นใบเขียว + ใบอ่อน → ขาด Fe
+- ขอบใบไหม้ → ขาด K
+- ใบม่วง/แดง → ขาด P
+- ยอดตาย ใบอ่อนบิดงอ → ขาด Ca หรือ B
+
+**5. กรณีไม่แน่ใจ:**
+- ภาพเบลอ/ไม่ชัด → "ต้องการภาพที่ชัดเจนกว่านี้"
+- อาการคล้ายหลายโรค → ระบุความเป็นไปได้หลายอย่าง + ลด confidence
+- อาจเป็นขาดธาตุ → "อาจเป็นอาการขาดธาตุ ต้องการข้อมูลเพิ่มเติม"
+
+══════════════════════════════════════════════════════════════════
+📤 **รูปแบบคำตอบ** (JSON เท่านั้น)
+
+{{
+  "disease_name": "ชื่อโรค/แมลง/อาการ ภาษาไทย (ภาษาอังกฤษ)",
+  "pest_type": "เชื้อรา/แบคทีเรีย/ไวรัส/แมลง/ไร/วัชพืช/ขาดธาตุ/unknown",
   "confidence_level_percent": 0-100,
   "confidence": "สูง/ปานกลาง/ต่ำ",
-  "symptoms_in_image": "สรุปอาการที่เห็นชัดในภาพ",
-  "symptoms": "รายละเอียดอาการ สี ขนาด ตำแหน่ง รูปร่าง",
-  "possible_cause": "สาเหตุที่เป็นไปได้จากสิ่งที่เห็น",
+  "symptoms_in_image": "อาการที่เห็นในภาพ (สี, รูปร่าง, ตำแหน่ง, ขนาด)",
+  "symptoms": "รายละเอียดอาการครบถ้วน",
+  "possible_cause": "สาเหตุที่เป็นไปได้ + เหตุผลที่วินิจฉัยเช่นนี้",
+  "differential_diagnosis": "โรค/แมลงอื่นที่คล้ายกัน และเหตุผลที่ตัดออก",
   "severity_level": "รุนแรง/ปานกลาง/เล็กน้อย",
-  "severity": "เหตุผลประกอบระดับความรุนแรง",
-  "description": "คำอธิบายเพิ่มเติมและคำแนะนำ",
-  "affected_area": "ส่วนของต้นที่ได้รับผลกระทบ เช่น ใบอ่อน, ใต้ใบ, ลำต้น",
-  "spread_risk": "สูง/ปานกลาง/ต่ำ"
-}
+  "severity": "เหตุผลที่ประเมินระดับความรุนแรงนี้",
+  "description": "คำอธิบายโดยละเอียดและคำแนะนำเบื้องต้น",
+  "affected_area": "ส่วนของต้นที่ได้รับผลกระทบ",
+  "spread_risk": "สูง/ปานกลาง/ต่ำ",
+  "additional_info_needed": "ข้อมูลเพิ่มเติมที่ต้องการ (ถ้ามี)"
+}}
 
 หากไม่พบปัญหาใดๆ:
-{
+{{
   "disease_name": "ไม่พบปัญหา",
-  "confidence": "สูง"
-}
-
+  "pest_type": "healthy",
+  "confidence_level_percent": 90,
+  "confidence": "สูง",
+  "symptoms_in_image": "พืชดูแข็งแรง ไม่พบอาการผิดปกติ",
+  "symptoms": "ไม่มี",
+  "description": "พืชดูแข็งแรงปกติ"
+}}
 """
 
         # Append extra user info if provided
@@ -173,18 +230,55 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         spread_risk = data.get("spread_risk") or ""
 
         # -----------------------------------------------------------------
-        # Simple post‑processing using extra_user_info to correct common confusions
+        # Enhanced post‑processing using disease database and user info
         # -----------------------------------------------------------------
+
+        # ดึงข้อมูลเพิ่มเติมจากฐานข้อมูล
+        disease_info = get_disease_info(disease_name)
+        if disease_info:
+            logger.info(f"📚 Found disease in database: {disease_info.get('name_th')} ({disease_info.get('category')})")
+            # เพิ่มข้อมูล differential diagnosis จากฐานข้อมูล
+            if disease_info.get("distinguish_from"):
+                description += f" | ⚠️ แยกจาก: {disease_info['distinguish_from']}"
+
+        # Post-processing based on extra_user_info
         if extra_user_info:
             lowered = extra_user_info.lower()
-            if "จุด" in lowered and "สี" in lowered and "สีน้ำตาล" in lowered:
+
+            # แก้ไขการสับสน Leaf Spot vs Anthracnose
+            if "จุด" in lowered and "กลม" in lowered:
                 if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
-                    logger.info("🔧 Adjusting disease_name based on user description to Leaf Spot")
-                    disease_name = "Leaf Spot"
-            if "แอนแทรคโนส" in lowered and "แผล" in lowered:
+                    logger.info("🔧 Adjusting: User described round spots → Leaf Spot")
+                    disease_name = "โรคใบจุด (Leaf Spot)"
+            if ("ขอบใบ" in lowered or "ปลายใบ" in lowered) and "แผล" in lowered:
                 if "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
-                    logger.info("🔧 Adjusting disease_name based on user description to Anthracnose")
-                    disease_name = "Anthracnose"
+                    logger.info("🔧 Adjusting: User described edge lesions → Anthracnose")
+                    disease_name = "โรคแอนแทรคโนส (Anthracnose)"
+
+            # แก้ไขการสับสนเพลี้ย
+            if "สีเขียว" in lowered and "เพลี้ยไฟ" in disease_name.lower():
+                logger.info("🔧 Adjusting: Green insect cannot be Thrips")
+                if "อวบ" in lowered or "กลม" in lowered:
+                    disease_name = "เพลี้ยอ่อน (Aphid)"
+                else:
+                    disease_name = "เพลี้ยจักจั่น (Leafhopper)"
+
+            # แก้ไขการสับสนอาการขาดธาตุ
+            if "เส้นใบเขียว" in lowered and "เหลือง" in lowered:
+                if "ใบล่าง" in lowered or "ใบแก่" in lowered:
+                    logger.info("🔧 Adjusting: Lower leaf chlorosis → Mg deficiency")
+                    disease_name = "ขาดแมกนีเซียม (Mg Deficiency)"
+                    pest_type = "ขาดธาตุ"
+                elif "ใบอ่อน" in lowered or "ยอด" in lowered:
+                    logger.info("🔧 Adjusting: Young leaf chlorosis → Fe deficiency")
+                    disease_name = "ขาดเหล็ก (Fe Deficiency)"
+                    pest_type = "ขาดธาตุ"
+
+            # ตรวจสอบอาการขอบใบไหม้
+            if "ขอบใบไหม้" in lowered or "ขอบใบแห้ง" in lowered:
+                if "ขาด" not in disease_name.lower() and "blight" not in disease_name.lower():
+                    logger.info("🔧 User mentioned leaf edge burn → checking K deficiency")
+                    description += " | ⚠️ หมายเหตุ: อาจเป็นอาการขาดโพแทสเซียม (K) ด้วย"
 
         # Build raw_analysis for downstream use
         raw_parts = [f"{pest_type}: {description}"]
