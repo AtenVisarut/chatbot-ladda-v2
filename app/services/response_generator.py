@@ -1,8 +1,12 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union, Dict
 from app.models import DiseaseDetectionResult, ProductRecommendation
 from app.services.services import openai_client
 from app.utils.response_template import build_simple_response
+from app.utils.flex_messages import (
+    create_disease_result_flex,
+    create_product_carousel_flex
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,3 +129,67 @@ async def generate_final_response(
     except Exception as e:
         logger.error(f"Error generating response: {e}", exc_info=True)
         return build_simple_response(disease_info)
+
+
+async def generate_flex_response(
+    disease_info: DiseaseDetectionResult,
+    products: List[ProductRecommendation],
+    extra_user_info: Optional[str] = None
+) -> List[Dict]:
+    """
+    Generate Flex Message response for disease detection
+    Returns list of Flex Messages: [disease_result, product_carousel]
+    """
+    try:
+        logger.info("Generating Flex Message response")
+
+        messages = []
+
+        # Extract pest type from raw_analysis
+        pest_type = "โรคพืช"
+        if disease_info.raw_analysis:
+            parts = disease_info.raw_analysis.split(":")
+            if len(parts) > 0:
+                pest_type = parts[0].strip()
+
+        # 1. Disease Result Flex
+        disease_flex = create_disease_result_flex(
+            disease_name=disease_info.disease_name,
+            confidence=disease_info.confidence,
+            symptoms=disease_info.symptoms or "ไม่ระบุอาการ",
+            cause=disease_info.cause or "ไม่ระบุสาเหตุ",
+            recommendation=disease_info.recommendation or "ปรึกษาผู้เชี่ยวชาญ",
+            pest_type=pest_type
+        )
+        messages.append(disease_flex)
+
+        # 2. Product Carousel Flex (if products available)
+        if products:
+            product_list = []
+            for p in products[:5]:  # Limit to 5 products
+                product_list.append({
+                    "product_name": p.product_name,
+                    "active_ingredient": p.active_ingredient or "-",
+                    "target_pest": p.target_pest or "-",
+                    "how_to_use": p.how_to_use or "-",
+                    "usage_rate": p.usage_rate or "-",
+                    "similarity": p.similarity if hasattr(p, 'similarity') else 0.8
+                })
+
+            product_flex = create_product_carousel_flex(product_list)
+            messages.append(product_flex)
+
+        # 3. Add footer text message
+        footer_msg = {
+            "type": "text",
+            "text": "⚠️ หมายเหตุ: นี่เป็นการวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้\n\n📚 ดูรายละเอียดเพิ่มเติม: icpladda.com\n💬 ส่งรูปเพิ่มหรือถามได้เลยค่ะ"
+        }
+        messages.append(footer_msg)
+
+        logger.info(f"✓ Flex response generated: {len(messages)} messages")
+        return messages
+
+    except Exception as e:
+        logger.error(f"Error generating flex response: {e}", exc_info=True)
+        # Fallback to simple text
+        return [{"type": "text", "text": build_simple_response(disease_info)}]

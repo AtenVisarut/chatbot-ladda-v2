@@ -5,6 +5,7 @@ Handles user registration through chat with Quick Reply buttons
 import logging
 from typing import Optional, Dict, Any, List
 from app.services.services import supabase_client, analytics_tracker
+from app.utils.flex_messages import create_registration_complete_flex
 
 logger = logging.getLogger(__name__)
 
@@ -320,20 +321,14 @@ class RegistrationManager:
             
             # Clear registration state
             await self.clear_registration(user_id)
-            
-            # Create summary
-            summary = (
-                "✅ ลงทะเบียนสำเร็จ!\n\n"
-                f"👤 ชื่อ: {data.get('full_name')}\n"
-                f"📱 เบอร์โทร: {data.get('phone_number')}\n"
-                f"📍 จังหวัด: {data.get('province')}\n"
+
+            # Create Flex Message summary
+            return create_registration_complete_flex(
+                name=data.get('full_name', 'ไม่ระบุ'),
+                phone=data.get('phone_number', 'ไม่ระบุ'),
+                province=data.get('province', 'ไม่ระบุ'),
+                crops=data.get('crops_grown', [])
             )
-            if data.get("crops_grown"):
-                summary += f"🌾 พืชที่ปลูก: {', '.join(data.get('crops_grown'))}\n"
-            
-            summary += "\nขอบคุณที่ให้ข้อมูล! ระบบจะให้บริการคุณได้ดียิ่งขึ้น 🌾"
-            
-            return self._create_text_message(summary)
             
         except Exception as e:
             logger.error(f"Error completing registration: {e}")

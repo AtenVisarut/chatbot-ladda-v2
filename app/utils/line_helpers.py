@@ -68,7 +68,7 @@ async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], wi
         logger.error(f"Error sending LINE reply: {e}", exc_info=True)
         # Don't raise exception here to avoid crashing the webhook handler
 
-async def push_line(user_id: str, message: str, with_sticker: bool = False) -> None:
+async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_sticker: bool = False) -> None:
     """Push message to LINE user (use when reply token is already consumed)"""
     try:
         logger.info(f"Pushing message to LINE user: {user_id[:10]}...")
@@ -77,10 +77,16 @@ async def push_line(user_id: str, message: str, with_sticker: bool = False) -> N
             "Content-Type": "application/json",
             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
         }
-        
-        # Build messages array
-        messages = [{"type": "text", "text": message}]
-        
+
+        # Build messages array (same logic as reply_line)
+        messages = []
+        if isinstance(message, str):
+            messages.append({"type": "text", "text": message})
+        elif isinstance(message, dict):
+            messages.append(message)
+        elif isinstance(message, list):
+            messages.extend(message)
+
         # Add sticker if requested
         if with_sticker:
             sticker_message = {
@@ -89,9 +95,9 @@ async def push_line(user_id: str, message: str, with_sticker: bool = False) -> N
                 "stickerId": "1988"
             }
             messages.append(sticker_message)
-        
+
         payload = {"to": user_id, "messages": messages}
-        
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             response.raise_for_status()

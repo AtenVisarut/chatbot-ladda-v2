@@ -5,6 +5,10 @@ Handles welcome messages and usage guides for new users
 
 import logging
 from typing import Dict, List
+from app.utils.flex_messages import (
+    create_welcome_flex,
+    create_registration_required_flex
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,51 +16,9 @@ logger = logging.getLogger(__name__)
 def get_welcome_message() -> Dict:
     """
     Create welcome message for new users (follow event)
-    Returns LINE message dict with Quick Reply buttons
+    Returns LINE Flex Message
     """
-    text = (
-        "🌾 สวัสดีค่ะ! ยินดีต้อนรับสู่ Chatbot Ladda\n\n"
-        "ฉันคือผู้ช่วยด้านการเกษตรที่จะช่วยคุณ:\n"
-        "✅ วิเคราะห์โรคพืชจากรูปภาพ\n"
-        "✅ แนะนำผลิตภัณฑ์ป้องกันกำจัด\n"
-        "✅ ตอบคำถามเกี่ยวกับการเกษตร\n\n"
-        "📝 แนะนำให้ลงทะเบียนเพื่อรับบริการที่ดีขึ้น!"
-    )
-    
-    quick_reply_items = [
-        {
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": "📝 ลงทะเบียน",
-                "text": "ลงทะเบียน"
-            }
-        },
-        {
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": "📖 วิธีใช้งาน",
-                "text": "วิธีใช้งาน"
-            }
-        },
-        {
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": "🌾 ผลิตภัณฑ์",
-                "text": "ดูผลิตภัณฑ์"
-            }
-        }
-    ]
-    
-    return {
-        "type": "text",
-        "text": text,
-        "quickReply": {
-            "items": quick_reply_items
-        }
-    }
+    return create_welcome_flex()
 
 
 def get_usage_guide() -> Dict:
@@ -98,41 +60,9 @@ def get_usage_guide() -> Dict:
 def get_registration_required_message() -> Dict:
     """
     Create message asking user to register before using features
-    Returns LINE message dict with Quick Reply buttons
+    Returns LINE Flex Message
     """
-    text = (
-        "⚠️ กรุณาลงทะเบียนก่อนใช้งาน\n\n"
-        "เพื่อให้บริการคุณได้ดียิ่งขึ้น\n"
-        "กรุณาลงทะเบียนข้อมูลพื้นฐานก่อนนะคะ\n\n"
-        "📝 กดปุ่ม 'ลงทะเบียน' ด้านล่างเลยค่ะ"
-    )
-
-    quick_reply_items = [
-        {
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": "📝 ลงทะเบียน",
-                "text": "ลงทะเบียน"
-            }
-        },
-        {
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": "📖 วิธีใช้งาน",
-                "text": "วิธีใช้งาน"
-            }
-        }
-    ]
-
-    return {
-        "type": "text",
-        "text": text,
-        "quickReply": {
-            "items": quick_reply_items
-        }
-    }
+    return create_registration_required_flex()
 
 
 def get_product_catalog_message() -> Dict:

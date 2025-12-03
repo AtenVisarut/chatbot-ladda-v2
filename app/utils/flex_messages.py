@@ -1,0 +1,927 @@
+"""
+LINE Flex Message Templates
+สำหรับ Chatbot Ladda - Plant Disease Detection
+"""
+
+from typing import Dict, List, Optional
+
+
+def create_welcome_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับต้อนรับ user ใหม่
+    """
+    return {
+        "type": "flex",
+        "altText": "ยินดีต้อนรับสู่ Chatbot Ladda",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "CHATBOT LADDA",
+                                "color": "#ffffff",
+                                "size": "xl",
+                                "weight": "bold",
+                                "align": "center"
+                            },
+                            {
+                                "type": "text",
+                                "text": "ผู้ช่วยด้านการเกษตรอัจฉริยะ",
+                                "color": "#ffffff",
+                                "size": "sm",
+                                "align": "center",
+                                "margin": "sm"
+                            }
+                        ]
+                    }
+                ],
+                "backgroundColor": "#27AE60",
+                "paddingAll": "20px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ยินดีต้อนรับค่ะ!",
+                        "weight": "bold",
+                        "size": "xl",
+                        "margin": "md",
+                        "color": "#27AE60"
+                    },
+                    {
+                        "type": "text",
+                        "text": "ฉันคือผู้ช่วยที่จะช่วยคุณดูแลพืชผล",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md",
+                        "wrap": True
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "md",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "🔍",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "วิเคราะห์โรคพืช",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "ส่งรูปใบพืชมาวิเคราะห์โรค",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "💊",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "แนะนำผลิตภัณฑ์",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "รับคำแนะนำยาและปุ๋ยที่เหมาะสม",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "💬",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "ถาม-ตอบการเกษตร",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "สอบถามปัญหาเกี่ยวกับพืช",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "text",
+                        "text": "📝 กรุณาลงทะเบียนเพื่อเริ่มใช้งาน",
+                        "size": "sm",
+                        "color": "#E74C3C",
+                        "margin": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📝 ลงทะเบียน",
+                            "text": "ลงทะเบียน"
+                        },
+                        "color": "#27AE60"
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📖 วิธีใช้งาน",
+                            "text": "วิธีใช้งาน"
+                        }
+                    }
+                ],
+                "flex": 0
+            }
+        }
+    }
+
+
+def create_registration_required_flex() -> Dict:
+    """
+    สร้าง Flex Message แจ้งเตือนให้ลงทะเบียนก่อนใช้งาน
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาลงทะเบียนก่อนใช้งาน",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "⚠️ กรุณาลงทะเบียน",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#E74C3C",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "เพื่อให้บริการคุณได้ดียิ่งขึ้น",
+                        "size": "sm",
+                        "color": "#666666",
+                        "align": "center",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": "กรุณาลงทะเบียนข้อมูลพื้นฐานก่อนนะคะ",
+                        "size": "sm",
+                        "color": "#666666",
+                        "align": "center",
+                        "wrap": True,
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "ข้อมูลที่ต้องกรอก:",
+                                "size": "sm",
+                                "weight": "bold"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• ชื่อ-นามสกุล",
+                                "size": "xs",
+                                "color": "#888888",
+                                "margin": "sm"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• เบอร์โทรศัพท์",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• จังหวัด",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• พืชที่ปลูก",
+                                "size": "xs",
+                                "color": "#888888"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📝 ลงทะเบียนเลย",
+                            "text": "ลงทะเบียน"
+                        },
+                        "color": "#27AE60"
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_registration_complete_flex(
+    name: str,
+    phone: str,
+    province: str,
+    crops: List[str]
+) -> Dict:
+    """
+    สร้าง Flex Message สรุปการลงทะเบียนสำเร็จ
+    """
+    crops_text = ", ".join(crops) if crops else "ไม่ระบุ"
+
+    return {
+        "type": "flex",
+        "altText": "ลงทะเบียนสำเร็จ!",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "✅ ลงทะเบียนสำเร็จ!",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#27AE60",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "👤 ชื่อ",
+                                "size": "sm",
+                                "color": "#888888",
+                                "flex": 2
+                            },
+                            {
+                                "type": "text",
+                                "text": name,
+                                "size": "sm",
+                                "color": "#333333",
+                                "flex": 4,
+                                "weight": "bold"
+                            }
+                        ],
+                        "margin": "md"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📱 เบอร์",
+                                "size": "sm",
+                                "color": "#888888",
+                                "flex": 2
+                            },
+                            {
+                                "type": "text",
+                                "text": phone,
+                                "size": "sm",
+                                "color": "#333333",
+                                "flex": 4,
+                                "weight": "bold"
+                            }
+                        ],
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📍 จังหวัด",
+                                "size": "sm",
+                                "color": "#888888",
+                                "flex": 2
+                            },
+                            {
+                                "type": "text",
+                                "text": province,
+                                "size": "sm",
+                                "color": "#333333",
+                                "flex": 4,
+                                "weight": "bold"
+                            }
+                        ],
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🌾 พืช",
+                                "size": "sm",
+                                "color": "#888888",
+                                "flex": 2
+                            },
+                            {
+                                "type": "text",
+                                "text": crops_text,
+                                "size": "sm",
+                                "color": "#333333",
+                                "flex": 4,
+                                "weight": "bold",
+                                "wrap": True
+                            }
+                        ],
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "text",
+                        "text": "🎉 พร้อมใช้งานแล้ว!",
+                        "size": "sm",
+                        "color": "#27AE60",
+                        "align": "center",
+                        "margin": "lg",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": "ส่งรูปพืชมาวิเคราะห์โรคได้เลยค่ะ",
+                        "size": "xs",
+                        "color": "#888888",
+                        "align": "center",
+                        "margin": "sm"
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_disease_result_flex(
+    disease_name: str,
+    confidence: float,
+    symptoms: str,
+    cause: str,
+    recommendation: str,
+    pest_type: str = "โรคพืช"
+) -> Dict:
+    """
+    สร้าง Flex Message แสดงผลการวิเคราะห์โรคพืช
+    """
+    # แปลง confidence เป็น percentage
+    confidence_pct = int(confidence * 100) if confidence <= 1 else int(confidence)
+
+    # กำหนดสีตาม confidence level
+    if confidence_pct >= 80:
+        confidence_color = "#27AE60"  # Green
+        confidence_text = "สูง"
+    elif confidence_pct >= 50:
+        confidence_color = "#F39C12"  # Orange
+        confidence_text = "ปานกลาง"
+    else:
+        confidence_color = "#E74C3C"  # Red
+        confidence_text = "ต่ำ"
+
+    # กำหนดสี header ตามประเภท
+    if "แมลง" in pest_type or "หนอน" in pest_type:
+        header_color = "#E67E22"  # Orange for insects
+        icon = "🐛"
+    elif "โรค" in pest_type or "เชื้อ" in pest_type:
+        header_color = "#E74C3C"  # Red for diseases
+        icon = "🦠"
+    else:
+        header_color = "#3498DB"  # Blue for others
+        icon = "🔬"
+
+    return {
+        "type": "flex",
+        "altText": f"ผลวิเคราะห์: {disease_name}",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"{icon} ผลการวิเคราะห์",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": pest_type,
+                        "color": "#ffffff",
+                        "size": "xs",
+                        "margin": "sm"
+                    }
+                ],
+                "backgroundColor": header_color,
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    # Disease Name
+                    {
+                        "type": "text",
+                        "text": disease_name,
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#333333",
+                        "wrap": True
+                    },
+                    # Confidence Bar
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "ความมั่นใจ",
+                                        "size": "sm",
+                                        "color": "#888888"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": f"{confidence_pct}% ({confidence_text})",
+                                        "size": "sm",
+                                        "color": confidence_color,
+                                        "weight": "bold",
+                                        "align": "end"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "margin": "sm",
+                                "contents": [
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [],
+                                        "backgroundColor": confidence_color,
+                                        "width": f"{confidence_pct}%",
+                                        "height": "6px",
+                                        "cornerRadius": "3px"
+                                    }
+                                ],
+                                "backgroundColor": "#E0E0E0",
+                                "cornerRadius": "3px"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    # Symptoms
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📋 อาการที่พบ",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": "#333333"
+                            },
+                            {
+                                "type": "text",
+                                "text": symptoms[:150] + "..." if len(symptoms) > 150 else symptoms,
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    },
+                    # Cause
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🔍 สาเหตุ",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": "#333333"
+                            },
+                            {
+                                "type": "text",
+                                "text": cause[:100] + "..." if len(cause) > 100 else cause,
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    },
+                    # Recommendation
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💡 คำแนะนำ",
+                                "size": "sm",
+                                "weight": "bold",
+                                "color": "#333333"
+                            },
+                            {
+                                "type": "text",
+                                "text": recommendation[:150] + "..." if len(recommendation) > 150 else recommendation,
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "👇 ผลิตภัณฑ์แนะนำด้านล่าง",
+                        "size": "xs",
+                        "color": "#888888",
+                        "align": "center"
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_product_carousel_flex(products: List[Dict]) -> Dict:
+    """
+    สร้าง Flex Message Carousel แสดงผลิตภัณฑ์แนะนำ
+
+    products: List of dict with keys:
+        - product_name
+        - active_ingredient
+        - target_pest
+        - how_to_use
+        - usage_rate
+        - similarity (optional)
+    """
+    bubbles = []
+
+    for i, product in enumerate(products[:10]):  # LINE limit 10 bubbles
+        similarity = product.get('similarity', 0)
+        similarity_pct = int(similarity * 100) if similarity else 0
+
+        bubble = {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": f"#{i+1}",
+                        "color": "#ffffff",
+                        "size": "xs"
+                    },
+                    {
+                        "type": "text",
+                        "text": product.get('product_name', 'ไม่ระบุชื่อ'),
+                        "color": "#ffffff",
+                        "size": "md",
+                        "weight": "bold",
+                        "wrap": True
+                    }
+                ],
+                "backgroundColor": "#27AE60",
+                "paddingAll": "12px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    # Active Ingredient
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💊 สารสำคัญ",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('active_ingredient', '-')[:50],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
+                    # Target Pest
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🎯 ศัตรูพืชเป้าหมาย",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('target_pest', '-')[:60],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
+                    # Usage Rate
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📏 อัตราใช้",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('usage_rate', '-')[:50],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
+                    # Match Score
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "ความเหมาะสม",
+                                "size": "xs",
+                                "color": "#888888",
+                                "flex": 2
+                            },
+                            {
+                                "type": "text",
+                                "text": f"{similarity_pct}%",
+                                "size": "sm",
+                                "color": "#27AE60",
+                                "weight": "bold",
+                                "align": "end",
+                                "flex": 1
+                            }
+                        ]
+                    }
+                ],
+                "spacing": "sm",
+                "paddingAll": "12px"
+            }
+        }
+        bubbles.append(bubble)
+
+    # ถ้าไม่มีผลิตภัณฑ์
+    if not bubbles:
+        return {
+            "type": "flex",
+            "altText": "ไม่พบผลิตภัณฑ์แนะนำ",
+            "contents": {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "ไม่พบผลิตภัณฑ์แนะนำ",
+                            "align": "center",
+                            "color": "#888888"
+                        }
+                    ]
+                }
+            }
+        }
+
+    return {
+        "type": "flex",
+        "altText": f"ผลิตภัณฑ์แนะนำ {len(bubbles)} รายการ",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles
+        }
+    }
+
+
+def create_simple_text_flex(title: str, message: str, button_label: str = None, button_text: str = None) -> Dict:
+    """
+    สร้าง Flex Message แบบง่ายๆ มีหัวข้อและเนื้อหา
+    """
+    contents = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": title,
+                    "weight": "bold",
+                    "size": "lg",
+                    "color": "#333333"
+                },
+                {
+                    "type": "text",
+                    "text": message,
+                    "size": "sm",
+                    "color": "#666666",
+                    "wrap": True,
+                    "margin": "md"
+                }
+            ]
+        }
+    }
+
+    if button_label and button_text:
+        contents["footer"] = {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "style": "primary",
+                    "action": {
+                        "type": "message",
+                        "label": button_label,
+                        "text": button_text
+                    },
+                    "color": "#27AE60"
+                }
+            ]
+        }
+
+    return {
+        "type": "flex",
+        "altText": title,
+        "contents": contents
+    }

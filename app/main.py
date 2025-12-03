@@ -59,7 +59,7 @@ from app.services.memory import (
 )
 from app.services.disease_detection import detect_disease
 from app.services.product_recommendation import retrieve_product_recommendation
-from app.services.response_generator import generate_final_response
+from app.services.response_generator import generate_final_response, generate_flex_response
 from app.services.chat import handle_natural_conversation
 
 # Import utils
@@ -438,9 +438,10 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 else:
                                     logger.info(f"Skipping product recommendation for: {detection_result.disease_name}")
                                     recommendations = []
-                                    
-                                final_response = await generate_final_response(detection_result, recommendations)
-                                
+
+                                # Generate Flex Message response
+                                flex_messages = await generate_flex_response(detection_result, recommendations)
+
                                 # Extract pest_type from raw_analysis
                                 pest_type = "ศัตรูพืช"
                                 if detection_result.raw_analysis:
@@ -457,7 +458,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         confidence=detection_result.confidence,
                                         response_time_ms=0.0
                                     )
-                                    
+
                                     # Track product recommendations
                                     if recommendations:
                                         product_names = [p.product_name for p in recommendations]
@@ -466,16 +467,16 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                             disease_name=detection_result.disease_name,
                                             products=product_names
                                         )
-                                
-                                # Send result via push (reply_token already used)
-                                await push_line(user_id, final_response)
-                                
+
+                                # Send Flex Messages via push (reply_token already used)
+                                await push_line(user_id, flex_messages)
+
                                 # Clear context
                                 await delete_pending_context(user_id)
-                                
+
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[ข้าม] {text}")
-                                await add_to_memory(user_id, "assistant", final_response)
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
                                 
                             except Exception as e:
                                 logger.error(f"Error in skip analysis: {e}")
@@ -485,12 +486,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             try:
                                 analyzing_msg = get_analyzing_with_info_message()
                                 await reply_line(reply_token, analyzing_msg)
-                                
+
                                 # Run detection with extra context
                                 detection_result = await detect_disease(image_bytes, extra_user_info=text)
                                 recommendations = await retrieve_product_recommendation(detection_result)
-                                final_response = await generate_final_response(detection_result, recommendations, extra_user_info=text)
-                                
+
+                                # Generate Flex Message response
+                                flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=text)
+
                                 # Extract pest_type from raw_analysis
                                 pest_type = "ศัตรูพืช"
                                 if detection_result.raw_analysis:
@@ -507,7 +510,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         confidence=detection_result.confidence,
                                         response_time_ms=0.0
                                     )
-                                    
+
                                     # Track product recommendations
                                     if recommendations:
                                         product_names = [p.product_name for p in recommendations]
@@ -516,17 +519,17 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                             disease_name=detection_result.disease_name,
                                             products=product_names
                                         )
-                                
-                                # Send result via push (reply_token already used)
-                                await push_line(user_id, final_response)
-                                
+
+                                # Send Flex Messages via push (reply_token already used)
+                                await push_line(user_id, flex_messages)
+
                                 # Clear context
                                 await delete_pending_context(user_id)
-                                
+
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
-                                await add_to_memory(user_id, "assistant", final_response)
-                                
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
+
                             except Exception as e:
                                 logger.error(f"Error in analysis with info: {e}")
                                 await push_line(user_id, "ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢")
