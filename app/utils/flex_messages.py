@@ -925,28 +925,8 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
             },
         }
 
-        # Add footer with product link (only if valid URL)
-        product_url = product.get('link_product', '')
-        # Validate URL - must start with http:// or https://
-        if product_url and product_url.startswith(('http://', 'https://')):
-            bubble["footer"] = {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "action": {
-                            "type": "uri",
-                            "label": "🔗 ดูรายละเอียดสินค้า",
-                            "uri": product_url
-                        },
-                        "style": "primary",
-                        "color": "#27AE60",
-                        "height": "sm"
-                    }
-                ],
-                "paddingAll": "10px"
-            }
+        # Footer temporarily disabled for debugging
+        # TODO: Re-enable after fixing URI issue
 
         bubbles.append(bubble)
 
