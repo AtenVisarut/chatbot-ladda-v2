@@ -142,45 +142,77 @@ async def generate_flex_response(
     """
     try:
         logger.info("Generating Flex Message response")
+        logger.info(f"  Disease: {disease_info.disease_name}")
+        logger.info(f"  Products count: {len(products) if products else 0}")
 
         messages = []
 
-        # Extract pest type from raw_analysis
+        # Extract pest type from raw_analysis (with safety)
         pest_type = "โรคพืช"
-        if disease_info.raw_analysis:
-            parts = disease_info.raw_analysis.split(":")
-            if len(parts) > 0:
-                pest_type = parts[0].strip()
+        try:
+            if disease_info.raw_analysis:
+                parts = disease_info.raw_analysis.split(":")
+                if len(parts) > 0 and parts[0].strip():
+                    pest_type = parts[0].strip()[:50]  # Limit length
+        except Exception as e:
+            logger.warning(f"Error extracting pest_type: {e}")
 
         # 1. Disease Result Flex
-        disease_flex = create_disease_result_flex(
-            disease_name=disease_info.disease_name,
-            confidence=disease_info.confidence,
-            symptoms=disease_info.symptoms or "ไม่ระบุอาการ",
-            severity=disease_info.severity or "ปานกลาง",
-            raw_analysis=disease_info.raw_analysis or "",
-            pest_type=pest_type
-        )
-        messages.append(disease_flex)
+        try:
+            # Sanitize inputs
+            safe_disease_name = (disease_info.disease_name or "ไม่ทราบ")[:100]
+            safe_confidence = str(disease_info.confidence or "75")[:20]
+            safe_symptoms = (disease_info.symptoms or "ไม่ระบุอาการ")[:500]
+            safe_severity = (disease_info.severity or "ปานกลาง")[:100]
+            safe_raw = (disease_info.raw_analysis or "")[:500]
+
+            disease_flex = create_disease_result_flex(
+                disease_name=safe_disease_name,
+                confidence=safe_confidence,
+                symptoms=safe_symptoms,
+                severity=safe_severity,
+                raw_analysis=safe_raw,
+                pest_type=pest_type
+            )
+            messages.append(disease_flex)
+            logger.info("  ✓ Disease flex created")
+        except Exception as e:
+            logger.error(f"Error creating disease flex: {e}", exc_info=True)
+            # Add simple text fallback
+            messages.append({
+                "type": "text",
+                "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\nความมั่นใจ: {disease_info.confidence}\nอาการ: {disease_info.symptoms[:200] if disease_info.symptoms else 'ไม่ระบุ'}"
+            })
 
         # 2. Product Carousel Flex (if products available)
         if products:
-            product_list = []
-            for p in products[:5]:  # Limit to 5 products
-                product_list.append({
-                    "product_name": p.product_name,
-                    "active_ingredient": p.active_ingredient or "-",
-                    "target_pest": p.target_pest or "-",
-                    "applicable_crops": p.applicable_crops or "-",
-                    "usage_period": p.usage_period or "-",
-                    "how_to_use": p.how_to_use or "-",
-                    "usage_rate": p.usage_rate or "-",
-                    "link_product": p.link_product or "",
-                    "similarity": p.score if hasattr(p, 'score') else 0.8
-                })
+            try:
+                product_list = []
+                for p in products[:5]:  # Limit to 5 products
+                    # Sanitize all product fields
+                    product_list.append({
+                        "product_name": (p.product_name or "ไม่ระบุ")[:100],
+                        "active_ingredient": (p.active_ingredient or "-")[:100],
+                        "target_pest": (p.target_pest or "-")[:200],
+                        "applicable_crops": (p.applicable_crops or "-")[:150],
+                        "usage_period": (p.usage_period or "-")[:100],
+                        "how_to_use": (p.how_to_use or "-")[:200],
+                        "usage_rate": (p.usage_rate or "-")[:100],
+                        "link_product": (p.link_product or "")[:500] if p.link_product and str(p.link_product).startswith("http") else "",
+                        "similarity": p.score if hasattr(p, 'score') else 0.8
+                    })
 
-            product_flex = create_product_carousel_flex(product_list)
-            messages.append(product_flex)
+                product_flex = create_product_carousel_flex(product_list)
+                messages.append(product_flex)
+                logger.info(f"  ✓ Product carousel created with {len(product_list)} products")
+            except Exception as e:
+                logger.error(f"Error creating product carousel: {e}", exc_info=True)
+                # Add simple text fallback for products
+                product_names = [p.product_name for p in products[:3]]
+                messages.append({
+                    "type": "text",
+                    "text": f"💊 ผลิตภัณฑ์แนะนำ:\n" + "\n".join(f"• {name}" for name in product_names)
+                })
 
         # 3. Add footer text message
         footer_msg = {
