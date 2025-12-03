@@ -171,9 +171,11 @@ async def generate_flex_response(
                     "product_name": p.product_name,
                     "active_ingredient": p.active_ingredient or "-",
                     "target_pest": p.target_pest or "-",
+                    "applicable_crops": p.applicable_crops or "-",
+                    "usage_period": p.usage_period or "-",
                     "how_to_use": p.how_to_use or "-",
                     "usage_rate": p.usage_rate or "-",
-                    "similarity": p.similarity if hasattr(p, 'similarity') else 0.8
+                    "similarity": p.score if hasattr(p, 'score') else 0.8
                 })
 
             product_flex = create_product_carousel_flex(product_list)

@@ -811,6 +811,69 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             }
                         ]
                     },
+                    # Applicable Crops
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🌾 พืชที่ใช้ได้",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('applicable_crops', '-')[:60],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
+                    # Usage Period
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📅 ช่วงการใช้",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('usage_period', '-')[:60],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
+                    # How to Use
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "md",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📝 วิธีใช้",
+                                "size": "xs",
+                                "color": "#888888"
+                            },
+                            {
+                                "type": "text",
+                                "text": product.get('how_to_use', '-')[:80],
+                                "size": "xs",
+                                "color": "#333333",
+                                "wrap": True
+                            }
+                        ]
+                    },
                     # Usage Rate
                     {
                         "type": "box",
