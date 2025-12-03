@@ -984,30 +984,6 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             }
                         ]
                     },
-                    # Match Score
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "margin": "lg",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "ความเหมาะสม",
-                                "size": "xs",
-                                "color": "#888888",
-                                "flex": 2
-                            },
-                            {
-                                "type": "text",
-                                "text": f"{similarity_pct}%",
-                                "size": "sm",
-                                "color": "#27AE60",
-                                "weight": "bold",
-                                "align": "end",
-                                "flex": 1
-                            }
-                        ]
-                    }
                 ],
                 "spacing": "sm",
                 "paddingAll": "12px"
