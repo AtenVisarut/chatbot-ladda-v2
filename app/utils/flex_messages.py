@@ -990,32 +990,48 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
             },
         }
 
-        # Add footer with product link (with strict validation)
+        # Add footer with product link (with very strict validation)
         product_url = product.get('link_product', '')
         if product_url:
-            product_url = str(product_url).strip()  # Remove whitespace
-            # Validate URL: must start with http/https and be <= 2000 chars
-            if (product_url.startswith(('http://', 'https://'))
-                and len(product_url) <= 2000
-                and ' ' not in product_url):  # No spaces in URL
-                bubble["footer"] = {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "uri",
-                                "label": "🔗 ดูรายละเอียดสินค้า",
-                                "uri": product_url
-                            },
-                            "style": "primary",
-                            "color": "#27AE60",
-                            "height": "sm"
-                        }
-                    ],
-                    "paddingAll": "10px"
-                }
+            try:
+                product_url = str(product_url).strip()
+                # Remove newlines, tabs, and other control characters
+                product_url = ''.join(c for c in product_url if c.isprintable() and c not in '\n\r\t')
+
+                # Very strict validation for LINE API
+                is_valid_url = (
+                    product_url.startswith(('http://', 'https://'))
+                    and len(product_url) >= 10
+                    and len(product_url) <= 1000
+                    and ' ' not in product_url
+                    and '\n' not in product_url
+                    and '\r' not in product_url
+                    and '\t' not in product_url
+                    and '\\' not in product_url
+                    and product_url.count('http') == 1  # Only one http
+                )
+
+                if is_valid_url:
+                    bubble["footer"] = {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "ดูรายละเอียดสินค้า",
+                                    "uri": product_url
+                                },
+                                "style": "primary",
+                                "color": "#27AE60",
+                                "height": "sm"
+                            }
+                        ],
+                        "paddingAll": "10px"
+                    }
+            except Exception:
+                pass  # Skip footer if URL processing fails
 
         bubbles.append(bubble)
 
