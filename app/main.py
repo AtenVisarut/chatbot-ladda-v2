@@ -534,8 +534,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
 
                             except Exception as e:
-                                logger.error(f"Error in analysis with info: {e}")
-                                await push_line(user_id, "ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢")
+                                logger.error(f"Error in analysis with info: {e}", exc_info=True)
+                                # Try to send error message
+                                try:
+                                    await push_line(user_id, f"ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢\n\nError: {str(e)[:100]}")
+                                except Exception as e2:
+                                    logger.error(f"Failed to send error message: {e2}")
                     else:
                         # Context exists but not awaiting info (shouldn't happen normally)
                         logger.warning(f"Found context for {user_id} but state is not awaiting_info")

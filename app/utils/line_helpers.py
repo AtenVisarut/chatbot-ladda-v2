@@ -96,12 +96,21 @@ async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_st
             }
             messages.append(sticker_message)
 
+        # LINE API limit: max 5 messages per call
+        if len(messages) > 5:
+            logger.warning(f"Too many messages ({len(messages)}), truncating to 5")
+            messages = messages[:5]
+
         payload = {"to": user_id, "messages": messages}
 
         # Debug: log message count and types
         logger.info(f"Sending {len(messages)} messages to LINE")
         for i, msg in enumerate(messages):
-            logger.info(f"  Message {i+1}: type={msg.get('type')}, altText={msg.get('altText', 'N/A')[:50] if msg.get('altText') else 'N/A'}")
+            msg_type = msg.get('type', 'unknown')
+            alt_text = msg.get('altText', 'N/A')
+            if alt_text and len(alt_text) > 50:
+                alt_text = alt_text[:50]
+            logger.info(f"  Message {i+1}: type={msg_type}, altText={alt_text}")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
@@ -115,5 +124,14 @@ async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_st
         logger.info("Push message sent to LINE")
     except Exception as e:
         logger.error(f"Error sending LINE push message: {e}", exc_info=True)
-        # Don't raise exception here to avoid crashing the webhook handler
+        # Try to send a simple fallback message
+        try:
+            simple_payload = {
+                "to": user_id,
+                "messages": [{"type": "text", "text": "ขออภัยค่ะ เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง 🙏"}]
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(url, headers=headers, json=simple_payload)
+        except Exception:
+            pass  # Silent fail for fallback
 
