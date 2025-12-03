@@ -990,11 +990,63 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
             },
         }
 
-        # Add footer with product link (with very strict validation)
-        # TEMPORARILY DISABLED - URLs in database causing LINE API errors
-        # TODO: Fix link_product data in Supabase then re-enable
-        # product_url = product.get('link_product', '')
-        # Footer disabled to fix Invalid action URI error
+        # Add footer with product link
+        product_url = product.get('link_product', '')
+        if product_url:
+            try:
+                import re
+                import logging
+                logger = logging.getLogger(__name__)
+
+                # Convert to string and clean
+                product_url = str(product_url).strip()
+
+                # Log original URL for debugging
+                logger.info(f"Product URL original: [{product_url[:100]}]")
+
+                # Remove all control characters and whitespace
+                product_url = re.sub(r'[\x00-\x1f\x7f-\x9f\s]', '', product_url)
+
+                # Validate URL format with regex
+                url_pattern = re.compile(
+                    r'^https?://'  # http:// or https://
+                    r'[a-zA-Z0-9]'  # Start with alphanumeric
+                    r'[a-zA-Z0-9\-\.]*'  # Domain characters
+                    r'\.[a-zA-Z]{2,}'  # TLD
+                    r'[^\s]*$'  # Rest of URL (no whitespace)
+                )
+
+                is_valid = (
+                    url_pattern.match(product_url)
+                    and len(product_url) >= 10
+                    and len(product_url) <= 1000
+                )
+
+                logger.info(f"Product URL cleaned: [{product_url[:100]}] valid={is_valid}")
+
+                if is_valid:
+                    bubble["footer"] = {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "ดูรายละเอียด",
+                                    "uri": product_url
+                                },
+                                "style": "primary",
+                                "color": "#27AE60",
+                                "height": "sm"
+                            }
+                        ],
+                        "paddingAll": "10px"
+                    }
+                else:
+                    logger.warning(f"Invalid URL skipped: [{product_url[:50]}]")
+            except Exception as e:
+                logger.error(f"URL processing error: {e}")
 
         bubbles.append(bubble)
 
