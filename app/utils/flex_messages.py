@@ -6,6 +6,95 @@ LINE Flex Message Templates
 from typing import Dict, List, Optional
 
 
+# =============================================================================
+# Helper Functions สำหรับ format ข้อความให้อ่านง่าย
+# =============================================================================
+
+def _format_symptoms(symptoms: str) -> str:
+    """Format อาการที่พบให้กระชับและอ่านง่าย"""
+    if not symptoms:
+        return "ไม่พบข้อมูลอาการ"
+
+    # ลบคำซ้ำและ format ใหม่
+    symptoms = symptoms.strip()
+
+    # ถ้าสั้นอยู่แล้ว ส่งคืนเลย
+    if len(symptoms) <= 200:
+        return symptoms
+
+    # ตัดที่ประโยคแรกๆ ไม่ให้ขาดกลางคำ
+    # หาจุดตัดที่เหมาะสม (จุด, เครื่องหมาย |, หรือ comma)
+    cut_point = 200
+    for sep in ['. ', ' | ', ', ', ' ']:
+        idx = symptoms.rfind(sep, 0, 250)
+        if idx > 100:
+            cut_point = idx + len(sep)
+            break
+
+    return symptoms[:cut_point].strip()
+
+
+def _get_severity_label(severity: str) -> str:
+    """แปลง severity เป็น label สั้นๆ"""
+    if not severity:
+        return "ปานกลาง"
+
+    severity_lower = severity.lower()
+
+    if any(x in severity_lower for x in ['รุนแรง', 'สูง', 'มาก', 'severe', 'high']):
+        return "รุนแรง"
+    elif any(x in severity_lower for x in ['เล็กน้อย', 'ต่ำ', 'น้อย', 'mild', 'low', 'light']):
+        return "เล็กน้อย"
+    else:
+        return "ปานกลาง"
+
+
+def _get_severity_color(severity: str) -> str:
+    """ให้สีตามระดับความรุนแรง"""
+    label = _get_severity_label(severity)
+
+    if label == "รุนแรง":
+        return "#E74C3C"  # Red
+    elif label == "เล็กน้อย":
+        return "#27AE60"  # Green
+    else:
+        return "#F39C12"  # Orange
+
+
+def _format_recommendation(raw_analysis: str) -> str:
+    """Format คำแนะนำให้กระชับ ไม่ตัดกลางประโยค"""
+    if not raw_analysis:
+        return "ควรปรึกษาผู้เชี่ยวชาญเพื่อการรักษาที่เหมาะสม"
+
+    # แยกส่วนต่างๆ ออก
+    parts = raw_analysis.split(' | ')
+
+    # เอาส่วนคำแนะนำหลัก (ส่วนแรกมักเป็นคำอธิบาย)
+    main_part = parts[0] if parts else raw_analysis
+
+    # ถ้ามีคำแนะนำเพิ่มเติมที่สำคัญ เช่น "แยกจาก:"
+    extra_info = ""
+    for part in parts[1:]:
+        if "แยกจาก" in part or "หมายเหตุ" in part:
+            extra_info = "\n" + part.strip()
+            break
+
+    result = main_part.strip()
+
+    # ถ้ายาวเกิน 300 ตัวอักษร ตัดที่ประโยค
+    if len(result) > 300:
+        # หาจุดตัดที่เหมาะสม
+        cut_point = 300
+        for sep in ['. ', '। ', ' - ']:
+            idx = result.rfind(sep, 0, 350)
+            if idx > 150:
+                cut_point = idx + len(sep)
+                break
+        result = result[:cut_point].strip()
+
+    return result + extra_info
+
+
 def create_welcome_flex() -> Dict:
     """
     สร้าง Flex Message สำหรับต้อนรับ user ใหม่
@@ -634,7 +723,7 @@ def create_disease_result_flex(
                         "type": "separator",
                         "margin": "lg"
                     },
-                    # Symptoms
+                    # Symptoms - แสดงอาการกระชับ
                     {
                         "type": "box",
                         "layout": "vertical",
@@ -645,59 +734,59 @@ def create_disease_result_flex(
                                 "text": "📋 อาการที่พบ",
                                 "size": "sm",
                                 "weight": "bold",
-                                "color": "#333333"
+                                "color": "#27AE60"
                             },
                             {
                                 "type": "text",
-                                "text": symptoms[:150] + "..." if len(symptoms) > 150 else symptoms,
-                                "size": "xs",
-                                "color": "#666666",
+                                "text": _format_symptoms(symptoms),
+                                "size": "sm",
+                                "color": "#333333",
                                 "wrap": True,
                                 "margin": "sm"
                             }
                         ]
                     },
-                    # Severity
+                    # Severity - แสดงระดับความรุนแรง
                     {
                         "type": "box",
-                        "layout": "vertical",
+                        "layout": "horizontal",
                         "margin": "md",
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "⚠️ ระดับความรุนแรง",
+                                "text": "⚠️ ความรุนแรง:",
                                 "size": "sm",
-                                "weight": "bold",
-                                "color": "#333333"
+                                "color": "#888888",
+                                "flex": 0
                             },
                             {
                                 "type": "text",
-                                "text": severity[:100] + "..." if len(severity) > 100 else severity,
-                                "size": "xs",
-                                "color": "#666666",
-                                "wrap": True,
+                                "text": _get_severity_label(severity),
+                                "size": "sm",
+                                "color": _get_severity_color(severity),
+                                "weight": "bold",
                                 "margin": "sm"
                             }
                         ]
                     },
-                    # Raw Analysis / Recommendation
+                    # Raw Analysis / Recommendation - คำแนะนำครบถ้วน
                     {
                         "type": "box",
                         "layout": "vertical",
-                        "margin": "md",
+                        "margin": "lg",
                         "contents": [
                             {
                                 "type": "text",
                                 "text": "💡 คำแนะนำ",
                                 "size": "sm",
                                 "weight": "bold",
-                                "color": "#333333"
+                                "color": "#3498DB"
                             },
                             {
                                 "type": "text",
-                                "text": (raw_analysis[:150] + "...") if raw_analysis and len(raw_analysis) > 150 else (raw_analysis if raw_analysis else "ควรปรึกษาผู้เชี่ยวชาญเพื่อการรักษาที่เหมาะสม"),
-                                "size": "xs",
-                                "color": "#666666",
+                                "text": _format_recommendation(raw_analysis),
+                                "size": "sm",
+                                "color": "#333333",
                                 "wrap": True,
                                 "margin": "sm"
                             }
