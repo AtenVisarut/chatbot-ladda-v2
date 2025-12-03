@@ -95,6 +95,46 @@ def get_usage_guide() -> Dict:
     }
 
 
+def get_registration_required_message() -> Dict:
+    """
+    Create message asking user to register before using features
+    Returns LINE message dict with Quick Reply buttons
+    """
+    text = (
+        "⚠️ กรุณาลงทะเบียนก่อนใช้งาน\n\n"
+        "เพื่อให้บริการคุณได้ดียิ่งขึ้น\n"
+        "กรุณาลงทะเบียนข้อมูลพื้นฐานก่อนนะคะ\n\n"
+        "📝 กดปุ่ม 'ลงทะเบียน' ด้านล่างเลยค่ะ"
+    )
+
+    quick_reply_items = [
+        {
+            "type": "action",
+            "action": {
+                "type": "message",
+                "label": "📝 ลงทะเบียน",
+                "text": "ลงทะเบียน"
+            }
+        },
+        {
+            "type": "action",
+            "action": {
+                "type": "message",
+                "label": "📖 วิธีใช้งาน",
+                "text": "วิธีใช้งาน"
+            }
+        }
+    ]
+
+    return {
+        "type": "text",
+        "text": text,
+        "quickReply": {
+            "items": quick_reply_items
+        }
+    }
+
+
 def get_product_catalog_message() -> Dict:
     """
     Create product catalog message

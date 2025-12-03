@@ -116,6 +116,26 @@ async def update_last_seen(user_id: str) -> bool:
         return False
 
 
+async def is_registration_completed(user_id: str) -> bool:
+    """
+    Check if user has completed registration
+
+    Args:
+        user_id: LINE user ID
+
+    Returns:
+        True if registration_completed is True, False otherwise
+    """
+    try:
+        user = await get_user(user_id)
+        if user and user.get('registration_completed') == True:
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error checking registration status for {user_id}: {e}")
+        return False
+
+
 async def ensure_user_exists(user_id: str) -> bool:
     """
     Ensure user exists in database

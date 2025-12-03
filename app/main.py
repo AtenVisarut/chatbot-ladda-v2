@@ -39,7 +39,8 @@ from app.services.services import (
 from app.services.welcome import (
     get_welcome_message,
     get_usage_guide,
-    get_product_catalog_message
+    get_product_catalog_message,
+    get_registration_required_message
 )
 from app.services.cache import (
     cleanup_expired_cache,
@@ -309,7 +310,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 continue
             
             # Ensure user exists (auto-register new users)
-            from app.services.user_service import ensure_user_exists
+            from app.services.user_service import ensure_user_exists, is_registration_completed
             await ensure_user_exists(user_id)
             
             # 1. Handle Follow Event (Welcome Message)
@@ -323,7 +324,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
             if event_type == "message" and event.get("message", {}).get("type") == "image":
                 message_id = event["message"]["id"]
                 logger.info(f"Received image from {user_id}")
-                
+
+                # Check if user has completed registration
+                if not await is_registration_completed(user_id):
+                    logger.info(f"User {user_id} not registered - blocking disease detection")
+                    reg_msg = get_registration_required_message()
+                    await reply_line(reply_token, reg_msg)
+                    continue
+
                 try:
                     # Get image content
                     image_bytes = await get_image_content_from_line(message_id)
@@ -544,18 +552,24 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         await reply_line(reply_token, help_msg)
                     
                     else:
-                        # Natural Conversation Handler
-                        response = await handle_natural_conversation(user_id, text)
-                        await reply_line(reply_token, response)
-                        
-                        # Track analytics
-                        if analytics_tracker:
-                            response_time = (time.time() - start_time) * 1000
-                            await analytics_tracker.track_question(
-                                user_id=user_id, 
-                                question=text,
-                                response_time_ms=response_time
-                            )
+                        # Check if user has completed registration before chat Q&A
+                        if not await is_registration_completed(user_id):
+                            logger.info(f"User {user_id} not registered - blocking chat Q&A")
+                            reg_msg = get_registration_required_message()
+                            await reply_line(reply_token, reg_msg)
+                        else:
+                            # Natural Conversation Handler
+                            response = await handle_natural_conversation(user_id, text)
+                            await reply_line(reply_token, response)
+
+                            # Track analytics
+                            if analytics_tracker:
+                                response_time = (time.time() - start_time) * 1000
+                                await analytics_tracker.track_question(
+                                    user_id=user_id,
+                                    question=text,
+                                    response_time_ms=response_time
+                                )
 
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
