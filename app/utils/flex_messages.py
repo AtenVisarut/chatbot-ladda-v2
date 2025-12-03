@@ -925,3 +925,443 @@ def create_simple_text_flex(title: str, message: str, button_label: str = None, 
         "altText": title,
         "contents": contents
     }
+
+
+def create_help_menu_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับเมนูช่วยเหลือ
+    """
+    return {
+        "type": "flex",
+        "altText": "เมนูช่วยเหลือ",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📋 เมนูช่วยเหลือ",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#3498DB",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": "📷", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ตรวจโรคพืช", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "ส่งรูปใบพืชที่มีอาการ", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": "💬", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ถามข้อมูล", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "พิมพ์คำถามเกี่ยวกับโรค/ผลิตภัณฑ์", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": "📝", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ลงทะเบียน", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "รับบริการเต็มรูปแบบ", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {"type": "text", "text": "🔄", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ล้างความจำ", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "พิมพ์ 'reset' เพื่อเริ่มใหม่", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "horizontal",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📝 ลงทะเบียน",
+                            "text": "ลงทะเบียน"
+                        },
+                        "color": "#27AE60",
+                        "flex": 1
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📖 วิธีใช้",
+                            "text": "วิธีใช้งาน"
+                        },
+                        "flex": 1
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_usage_guide_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับวิธีใช้งาน
+    """
+    return {
+        "type": "flex",
+        "altText": "วิธีใช้งาน Chatbot Ladda",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📖 วิธีใช้งาน",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": "Chatbot Ladda",
+                        "color": "#ffffff",
+                        "size": "sm"
+                    }
+                ],
+                "backgroundColor": "#9B59B6",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "lg",
+                "contents": [
+                    # Section 1: วิเคราะห์โรค
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🔍 วิเคราะห์โรคพืช",
+                                "weight": "bold",
+                                "size": "sm",
+                                "color": "#27AE60"
+                            },
+                            {
+                                "type": "text",
+                                "text": "1. ถ่ายรูปใบพืชที่เป็นโรค\n2. ส่งรูปมาให้ฉัน\n3. ตอบคำถามเพิ่มเติม (ถ้ามี)\n4. รับผลวิเคราะห์และคำแนะนำ",
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    },
+                    {"type": "separator"},
+                    # Section 2: ลงทะเบียน
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📝 ลงทะเบียน",
+                                "weight": "bold",
+                                "size": "sm",
+                                "color": "#E74C3C"
+                            },
+                            {
+                                "type": "text",
+                                "text": "พิมพ์ 'ลงทะเบียน' แล้วกรอก:\n• ชื่อ-นามสกุล\n• เบอร์โทร\n• จังหวัด\n• พืชที่ปลูก",
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    },
+                    {"type": "separator"},
+                    # Section 3: ถามคำถาม
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💬 ถามคำถาม",
+                                "weight": "bold",
+                                "size": "sm",
+                                "color": "#3498DB"
+                            },
+                            {
+                                "type": "text",
+                                "text": "พิมพ์คำถามเกี่ยวกับการเกษตร\nเช่น: 'วิธีป้องกันโรคใบจุด'",
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "message",
+                            "label": "📝 ลงทะเบียนเลย",
+                            "text": "ลงทะเบียน"
+                        },
+                        "color": "#27AE60"
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_product_catalog_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับแคตตาล็อกผลิตภัณฑ์
+    """
+    return {
+        "type": "flex",
+        "altText": "ผลิตภัณฑ์ ICP Ladda",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "🌾 ผลิตภัณฑ์ ICP Ladda",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": "#F39C12",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ผลิตภัณฑ์ป้องกันกำจัดศัตรูพืช 48 รายการ",
+                        "size": "sm",
+                        "color": "#333333",
+                        "align": "center"
+                    },
+                    {"type": "separator", "margin": "lg"},
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "✅", "flex": 0},
+                                    {"type": "text", "text": "ยาฆ่าแมลง", "size": "sm", "margin": "sm"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "✅", "flex": 0},
+                                    {"type": "text", "text": "ยาฆ่าเชื้อรา", "size": "sm", "margin": "sm"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "✅", "flex": 0},
+                                    {"type": "text", "text": "ยาฆ่าหญ้า", "size": "sm", "margin": "sm"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "✅", "flex": 0},
+                                    {"type": "text", "text": "ปุ๋ยและสารเสริม", "size": "sm", "margin": "sm"}
+                                ]
+                            }
+                        ]
+                    },
+                    {"type": "separator", "margin": "lg"},
+                    {
+                        "type": "text",
+                        "text": "💡 ส่งรูปพืชที่เป็นโรคมาให้ฉัน\nจะแนะนำผลิตภัณฑ์ที่เหมาะสมให้!",
+                        "size": "xs",
+                        "color": "#888888",
+                        "wrap": True,
+                        "margin": "lg",
+                        "align": "center"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "uri",
+                            "label": "🔗 เว็บไซต์ ICP Ladda",
+                            "uri": "https://www.icpladda.com/about/"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_chat_response_flex(question: str, answer: str) -> Dict:
+    """
+    สร้าง Flex Message สำหรับการตอบคำถาม Chat Q&A
+    """
+    # ตัดข้อความให้สั้นลงถ้ายาวเกินไป
+    display_question = question[:50] + "..." if len(question) > 50 else question
+
+    return {
+        "type": "flex",
+        "altText": f"คำตอบ: {display_question}",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "💬 คำตอบจาก Ladda",
+                        "color": "#ffffff",
+                        "size": "md",
+                        "weight": "bold"
+                    }
+                ],
+                "backgroundColor": "#27AE60",
+                "paddingAll": "12px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": answer,
+                        "size": "sm",
+                        "color": "#333333",
+                        "wrap": True
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "horizontal",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📷 ส่งรูปวิเคราะห์",
+                            "text": "ส่งรูปวิเคราะห์"
+                        },
+                        "flex": 1
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "❓ ช่วยเหลือ",
+                            "text": "help"
+                        },
+                        "flex": 1
+                    }
+                ]
+            }
+        }
+    }

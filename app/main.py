@@ -40,8 +40,10 @@ from app.services.welcome import (
     get_welcome_message,
     get_usage_guide,
     get_product_catalog_message,
-    get_registration_required_message
+    get_registration_required_message,
+    get_help_menu
 )
+from app.utils.flex_messages import create_chat_response_flex
 from app.services.cache import (
     cleanup_expired_cache,
     get_cache_stats,
@@ -543,17 +545,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     if text.lower() in ["ล้างความจำ", "reset", "clear"]:
                         await clear_memory(user_id)
                         await reply_line(reply_token, "ล้างความจำเรียบร้อยค่ะ เริ่มต้นใหม่ได้เลย! ✨")
-                    
-                    elif text.lower() in ["ช่วยเหลือ", "help", "เมนู"]:
-                        help_msg = """🌱 **เมนูช่วยเหลือ**
-1. **ตรวจโรคพืช**: ส่งรูปภาพใบพืชที่มีอาการ
-2. **ถามข้อมูล**: พิมพ์คำถามเกี่ยวกับโรคหรือผลิตภัณฑ์
-3. **ลงทะเบียน**: พิมพ์ "ลงทะเบียน" เพื่อรับบริการเต็มรูปแบบ
-4. **ล้างความจำ**: พิมพ์ "reset" เพื่อเริ่มใหม่
 
-ต้องการให้ช่วยอะไรบอกได้เลยนะคะ! 😊"""
-                        await reply_line(reply_token, help_msg)
-                    
+                    elif text.lower() in ["ช่วยเหลือ", "help", "เมนู"]:
+                        # Use Flex Message for help menu
+                        help_flex = get_help_menu()
+                        await reply_line(reply_token, help_flex)
+
                     else:
                         # Check if user has completed registration before chat Q&A
                         if not await is_registration_completed(user_id):
@@ -563,7 +560,10 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         else:
                             # Natural Conversation Handler
                             response = await handle_natural_conversation(user_id, text)
-                            await reply_line(reply_token, response)
+
+                            # Use Flex Message for chat response
+                            chat_flex = create_chat_response_flex(text, response)
+                            await reply_line(reply_token, chat_flex)
 
                             # Track analytics
                             if analytics_tracker:
