@@ -207,19 +207,21 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         search_queries = []
         
         if intent == "increase_yield":
-            # เพิ่มผลผลิต
+            # เพิ่มผลผลิต - search more broadly
             if crops:
                 for crop in crops[:2]:
+                    # Primary searches
                     search_queries.append(f"เพิ่มผลผลิต {crop}")
-                    search_queries.append(f"ปุ๋ยบำรุง {crop}")
+                    search_queries.append(f"บำรุง {crop}")
+                    search_queries.append(f"ปุ๋ย {crop}")
                     search_queries.append(f"ฮอร์โมน {crop}")
-                    # English variants for English crop names
-                    if any(c.isalpha() for c in crop):
-                        search_queries.append(f"increase yield {crop}")
-                        search_queries.append(f"fertilizer for {crop}")
-                        search_queries.append(f"plant hormone {crop}")
+                    # Also search by crop name directly
+                    search_queries.append(crop)
+                    # Problem prevention for yield
+                    search_queries.append(f"ป้องกันโรค {crop}")
+                    search_queries.append(f"บำรุงต้น {crop}")
             else:
-                search_queries.append("เพิ่มผลผลิต ปุ๋ย ฮอร์โมน")
+                search_queries.append("เพิ่มผลผลิต ปุ๋ย ฮอร์โมน บำรุง")
         
         elif intent == "solve_problem":
             # แก้ปัญหาศัตรูพืช
@@ -258,9 +260,9 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         
         # Vector search for each query
         all_products = []
-        logger.info(f"🔍 Searching with {len(search_queries)} queries: {search_queries[:3]}")
-        
-        for query in search_queries[:3]:  # Top 3 queries
+        logger.info(f"🔍 Searching with {len(search_queries)} queries: {search_queries[:5]}")
+
+        for query in search_queries[:5]:  # Top 5 queries (increased)
             try:
                 logger.info(f"   → Query: '{query}'")
                 
@@ -276,8 +278,8 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                     'match_products',
                     {
                         'query_embedding': query_embedding,
-                        'match_threshold': 0.25,  # Lower threshold for more results
-                        'match_count': 10
+                        'match_threshold': 0.15,  # Very low threshold for more results
+                        'match_count': 15
                     }
                 ).execute()
                 
@@ -299,11 +301,45 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                 unique_products.append(p)
         
         logger.info(f"📦 Total products: {len(all_products)}, Unique: {len(unique_products)}")
-        
+
         if not unique_products:
-            # Fallback to keyword search
-            logger.warning("⚠️ No products from vector search, trying keyword search")
-            return await answer_product_question(question, keywords)
+            # Fallback 1: Search by applicable_crops
+            logger.warning("⚠️ No products from vector search, trying applicable_crops search")
+            if crops:
+                for crop in crops[:2]:
+                    try:
+                        result = supabase_client.table('products')\
+                            .select('*')\
+                            .ilike('applicable_crops', f'%{crop}%')\
+                            .limit(10)\
+                            .execute()
+
+                        if result.data:
+                            unique_products.extend(result.data)
+                            logger.info(f"✓ Found {len(result.data)} products for crop: {crop}")
+                    except Exception as e:
+                        logger.warning(f"applicable_crops search failed: {e}")
+
+            # Fallback 2: Search by target_pest for common issues
+            if not unique_products and pests:
+                for pest in pests[:2]:
+                    try:
+                        result = supabase_client.table('products')\
+                            .select('*')\
+                            .ilike('target_pest', f'%{pest}%')\
+                            .limit(10)\
+                            .execute()
+
+                        if result.data:
+                            unique_products.extend(result.data)
+                            logger.info(f"✓ Found {len(result.data)} products for pest: {pest}")
+                    except Exception as e:
+                        logger.warning(f"target_pest search failed: {e}")
+
+            # If still no products, fallback to keyword search
+            if not unique_products:
+                logger.warning("⚠️ No products found, trying keyword search")
+                return await answer_product_question(question, keywords)
         
         # Log product names
         product_names = [p.get('product_name', 'N/A') for p in unique_products[:5]]
