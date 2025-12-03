@@ -157,8 +157,8 @@ async def generate_flex_response(
             disease_name=disease_info.disease_name,
             confidence=disease_info.confidence,
             symptoms=disease_info.symptoms or "ไม่ระบุอาการ",
-            cause=disease_info.cause or "ไม่ระบุสาเหตุ",
-            recommendation=disease_info.recommendation or "ปรึกษาผู้เชี่ยวชาญ",
+            severity=disease_info.severity or "ปานกลาง",
+            raw_analysis=disease_info.raw_analysis or "",
             pest_type=pest_type
         )
         messages.append(disease_flex)

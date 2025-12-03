@@ -487,17 +487,39 @@ def create_registration_complete_flex(
 
 def create_disease_result_flex(
     disease_name: str,
-    confidence: float,
+    confidence: str,
     symptoms: str,
-    cause: str,
-    recommendation: str,
+    severity: str = "ปานกลาง",
+    raw_analysis: str = "",
     pest_type: str = "โรคพืช"
 ) -> Dict:
     """
     สร้าง Flex Message แสดงผลการวิเคราะห์โรคพืช
+
+    Args:
+        disease_name: ชื่อโรค
+        confidence: ความมั่นใจ (เช่น "85%" หรือ "0.85")
+        symptoms: อาการที่พบ
+        severity: ระดับความรุนแรง
+        raw_analysis: ข้อมูลวิเคราะห์ดิบ
+        pest_type: ประเภทศัตรูพืช
     """
     # แปลง confidence เป็น percentage
-    confidence_pct = int(confidence * 100) if confidence <= 1 else int(confidence)
+    try:
+        if isinstance(confidence, str):
+            # ถ้าเป็น string เช่น "85%" หรือ "สูง"
+            confidence_clean = confidence.replace("%", "").strip()
+            if confidence_clean.replace(".", "").isdigit():
+                conf_val = float(confidence_clean)
+                confidence_pct = int(conf_val) if conf_val > 1 else int(conf_val * 100)
+            else:
+                # ถ้าเป็นข้อความ เช่น "สูง", "ปานกลาง"
+                confidence_pct = 75  # default
+        else:
+            conf_val = float(confidence)
+            confidence_pct = int(conf_val) if conf_val > 1 else int(conf_val * 100)
+    except:
+        confidence_pct = 75  # default
 
     # กำหนดสีตาม confidence level
     if confidence_pct >= 80:
@@ -635,7 +657,7 @@ def create_disease_result_flex(
                             }
                         ]
                     },
-                    # Cause
+                    # Severity
                     {
                         "type": "box",
                         "layout": "vertical",
@@ -643,14 +665,14 @@ def create_disease_result_flex(
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "🔍 สาเหตุ",
+                                "text": "⚠️ ระดับความรุนแรง",
                                 "size": "sm",
                                 "weight": "bold",
                                 "color": "#333333"
                             },
                             {
                                 "type": "text",
-                                "text": cause[:100] + "..." if len(cause) > 100 else cause,
+                                "text": severity[:100] + "..." if len(severity) > 100 else severity,
                                 "size": "xs",
                                 "color": "#666666",
                                 "wrap": True,
@@ -658,7 +680,7 @@ def create_disease_result_flex(
                             }
                         ]
                     },
-                    # Recommendation
+                    # Raw Analysis / Recommendation
                     {
                         "type": "box",
                         "layout": "vertical",
@@ -673,7 +695,7 @@ def create_disease_result_flex(
                             },
                             {
                                 "type": "text",
-                                "text": recommendation[:150] + "..." if len(recommendation) > 150 else recommendation,
+                                "text": (raw_analysis[:150] + "...") if raw_analysis and len(raw_analysis) > 150 else (raw_analysis if raw_analysis else "ควรปรึกษาผู้เชี่ยวชาญเพื่อการรักษาที่เหมาะสม"),
                                 "size": "xs",
                                 "color": "#666666",
                                 "wrap": True,

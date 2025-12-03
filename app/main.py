@@ -139,12 +139,13 @@ async def lifespan(app_instance: FastAPI):
     
     # Shutdown
     logger.info("Shutting down gracefully...")
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
-    
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
     # Clear all caches
     await clear_all_caches()
     logger.info("All caches cleared")
