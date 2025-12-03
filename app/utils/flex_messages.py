@@ -1001,8 +1001,8 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 # Convert to string and clean
                 product_url = str(product_url).strip()
 
-                # Log original URL for debugging
-                logger.info(f"Product URL original: [{product_url[:100]}]")
+                # Log original URL for debugging (FULL URL)
+                logger.info(f"Product URL (len={len(product_url)}): [{product_url}]")
 
                 # Remove all control characters and whitespace
                 product_url = re.sub(r'[\x00-\x1f\x7f-\x9f\s]', '', product_url)
@@ -1022,7 +1022,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                     and len(product_url) <= 1000
                 )
 
-                logger.info(f"Product URL cleaned: [{product_url[:100]}] valid={is_valid}")
+                logger.info(f"Product URL valid={is_valid}, len={len(product_url)}")
 
                 if is_valid:
                     bubble["footer"] = {
