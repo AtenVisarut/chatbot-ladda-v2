@@ -922,8 +922,31 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 ],
                 "spacing": "sm",
                 "paddingAll": "12px"
-            }
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "uri",
+                            "label": "🔗 ดูรายละเอียดสินค้า",
+                            "uri": product.get('link_product', 'https://www.icpladda.com/about/')
+                        },
+                        "style": "primary",
+                        "color": "#27AE60",
+                        "height": "sm"
+                    }
+                ],
+                "paddingAll": "10px"
+            } if product.get('link_product') else None
         }
+
+        # Remove None footer if no link
+        if bubble.get("footer") is None:
+            bubble.pop("footer", None)
+
         bubbles.append(bubble)
 
     # ถ้าไม่มีผลิตภัณฑ์

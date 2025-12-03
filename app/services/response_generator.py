@@ -175,6 +175,7 @@ async def generate_flex_response(
                     "usage_period": p.usage_period or "-",
                     "how_to_use": p.how_to_use or "-",
                     "usage_rate": p.usage_rate or "-",
+                    "link_product": p.link_product or "",
                     "similarity": p.score if hasattr(p, 'score') else 0.8
                 })
 

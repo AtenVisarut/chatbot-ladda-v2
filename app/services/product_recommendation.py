@@ -177,6 +177,7 @@ def build_recommendations_from_data(products_data: List[Dict]) -> List[ProductRe
             how_to_use=product.get("how_to_use", ""),
             usage_period=product.get("usage_period", ""),
             usage_rate=product.get("usage_rate", ""),
+            link_product=product.get("link_product", ""),
             score=product.get("similarity", 0.7)
         )
         recommendations.append(rec)
