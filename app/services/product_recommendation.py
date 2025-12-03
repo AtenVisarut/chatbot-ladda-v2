@@ -1,25 +1,216 @@
 import logging
 import json
-from typing import List, Dict
-from app.models import DiseaseDetectionResult, ProductRecommendation
-from app.services.services import supabase_client, e5_model, openai_client
-import logging
-import json
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from app.models import DiseaseDetectionResult, ProductRecommendation
 from app.services.services import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question
+from app.services.reranker import rerank_products_with_llm, simple_relevance_boost
 
 logger = logging.getLogger(__name__)
 
-async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) -> List[ProductRecommendation]:
+# Configuration for re-ranking
+ENABLE_RERANKING = True  # Set to False to disable re-ranking for faster response
+
+
+# =============================================================================
+# Hybrid Search Functions (Vector + BM25/Keyword)
+# =============================================================================
+
+async def hybrid_search_products(query: str, match_count: int = 15,
+                                  vector_weight: float = 0.6,
+                                  keyword_weight: float = 0.4) -> List[Dict]:
     """
-    Query products using Vector Search + Gemini filtering
-    Returns top 3-5 most relevant products
+    Perform Hybrid Search combining Vector Search + Keyword/BM25 Search
+    Uses Reciprocal Rank Fusion (RRF) for combining results
     """
     try:
-        logger.info("🔍 Retrieving products with Vector Search + Gemini Filter")
+        if not supabase_client or not openai_client:
+            logger.warning("Supabase or OpenAI client not available for hybrid search")
+            return []
+
+        logger.info(f"🔍 Hybrid Search: '{query}' (vector={vector_weight}, keyword={keyword_weight})")
+
+        # Generate embedding for vector search
+        response = await openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=query,
+            encoding_format="float"
+        )
+        query_embedding = response.data[0].embedding
+
+        # Try hybrid_search_products RPC first (if SQL function exists)
+        try:
+            result = supabase_client.rpc(
+                'hybrid_search_products',
+                {
+                    'query_embedding': query_embedding,
+                    'search_query': query,
+                    'vector_weight': vector_weight,
+                    'keyword_weight': keyword_weight,
+                    'match_threshold': 0.15,
+                    'match_count': match_count
+                }
+            ).execute()
+
+            if result.data:
+                logger.info(f"✓ Hybrid search returned {len(result.data)} products")
+                for p in result.data[:3]:
+                    logger.info(f"   → {p.get('product_name')}: hybrid={p.get('hybrid_score', 0):.3f} "
+                               f"(vec={p.get('vector_score', 0):.3f}, kw={p.get('keyword_score', 0):.3f})")
+                return result.data
+
+        except Exception as e:
+            logger.warning(f"hybrid_search_products RPC failed: {e}, falling back to manual hybrid search")
+
+        # Fallback: Manual hybrid search (Vector + Keyword separately)
+        return await manual_hybrid_search(query, query_embedding, match_count, vector_weight, keyword_weight)
+
+    except Exception as e:
+        logger.error(f"Hybrid search failed: {e}", exc_info=True)
+        return []
+
+
+async def manual_hybrid_search(query: str, query_embedding: List[float],
+                                match_count: int = 15,
+                                vector_weight: float = 0.6,
+                                keyword_weight: float = 0.4) -> List[Dict]:
+    """
+    Manual Hybrid Search fallback - runs vector and keyword search separately
+    then combines with Reciprocal Rank Fusion (RRF)
+    """
+    try:
+        # 1. Vector Search
+        vector_results = []
+        try:
+            result = supabase_client.rpc(
+                'match_products',
+                {
+                    'query_embedding': query_embedding,
+                    'match_threshold': 0.15,
+                    'match_count': match_count * 2
+                }
+            ).execute()
+            if result.data:
+                vector_results = result.data
+                logger.info(f"   Vector search: {len(vector_results)} results")
+        except Exception as e:
+            logger.warning(f"Vector search failed: {e}")
+
+        # 2. Keyword Search (ILIKE fallback)
+        keyword_results = []
+        try:
+            # Try keyword_search_products RPC
+            result = supabase_client.rpc(
+                'keyword_search_products',
+                {
+                    'search_query': query,
+                    'match_count': match_count * 2
+                }
+            ).execute()
+            if result.data:
+                keyword_results = result.data
+                logger.info(f"   Keyword search (RPC): {len(keyword_results)} results")
+        except Exception as e:
+            logger.warning(f"keyword_search_products RPC failed: {e}, trying ILIKE")
+            # Fallback: ILIKE search
+            try:
+                result = supabase_client.table('products')\
+                    .select('*')\
+                    .or_(f"product_name.ilike.%{query}%,"
+                         f"target_pest.ilike.%{query}%,"
+                         f"applicable_crops.ilike.%{query}%,"
+                         f"active_ingredient.ilike.%{query}%")\
+                    .limit(match_count * 2)\
+                    .execute()
+                if result.data:
+                    # Add rank score for ILIKE results
+                    for i, p in enumerate(result.data):
+                        p['rank'] = 1.0 / (i + 1)  # Simple rank score
+                    keyword_results = result.data
+                    logger.info(f"   Keyword search (ILIKE): {len(keyword_results)} results")
+            except Exception as e2:
+                logger.warning(f"ILIKE search failed: {e2}")
+
+        # 3. Combine with RRF (Reciprocal Rank Fusion)
+        combined = reciprocal_rank_fusion(
+            vector_results, keyword_results,
+            vector_weight, keyword_weight
+        )
+
+        logger.info(f"✓ Manual hybrid search combined: {len(combined)} products")
+        return combined[:match_count]
+
+    except Exception as e:
+        logger.error(f"Manual hybrid search failed: {e}", exc_info=True)
+        return []
+
+
+def reciprocal_rank_fusion(vector_results: List[Dict], keyword_results: List[Dict],
+                           vector_weight: float = 0.6, keyword_weight: float = 0.4,
+                           k: int = 60) -> List[Dict]:
+    """
+    Combine vector and keyword search results using Reciprocal Rank Fusion (RRF)
+    RRF score = sum(1 / (k + rank)) across all result sets
+
+    Parameters:
+    - k: constant to prevent high scores for top results (default 60)
+    """
+    try:
+        # Build product lookup and RRF scores
+        products_by_id = {}
+        rrf_scores = {}
+
+        # Process vector results
+        for rank, product in enumerate(vector_results, 1):
+            pid = product.get('id') or product.get('product_name')
+            if pid:
+                products_by_id[pid] = product
+                rrf_scores[pid] = rrf_scores.get(pid, 0) + vector_weight * (1 / (k + rank))
+                product['vector_rank'] = rank
+                product['vector_score'] = product.get('similarity', 0)
+
+        # Process keyword results
+        for rank, product in enumerate(keyword_results, 1):
+            pid = product.get('id') or product.get('product_name')
+            if pid:
+                if pid not in products_by_id:
+                    products_by_id[pid] = product
+                rrf_scores[pid] = rrf_scores.get(pid, 0) + keyword_weight * (1 / (k + rank))
+                products_by_id[pid]['keyword_rank'] = rank
+                products_by_id[pid]['keyword_score'] = product.get('rank', 0)
+
+        # Add bonus for products appearing in both
+        for pid in rrf_scores:
+            product = products_by_id[pid]
+            if product.get('vector_rank') and product.get('keyword_rank'):
+                rrf_scores[pid] += 0.02  # Small bonus for appearing in both
+
+        # Sort by RRF score
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+
+        # Build final results
+        combined_results = []
+        for pid in sorted_ids:
+            product = products_by_id[pid].copy()
+            product['hybrid_score'] = rrf_scores[pid]
+            product['similarity'] = rrf_scores[pid]  # Use hybrid score as similarity
+            combined_results.append(product)
+
+        return combined_results
+
+    except Exception as e:
+        logger.error(f"RRF fusion failed: {e}", exc_info=True)
+        # Fallback: return vector results
+        return vector_results
+
+async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) -> List[ProductRecommendation]:
+    """
+    Query products using Hybrid Search (Vector + Keyword/BM25)
+    Returns top 3-6 most relevant products
+    """
+    try:
+        logger.info("🔍 Retrieving products with Hybrid Search (Vector + Keyword)")
 
         if not supabase_client:
             logger.warning("Supabase not configured")
@@ -27,71 +218,70 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         disease_name = disease_info.disease_name
         logger.info(f"📝 Searching products for: {disease_name}")
-        
+
         # Check cache first
         cache_key = f"products:{disease_name}"
-        # Use "products" as cache type
         cached_products = await get_from_cache("products", cache_key)
         if cached_products:
             logger.info("✓ Using cached product recommendations")
             return [ProductRecommendation(**p) for p in cached_products]
-        
-        # Strategy 1: Vector search by disease name (most accurate)
+
+        # Strategy 1: Hybrid Search (Vector + Keyword combined)
         try:
-            if openai_client:
-                # Generate embedding for disease name using OpenAI
-                response = await openai_client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=disease_name,
-                    encoding_format="float"
-                )
-                query_embedding = response.data[0].embedding
-                logger.info("✓ Product query embedding generated (OpenAI)")
-                
-                # Vector search in products table
-                result = supabase_client.rpc(
-                    'match_products',
-                    {
-                        'query_embedding': query_embedding,
-                        'match_threshold': 0.3,  # Lower threshold for more candidates
-                        'match_count': 15  # Get more candidates
-                    }
-                ).execute()
-                
-                if result.data and len(result.data) > 0:
-                    logger.info(f"✓ Found {len(result.data)} product candidates via vector search")
-                    
-                    # Use similarity scores directly (NO AI filtering - saves ~100 tokens)
-                    # Filter by similarity threshold
-                    filtered_data = [
-                        p for p in result.data 
-                        if p.get('similarity', 0) > 0.4
-                    ][:6]  # Top 6 candidates
-                    
-                    if filtered_data:
-                        logger.info(f"✓ Filtered {len(filtered_data)} products by similarity (no AI)")
-                        filtered_products = build_recommendations_from_data(filtered_data)
-                        
-                        # Cache the results
-                        if filtered_products:
-                            # Use "products" as cache type
-                            await set_to_cache("products", cache_key, [r.dict() for r in filtered_products])
-                        
-                        return filtered_products
-                    else:
-                        logger.warning("⚠️ No products passed similarity threshold, using top vector results")
-                        # Fallback: use top vector search results
-                        return build_recommendations_from_data(result.data[:6])
+            hybrid_results = await hybrid_search_products(
+                query=disease_name,
+                match_count=15,
+                vector_weight=0.6,
+                keyword_weight=0.4
+            )
+
+            if hybrid_results:
+                logger.info(f"✓ Hybrid search found {len(hybrid_results)} candidates")
+
+                # Apply simple relevance boost first
+                for p in hybrid_results:
+                    boost = simple_relevance_boost(disease_name, p)
+                    p['hybrid_score'] = p.get('hybrid_score', p.get('similarity', 0)) + boost
+
+                # Sort by boosted score
+                hybrid_results.sort(key=lambda x: x.get('hybrid_score', 0), reverse=True)
+
+                # Re-rank top candidates with LLM Cross-Encoder (if enabled)
+                if ENABLE_RERANKING and len(hybrid_results) > 6:
+                    logger.info("🔄 Applying LLM re-ranking for higher accuracy...")
+                    hybrid_results = await rerank_products_with_llm(
+                        query=disease_name,
+                        products=hybrid_results[:15],  # Top 15 candidates
+                        top_k=6,
+                        openai_client=openai_client
+                    )
+
+                # Filter by hybrid score threshold
+                filtered_data = [
+                    p for p in hybrid_results
+                    if p.get('hybrid_score', p.get('similarity', 0)) > 0.005
+                ][:6]
+
+                if filtered_data:
+                    logger.info(f"✓ Final {len(filtered_data)} products after re-ranking")
+                    filtered_products = build_recommendations_from_data(filtered_data)
+
+                    # Cache the results
+                    if filtered_products:
+                        await set_to_cache("products", cache_key, [r.dict() for r in filtered_products])
+
+                    return filtered_products
                 else:
-                    logger.info("No products found via vector search, trying keyword search")
-            else:
-                logger.warning("OpenAI client not available, using keyword search")
+                    # Use top results anyway
+                    logger.warning("⚠️ No products passed threshold, using top results")
+                    return build_recommendations_from_data(hybrid_results[:6])
+
         except Exception as e:
-            logger.warning(f"Vector search failed: {e}, trying keyword search")
-        
+            logger.warning(f"Hybrid search failed: {e}, trying fallback")
+
         # Strategy 2: Keyword search fallback
         matches_data = []
-        
+
         # Search in target_pest field
         try:
             result = supabase_client.table('products')\
@@ -99,13 +289,13 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                 .ilike('target_pest', f'%{disease_name}%')\
                 .limit(10)\
                 .execute()
-            
+
             if result.data:
                 matches_data.extend(result.data)
                 logger.info(f"Found {len(result.data)} products in target_pest")
         except Exception as e:
             logger.warning(f"target_pest search failed: {e}")
-        
+
         # If no results, search by pest type
         if not matches_data:
             try:
@@ -118,34 +308,33 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                     pest_keywords = ["แมลง", "ศัตรูพืช", "เพลี้ย"]
                 elif "วัชพืช" in disease_info.raw_analysis:
                     pest_keywords = ["วัชพืช", "หญ้า"]
-                
+
                 for keyword in pest_keywords:
                     result = supabase_client.table('products')\
                         .select('*')\
                         .ilike('target_pest', f'%{keyword}%')\
                         .limit(5)\
                         .execute()
-                    
+
                     if result.data:
                         matches_data.extend(result.data)
                         logger.info(f"Found {len(result.data)} products for keyword: {keyword}")
                         break
-                        
+
             except Exception as e:
                 logger.warning(f"Keyword search failed: {e}")
-        
+
         if not matches_data:
             logger.warning("No products found with any search strategy")
             return []
-        
+
         logger.info(f"Total products found: {len(matches_data)}")
         recommendations = build_recommendations_from_data(matches_data[:6])
-        
+
         # Cache the results
         if recommendations:
-            # Use "products" as cache type
             await set_to_cache("products", cache_key, [r.dict() for r in recommendations])
-        
+
         return recommendations
 
     except Exception as e:
@@ -258,48 +447,57 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
             if pests:
                 search_queries.append(f"กำจัด {pests[0]}")
         
-        # Vector search for each query
+        # Hybrid search for each query (Vector + Keyword combined)
         all_products = []
-        logger.info(f"🔍 Searching with {len(search_queries)} queries: {search_queries[:5]}")
+        logger.info(f"🔍 Hybrid searching with {len(search_queries)} queries: {search_queries[:5]}")
 
-        for query in search_queries[:5]:  # Top 5 queries (increased)
+        for query in search_queries[:5]:  # Top 5 queries
             try:
                 logger.info(f"   → Query: '{query}'")
-                
-                # Generate embedding using OpenAI
-                response = await openai_client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=query,
-                    encoding_format="float"
+
+                # Use hybrid search (Vector + Keyword)
+                results = await hybrid_search_products(
+                    query=query,
+                    match_count=15,
+                    vector_weight=0.5,  # Balanced weights for intent-based search
+                    keyword_weight=0.5
                 )
-                query_embedding = response.data[0].embedding
-                
-                result = supabase_client.rpc(
-                    'match_products',
-                    {
-                        'query_embedding': query_embedding,
-                        'match_threshold': 0.15,  # Very low threshold for more results
-                        'match_count': 15
-                    }
-                ).execute()
-                
-                if result.data:
-                    all_products.extend(result.data)
-                    logger.info(f"   ✓ Found {len(result.data)} products")
+
+                if results:
+                    all_products.extend(results)
+                    logger.info(f"   ✓ Found {len(results)} products (hybrid)")
                 else:
                     logger.warning(f"   ⚠️ No products found")
             except Exception as e:
-                logger.error(f"   ❌ Vector search failed: {e}", exc_info=True)
+                logger.error(f"   ❌ Hybrid search failed: {e}", exc_info=True)
         
-        # Remove duplicates
+        # Remove duplicates and apply relevance boost
         seen = set()
         unique_products = []
         for p in all_products:
             pname = p.get('product_name', '')
             if pname and pname not in seen:
                 seen.add(pname)
+                # Apply relevance boost based on query terms
+                boost = 0
+                for query in search_queries[:3]:
+                    boost += simple_relevance_boost(query, p)
+                p['hybrid_score'] = p.get('hybrid_score', p.get('similarity', 0)) + (boost / 3)
                 unique_products.append(p)
-        
+
+        # Sort by boosted score
+        unique_products.sort(key=lambda x: x.get('hybrid_score', 0), reverse=True)
+
+        # Re-rank with LLM if enabled and enough candidates
+        if ENABLE_RERANKING and len(unique_products) > 6:
+            logger.info("🔄 Applying LLM re-ranking for intent-based search...")
+            unique_products = await rerank_products_with_llm(
+                query=question,
+                products=unique_products[:15],
+                top_k=10,
+                openai_client=openai_client
+            )
+
         logger.info(f"📦 Total products: {len(all_products)}, Unique: {len(unique_products)}")
 
         if not unique_products:

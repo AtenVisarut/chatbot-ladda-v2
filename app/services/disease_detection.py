@@ -219,20 +219,121 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
             prompt_text += f"\n\nเพิ่มเติมจากผู้ใช้: {extra_user_info}"
 
         # -----------------------------------------------------------------
-        # Call OpenAI vision model
+        # Call OpenAI vision model with Chain-of-Thought (CoT) prompting
+        # Two-stage approach for highest accuracy:
+        # Stage 1: Detailed analysis and reasoning
+        # Stage 2: Structured JSON output
         # -----------------------------------------------------------------
-        response = await openai_client.chat.completions.create(
+
+        # Stage 1: CoT Analysis - Ask model to think step-by-step
+        cot_prompt = f"""คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืช ประสบการณ์ 20 ปี
+
+🔬 **ขั้นตอนที่ 1: วิเคราะห์ภาพอย่างละเอียด**
+
+กรุณาวิเคราะห์ภาพนี้ทีละขั้นตอน โดยคิดออกเสียง (Think out loud):
+
+**A. สังเกตภาพรวม:**
+- พืชชนิดอะไร?
+- ส่วนไหนของพืชที่มีปัญหา? (ใบ/ลำต้น/ผล/ราก)
+
+**B. วิเคราะห์ลักษณะความผิดปกติ:**
+- รูปร่างของแผล/จุด? (กลม/รี/รูปเพชร/ไม่แน่นอน)
+- สีของแผล? (น้ำตาล/ดำ/เหลือง/เทา)
+- ตรงกลางแผลสีอะไร? (เทา/ขาว/เดียวกับขอบ)
+- มี halo สีเหลืองรอบแผลไหม?
+- แผลยุบตัวลงไหม (sunken)?
+- ตำแหน่งแผลอยู่ตรงไหน? (กระจาย/ขอบใบ/ปลายใบ)
+
+**C. ตรวจหาแมลง (ถ้ามี):**
+- เห็นแมลงไหม? สีอะไร? ขนาดเท่าไร?
+- มีร่องรอยอะไร? (มูล/ไข่/รอยกัด/เส้นทาง)
+
+**D. เปรียบเทียบและตัดตัวเลือก:**
+- โรค/แมลงที่เป็นไปได้มีอะไรบ้าง?
+- เหตุผลที่ตัดแต่ละตัวเลือกออก?
+- สรุปว่าน่าจะเป็นอะไรมากที่สุด? เพราะอะไร?
+
+{f"**ข้อมูลเพิ่มเติมจากผู้ใช้:** {extra_user_info}" if extra_user_info else ""}
+
+กรุณาวิเคราะห์ทีละขั้นตอนก่อน แล้วค่อยสรุป:"""
+
+        # Stage 1: Get detailed reasoning
+        cot_response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
+                    "role": "system",
+                    "content": "คุณคือผู้เชี่ยวชาญโรคพืชที่ต้องวิเคราะห์อย่างละเอียดและแม่นยำ คิดทีละขั้นตอนก่อนสรุป"
+                },
+                {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt_text},
+                        {"type": "text", "text": cot_prompt},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                         },
                     ],
+                }
+            ],
+            max_tokens=1500,
+        )
+
+        cot_analysis = cot_response.choices[0].message.content
+        logger.info(f"CoT Analysis: {cot_analysis[:500]}...")
+
+        # Stage 2: Structured JSON output based on CoT analysis
+        json_prompt = f"""จากการวิเคราะห์ข้างต้น:
+
+{cot_analysis}
+
+══════════════════════════════════════════════════════════════════
+📚 **ฐานข้อมูลอ้างอิง:**
+{disease_database_section}
+
+══════════════════════════════════════════════════════════════════
+🚨 **กฎการแยกแยะที่สำคัญ:**
+
+| ลักษณะ | Brown Spot | Leaf Spot | Anthracnose |
+|--------|-----------|-----------|-------------|
+| พืช | ข้าว | ทั่วไป | มะม่วง/พริก |
+| ตรงกลาง | สีเทา/ขาว | สีเดียวกัน | สีเข้มทั้งหมด |
+| Halo เหลือง | ✅ ชัด | ⚠️ อาจมี | ❌ ไม่มี |
+| แผลยุบตัว | ❌ | ❌ | ✅ ยุบชัด |
+| ตำแหน่ง | กระจาย | กระจาย | ขอบ/ปลายใบ |
+
+══════════════════════════════════════════════════════════════════
+📤 **สรุปเป็น JSON:**
+
+{{
+  "plant_type": "ชนิดพืช",
+  "disease_name": "ชื่อโรค/แมลง ภาษาไทย (English)",
+  "pest_type": "เชื้อรา/แบคทีเรีย/ไวรัส/แมลง/ไร/วัชพืช/ขาดธาตุ/unknown",
+  "confidence_level_percent": 0-100,
+  "confidence": "สูง/ปานกลาง/ต่ำ",
+  "symptoms_in_image": "อาการที่เห็นในภาพ",
+  "key_diagnostic_features": "ลักษณะสำคัญที่ใช้วินิจฉัย",
+  "symptoms": "รายละเอียดอาการ",
+  "possible_cause": "สาเหตุและเหตุผลการวินิจฉัย",
+  "differential_diagnosis": "โรคอื่นที่ตัดออกและเหตุผล",
+  "severity_level": "รุนแรง/ปานกลาง/เล็กน้อย",
+  "severity": "เหตุผลการประเมิน",
+  "description": "คำอธิบายและคำแนะนำ",
+  "affected_area": "ส่วนที่ได้รับผลกระทบ",
+  "spread_risk": "สูง/ปานกลาง/ต่ำ",
+  "additional_info_needed": "ข้อมูลเพิ่มเติมที่ต้องการ"
+}}"""
+
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "สรุปการวิเคราะห์เป็น JSON ที่ถูกต้องและแม่นยำ"
+                },
+                {
+                    "role": "user",
+                    "content": json_prompt
                 }
             ],
             response_format={"type": "json_object"},
