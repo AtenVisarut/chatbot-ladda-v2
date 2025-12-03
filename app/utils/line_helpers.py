@@ -98,8 +98,19 @@ async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_st
 
         payload = {"to": user_id, "messages": messages}
 
+        # Debug: log message count and types
+        logger.info(f"Sending {len(messages)} messages to LINE")
+        for i, msg in enumerate(messages):
+            logger.info(f"  Message {i+1}: type={msg.get('type')}, altText={msg.get('altText', 'N/A')[:50] if msg.get('altText') else 'N/A'}")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
+
+            # Log error details if not successful
+            if response.status_code != 200:
+                logger.error(f"LINE API error: {response.status_code}")
+                logger.error(f"LINE API response: {response.text}")
+
             response.raise_for_status()
         logger.info("Push message sent to LINE")
     except Exception as e:
