@@ -1444,20 +1444,8 @@ def create_chat_response_flex(question: str, answer: str) -> Dict:
             },
             "footer": {
                 "type": "box",
-                "layout": "horizontal",
-                "spacing": "sm",
+                "layout": "vertical",
                 "contents": [
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "height": "sm",
-                        "action": {
-                            "type": "message",
-                            "label": "📷 ส่งรูปวิเคราะห์",
-                            "text": "ส่งรูปวิเคราะห์"
-                        },
-                        "flex": 1
-                    },
                     {
                         "type": "button",
                         "style": "secondary",
@@ -1466,8 +1454,7 @@ def create_chat_response_flex(question: str, answer: str) -> Dict:
                             "type": "message",
                             "label": "❓ ช่วยเหลือ",
                             "text": "help"
-                        },
-                        "flex": 1
+                        }
                     }
                 ]
             }

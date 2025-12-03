@@ -38,6 +38,7 @@ returns table (
   how_to_use text,
   usage_period text,
   usage_rate text,
+  link_product text,
   similarity float
 )
 language plpgsql
@@ -53,6 +54,7 @@ begin
     products.how_to_use,
     products.usage_period,
     products.usage_rate,
+    products.link_product,
     1 - (products.embedding <=> query_embedding) as similarity
   from products
   where 1 - (products.embedding <=> query_embedding) > match_threshold
