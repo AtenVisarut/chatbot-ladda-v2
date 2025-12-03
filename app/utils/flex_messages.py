@@ -1007,6 +1007,9 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 # Remove all control characters and whitespace
                 product_url = re.sub(r'[\x00-\x1f\x7f-\x9f\s]', '', product_url)
 
+                # Encode square brackets (Facebook URLs have __cft__[0]= which is invalid)
+                product_url = product_url.replace('[', '%5B').replace(']', '%5D')
+
                 # Validate URL format with regex
                 url_pattern = re.compile(
                     r'^https?://'  # http:// or https://
