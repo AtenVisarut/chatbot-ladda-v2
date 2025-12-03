@@ -923,7 +923,13 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 "spacing": "sm",
                 "paddingAll": "12px"
             },
-            "footer": {
+        }
+
+        # Add footer with product link (only if valid URL)
+        product_url = product.get('link_product', '')
+        # Validate URL - must start with http:// or https://
+        if product_url and product_url.startswith(('http://', 'https://')):
+            bubble["footer"] = {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
@@ -932,7 +938,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                         "action": {
                             "type": "uri",
                             "label": "🔗 ดูรายละเอียดสินค้า",
-                            "uri": product.get('link_product') if product.get('link_product') else "https://www.icpladda.com/about/"
+                            "uri": product_url
                         },
                         "style": "primary",
                         "color": "#27AE60",
@@ -941,7 +947,6 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 ],
                 "paddingAll": "10px"
             }
-        }
 
         bubbles.append(bubble)
 
