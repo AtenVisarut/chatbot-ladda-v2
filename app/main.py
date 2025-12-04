@@ -50,7 +50,9 @@ from app.services.welcome import (
 from app.utils.flex_messages import (
     create_chat_response_flex,
     create_liff_registration_flex,
-    create_liff_welcome_flex
+    create_liff_welcome_flex,
+    create_initial_questions_flex,
+    create_analyzing_flex
 )
 from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
@@ -406,12 +408,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     })
                     
                     # Ask for additional information instead of immediate analysis
-                    questions_message = get_initial_questions_message()
-                    await reply_line(reply_token, questions_message)
-                    
+                    questions_flex = create_initial_questions_flex()
+                    await reply_line(reply_token, questions_flex)
+
                     # Add to memory
                     await add_to_memory(user_id, "user", "[ส่งรูปภาพพืช]")
-                    await add_to_memory(user_id, "assistant", questions_message)
+                    await add_to_memory(user_id, "assistant", "[ถามข้อมูลเพิ่มเติมสำหรับวิเคราะห์]")
                     
                     logger.info(f"Asked questions for user {user_id}, waiting for additional info")
                     
@@ -467,8 +469,8 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         if should_skip_questions(text):
                             # Analyze without additional info
                             try:
-                                skip_msg = get_skip_analysis_message()
-                                await reply_line(reply_token, skip_msg)
+                                skip_flex = create_analyzing_flex(with_info=False)
+                                await reply_line(reply_token, skip_flex)
                                 
                                 detection_result = await detect_disease(image_bytes)
                                 
@@ -532,8 +534,8 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         else:
                             # Analyze with user's additional information
                             try:
-                                analyzing_msg = get_analyzing_with_info_message()
-                                await reply_line(reply_token, analyzing_msg)
+                                analyzing_flex = create_analyzing_flex(with_info=True)
+                                await reply_line(reply_token, analyzing_flex)
 
                                 # Run detection with extra context
                                 detection_result = await detect_disease(image_bytes, extra_user_info=text)

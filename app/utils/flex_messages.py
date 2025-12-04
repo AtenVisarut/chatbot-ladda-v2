@@ -1505,6 +1505,255 @@ def create_product_catalog_flex() -> Dict:
     }
 
 
+def create_initial_questions_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับถามคำถามเพิ่มเติมหลังรับรูป
+    """
+    return {
+        "type": "flex",
+        "altText": "ได้รับรูปแล้วค่ะ กรุณาตอบคำถามเพิ่มเติม",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "✅ ได้รับรูปแล้วค่ะ",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    }
+                ],
+                "backgroundColor": "#27AE60",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "👉 เพื่อความแม่นยำในการวินิจฉัย",
+                        "size": "sm",
+                        "color": "#E74C3C",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": "กรุณาตอบคำถามเพิ่มเติมค่ะ:",
+                        "size": "sm",
+                        "color": "#E74C3C",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "md",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "1️⃣", "flex": 0, "size": "sm"},
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "margin": "md",
+                                        "contents": [
+                                            {"type": "text", "text": "ชนิดพืช", "weight": "bold", "size": "sm"},
+                                            {"type": "text", "text": "ทุเรียน/มะม่วง/ข้าว/อื่นๆ?", "size": "xs", "color": "#888888"}
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "2️⃣", "flex": 0, "size": "sm"},
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "margin": "md",
+                                        "contents": [
+                                            {"type": "text", "text": "ตำแหน่งอาการ", "weight": "bold", "size": "sm"},
+                                            {"type": "text", "text": "ใบ/ลำต้น/ผล/ราก?", "size": "xs", "color": "#888888"}
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "3️⃣", "flex": 0, "size": "sm"},
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "margin": "md",
+                                        "contents": [
+                                            {"type": "text", "text": "ลักษณะอาการ", "weight": "bold", "size": "sm"},
+                                            {"type": "text", "text": "• สีของจุด/แผล (น้ำตาล/เหลือง/ดำ/ขาว)", "size": "xs", "color": "#888888", "wrap": True},
+                                            {"type": "text", "text": "• พื้นที่เสียหาย (แค่กใบ/ปลายใบ/กลางใบ/ทั่วใบ)", "size": "xs", "color": "#888888", "wrap": True},
+                                            {"type": "text", "text": "• ขึ้นพองหรือไม่ (ถ้าขึ้น สีและขนาด)", "size": "xs", "color": "#888888", "wrap": True}
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "4️⃣", "flex": 0, "size": "sm"},
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "margin": "md",
+                                        "contents": [
+                                            {"type": "text", "text": "ระยะเวลาอาการ", "weight": "bold", "size": "sm"},
+                                            {"type": "text", "text": "เพิ่งพบหรือนานแค่ไหน?", "size": "xs", "color": "#888888"}
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💡 ตัวอย่างการตอบกลับ:",
+                                "size": "sm",
+                                "color": "#3498DB",
+                                "weight": "bold"
+                            },
+                            {
+                                "type": "text",
+                                "text": "\"ทุเรียน ใบมีจุดสีน้ำตาล เห็นแผลตรงกลางใบ เกิดมา 3 วัน\"",
+                                "size": "xs",
+                                "color": "#666666",
+                                "margin": "sm",
+                                "wrap": True,
+                                "style": "italic"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "text",
+                        "text": "🔬 ยิ่งให้ข้อมูลเยอะ ยิ่งวิเคราะห์ได้แม่นยำค่ะ!",
+                        "size": "xs",
+                        "color": "#27AE60",
+                        "margin": "lg",
+                        "align": "center",
+                        "weight": "bold"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "⏭️ ข้าม - วิเคราะห์เลย",
+                            "text": "ข้าม"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_analyzing_flex(with_info: bool = False) -> Dict:
+    """
+    สร้าง Flex Message แสดงสถานะกำลังวิเคราะห์
+    """
+    if with_info:
+        title = "รับทราบข้อมูลค่ะ"
+        subtitle = "กำลังวิเคราะห์อย่างละเอียด..."
+    else:
+        title = "เข้าใจค่ะ"
+        subtitle = "กำลังวิเคราะห์จากรูปภาพ..."
+
+    return {
+        "type": "flex",
+        "altText": subtitle,
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🔍",
+                                "size": "3xl",
+                                "flex": 0
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "margin": "lg",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": title,
+                                        "weight": "bold",
+                                        "size": "lg",
+                                        "color": "#27AE60"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": subtitle,
+                                        "size": "sm",
+                                        "color": "#666666",
+                                        "margin": "sm"
+                                    }
+                                ]
+                            }
+                        ],
+                        "alignItems": "center"
+                    },
+                    {
+                        "type": "text",
+                        "text": "🌱 กรุณารอสักครู่...",
+                        "size": "xs",
+                        "color": "#888888",
+                        "align": "center",
+                        "margin": "lg"
+                    }
+                ],
+                "paddingAll": "20px"
+            }
+        }
+    }
+
+
 def create_chat_response_flex(question: str, answer: str) -> Dict:
     """
     สร้าง Flex Message สำหรับการตอบคำถาม Chat Q&A
