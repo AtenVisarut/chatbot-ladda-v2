@@ -272,9 +272,9 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
                     return filtered_products
                 else:
-                    # Use top results anyway
-                    logger.warning("⚠️ No products passed threshold, using top results")
-                    return build_recommendations_from_data(hybrid_results[:6])
+                    # No products passed threshold - return empty instead of forcing results
+                    logger.warning("⚠️ No products passed relevance threshold - no recommendations")
+                    return []
 
         except Exception as e:
             logger.warning(f"Hybrid search failed: {e}, trying fallback")

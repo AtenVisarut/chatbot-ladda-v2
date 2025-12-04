@@ -475,12 +475,21 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 detection_result = await detect_disease(image_bytes)
                                 
                                 # Check if we should recommend products
-                                # Skip if: Not found, Unknown, Normal, Unclear
-                                skip_keywords = ["ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน"]
+                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency
+                                skip_keywords = [
+                                    "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
+                                    "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
+                                    "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
+                                    "Deficiency", "deficiency",
+                                    "ใบเหลือง", "ใบซีด", "ใบด่าง",
+                                    "สุขภาพดี", "healthy", "Healthy"
+                                ]
                                 should_recommend = True
+                                disease_name_lower = detection_result.disease_name.lower()
                                 for kw in skip_keywords:
-                                    if kw in detection_result.disease_name:
+                                    if kw.lower() in disease_name_lower:
                                         should_recommend = False
+                                        logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
                                         break
                                 
                                 if should_recommend:
@@ -539,7 +548,28 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
                                 # Run detection with extra context
                                 detection_result = await detect_disease(image_bytes, extra_user_info=text)
-                                recommendations = await retrieve_product_recommendation(detection_result)
+
+                                # Check if we should recommend products
+                                skip_keywords = [
+                                    "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
+                                    "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
+                                    "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
+                                    "Deficiency", "deficiency",
+                                    "ใบเหลือง", "ใบซีด", "ใบด่าง",
+                                    "สุขภาพดี", "healthy", "Healthy"
+                                ]
+                                should_recommend = True
+                                disease_name_lower = detection_result.disease_name.lower()
+                                for kw in skip_keywords:
+                                    if kw.lower() in disease_name_lower:
+                                        should_recommend = False
+                                        logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
+                                        break
+
+                                if should_recommend:
+                                    recommendations = await retrieve_product_recommendation(detection_result)
+                                else:
+                                    recommendations = []
 
                                 # Generate Flex Message response
                                 flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=text)
