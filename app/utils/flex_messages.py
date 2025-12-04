@@ -1757,6 +1757,7 @@ def create_analyzing_flex(with_info: bool = False) -> Dict:
 def create_chat_response_flex(question: str, answer: str) -> Dict:
     """
     สร้าง Flex Message สำหรับการตอบคำถาม Chat Q&A
+    ไม่มีปุ่มช่วยเหลือ - แสดงเฉพาะคำตอบ
     """
     # ตัดข้อความให้สั้นลงถ้ายาวเกินไป
     display_question = question[:50] + "..." if len(question) > 50 else question
@@ -1792,22 +1793,6 @@ def create_chat_response_flex(question: str, answer: str) -> Dict:
                         "size": "sm",
                         "color": "#333333",
                         "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "height": "sm",
-                        "action": {
-                            "type": "message",
-                            "label": "❓ ช่วยเหลือ",
-                            "text": "help"
-                        }
                     }
                 ]
             }
