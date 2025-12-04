@@ -535,8 +535,8 @@
         // LIFF ID - ต้องเปลี่ยนเป็น LIFF ID จริงหลังสร้างใน LINE Developer Console
         const LIFF_ID = '2008547824-ampdbE7x';
 
-        // API Endpoint
-        const API_BASE_URL = ''; // จะเป็น relative path เมื่อ deploy บน Railway
+        // API Endpoint - ใช้ origin ของ current URL
+        const API_BASE_URL = window.location.origin;
 
         // State
         let lineProfile = null;
@@ -657,6 +657,7 @@
                 };
 
                 console.log('Registration data:', registrationData);
+                console.log('API URL:', `${API_BASE_URL}/api/liff/register`);
 
                 // Send to API
                 const response = await fetch(`${API_BASE_URL}/api/liff/register`, {
@@ -667,7 +668,19 @@
                     body: JSON.stringify(registrationData)
                 });
 
-                const result = await response.json();
+                console.log('Response status:', response.status);
+
+                // Check if response has content
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+
+                let result;
+                try {
+                    result = responseText ? JSON.parse(responseText) : {};
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    throw new Error(`Server error: ${responseText || 'Empty response'}`);
+                }
 
                 if (!response.ok) {
                     throw new Error(result.detail || result.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
