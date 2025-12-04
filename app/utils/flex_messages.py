@@ -1564,3 +1564,355 @@ def create_chat_response_flex(question: str, answer: str) -> Dict:
             }
         }
     }
+
+
+# =============================================================================
+# LIFF Registration Flex Messages
+# =============================================================================
+
+def create_liff_registration_flex(liff_url: str) -> Dict:
+    """
+    สร้าง Flex Message สำหรับเปิด LIFF ลงทะเบียน
+
+    Args:
+        liff_url: URL ของ LIFF app (เช่น https://liff.line.me/xxxx)
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาลงทะเบียนก่อนใช้งาน",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "🌾 Login ICP",
+                        "color": "#ffffff",
+                        "size": "xl",
+                        "weight": "bold",
+                        "align": "center"
+                    },
+                    {
+                        "type": "text",
+                        "text": "ลงทะเบียนเกษตรกรอัจฉริยะ",
+                        "color": "#ffffff",
+                        "size": "sm",
+                        "align": "center",
+                        "margin": "sm"
+                    }
+                ],
+                "backgroundColor": "#2d5016",
+                "paddingAll": "20px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "เพื่อให้บริการคุณได้ดียิ่งขึ้น",
+                        "size": "sm",
+                        "color": "#333333",
+                        "align": "center"
+                    },
+                    {
+                        "type": "text",
+                        "text": "กรุณาลงทะเบียนข้อมูลพื้นฐาน",
+                        "size": "sm",
+                        "color": "#333333",
+                        "align": "center",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "👤", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "ชื่อ-นามสกุล", "size": "sm", "margin": "md", "color": "#666666"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "📱", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "เบอร์โทรศัพท์", "size": "sm", "margin": "md", "color": "#666666"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "📍", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "จังหวัด", "size": "sm", "margin": "md", "color": "#666666"}
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {"type": "text", "text": "🌱", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "พืชที่ปลูก", "size": "sm", "margin": "md", "color": "#666666"}
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "text",
+                        "text": "ใช้เวลาไม่ถึง 1 นาที!",
+                        "size": "xs",
+                        "color": "#4a7c23",
+                        "align": "center",
+                        "margin": "lg",
+                        "weight": "bold"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "uri",
+                            "label": "📝 ลงทะเบียนเลย",
+                            "uri": liff_url
+                        },
+                        "color": "#4a7c23",
+                        "height": "md"
+                    }
+                ]
+            }
+        }
+    }
+
+
+def create_liff_welcome_flex(liff_url: str) -> Dict:
+    """
+    สร้าง Flex Message ต้อนรับพร้อมปุ่ม LIFF ลงทะเบียน
+
+    Args:
+        liff_url: URL ของ LIFF app
+    """
+    return {
+        "type": "flex",
+        "altText": "ยินดีต้อนรับสู่ Chatbot Ladda",
+        "contents": {
+            "type": "bubble",
+            "size": "giga",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "🌾 CHATBOT LADDA",
+                                "color": "#ffffff",
+                                "size": "xl",
+                                "weight": "bold",
+                                "align": "center"
+                            },
+                            {
+                                "type": "text",
+                                "text": "ผู้ช่วยด้านการเกษตรอัจฉริยะ",
+                                "color": "#ffffff",
+                                "size": "sm",
+                                "align": "center",
+                                "margin": "sm"
+                            }
+                        ]
+                    }
+                ],
+                "backgroundColor": "#2d5016",
+                "paddingAll": "20px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ยินดีต้อนรับค่ะ!",
+                        "weight": "bold",
+                        "size": "xl",
+                        "margin": "md",
+                        "color": "#4a7c23"
+                    },
+                    {
+                        "type": "text",
+                        "text": "ฉันคือผู้ช่วยที่จะช่วยคุณดูแลพืชผล",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md",
+                        "wrap": True
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "margin": "lg",
+                        "spacing": "md",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "🔍",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "วิเคราะห์โรคพืช",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "ส่งรูปใบพืชมาวิเคราะห์โรค",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "💊",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "แนะนำผลิตภัณฑ์",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "รับคำแนะนำยาและปุ๋ยที่เหมาะสม",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "💬",
+                                        "size": "xl",
+                                        "flex": 0
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "ถาม-ตอบการเกษตร",
+                                                "weight": "bold",
+                                                "size": "sm"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "สอบถามปัญหาเกี่ยวกับพืช",
+                                                "size": "xs",
+                                                "color": "#888888"
+                                            }
+                                        ],
+                                        "margin": "md"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "lg"
+                    },
+                    {
+                        "type": "text",
+                        "text": "📝 กรุณาลงทะเบียนเพื่อเริ่มใช้งาน",
+                        "size": "sm",
+                        "color": "#E74C3C",
+                        "margin": "lg",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "height": "md",
+                        "action": {
+                            "type": "uri",
+                            "label": "📝 ลงทะเบียน",
+                            "uri": liff_url
+                        },
+                        "color": "#4a7c23"
+                    },
+                    {
+                        "type": "button",
+                        "style": "secondary",
+                        "height": "sm",
+                        "action": {
+                            "type": "message",
+                            "label": "📖 วิธีใช้งาน",
+                            "text": "วิธีใช้งาน"
+                        }
+                    }
+                ],
+                "flex": 0
+            }
+        }
+    }

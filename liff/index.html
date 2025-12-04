@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login ICP - ลงทะเบียนเกษตรกร</title>
+
+    <!-- LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c23 50%, #6b9b37 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 20px 0 30px;
+            color: white;
+        }
+
+        .logo {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+
+        /* Main Card */
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px 25px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+        }
+
+        /* Profile Section */
+        .profile-section {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 25px;
+            border-bottom: 2px dashed #e0e0e0;
+        }
+
+        .profile-pic {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid #4a7c23;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+
+        .profile-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .profile-status {
+            font-size: 0.9em;
+            color: #4a7c23;
+            margin-top: 5px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .form-group label .icon {
+            margin-right: 8px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1em;
+            font-family: 'Sarabun', sans-serif;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4a7c23;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(74, 124, 35, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #aaa;
+        }
+
+        /* Crops Selection */
+        .crops-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .crop-btn {
+            padding: 12px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #fafafa;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .crop-btn:hover {
+            border-color: #4a7c23;
+            background: #f0f7e6;
+        }
+
+        .crop-btn.selected {
+            border-color: #4a7c23;
+            background: #4a7c23;
+            color: white;
+        }
+
+        .crop-btn .crop-icon {
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .selected-crops {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        /* Custom crop input */
+        .custom-crop-input {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .custom-crop-input.show {
+            display: block;
+        }
+
+        /* Submit Button */
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #4a7c23 0%, #6b9b37 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(74, 124, 35, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #4a7c23;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Success */
+        .success-section {
+            display: none;
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        .success-section.show {
+            display: block;
+        }
+
+        .success-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .success-section h2 {
+            color: #4a7c23;
+            margin-bottom: 10px;
+        }
+
+        .success-section p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .close-btn {
+            width: 100%;
+            padding: 14px;
+            background: #4a7c23;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        /* Error */
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 0.95em;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9em;
+        }
+
+        /* Responsive */
+        @media (max-width: 360px) {
+            .crops-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .card {
+                padding: 25px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">🌾</div>
+            <h1>Login ICP</h1>
+            <p>ลงทะเบียนเกษตรกรอัจฉริยะ</p>
+        </div>
+
+        <!-- Main Card -->
+        <div class="card">
+            <!-- Loading -->
+            <div class="loading" id="loadingSection">
+                <div class="spinner"></div>
+                <p>กำลังโหลดข้อมูล...</p>
+            </div>
+
+            <!-- Registration Form -->
+            <div id="formSection" style="display: none;">
+                <!-- Profile Section -->
+                <div class="profile-section">
+                    <img id="profilePic" class="profile-pic" src="https://via.placeholder.com/80" alt="Profile">
+                    <div class="profile-name" id="profileName">กำลังโหลด...</div>
+                    <div class="profile-status">บัญชี LINE ของคุณ</div>
+                </div>
+
+                <!-- Error Message -->
+                <div class="error-message" id="errorMessage"></div>
+
+                <!-- Form -->
+                <form id="registrationForm">
+                    <div class="form-group">
+                        <label><span class="icon">👤</span>ชื่อ - นามสกุล</label>
+                        <input type="text" id="fullName" placeholder="เช่น สมชาย ใจดี" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><span class="icon">📱</span>เบอร์โทรศัพท์</label>
+                        <input type="tel" id="phoneNumber" placeholder="เช่น 0812345678"
+                               pattern="[0-9]{9,10}" maxlength="10" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label><span class="icon">📍</span>จังหวัด</label>
+                        <select id="province" required>
+                            <option value="">-- เลือกจังหวัด --</option>
+                            <!-- ภาคเหนือ -->
+                            <optgroup label="ภาคเหนือ">
+                                <option value="เชียงใหม่">เชียงใหม่</option>
+                                <option value="เชียงราย">เชียงราย</option>
+                                <option value="น่าน">น่าน</option>
+                                <option value="พะเยา">พะเยา</option>
+                                <option value="แพร่">แพร่</option>
+                                <option value="แม่ฮ่องสอน">แม่ฮ่องสอน</option>
+                                <option value="ลำปาง">ลำปาง</option>
+                                <option value="ลำพูน">ลำพูน</option>
+                                <option value="อุตรดิตถ์">อุตรดิตถ์</option>
+                            </optgroup>
+                            <!-- ภาคตะวันออกเฉียงเหนือ -->
+                            <optgroup label="ภาคตะวันออกเฉียงเหนือ">
+                                <option value="กาฬสินธุ์">กาฬสินธุ์</option>
+                                <option value="ขอนแก่น">ขอนแก่น</option>
+                                <option value="ชัยภูมิ">ชัยภูมิ</option>
+                                <option value="นครพนม">นครพนม</option>
+                                <option value="นครราชสีมา">นครราชสีมา</option>
+                                <option value="บึงกาฬ">บึงกาฬ</option>
+                                <option value="บุรีรัมย์">บุรีรัมย์</option>
+                                <option value="มหาสารคาม">มหาสารคาม</option>
+                                <option value="มุกดาหาร">มุกดาหาร</option>
+                                <option value="ยโสธร">ยโสธร</option>
+                                <option value="ร้อยเอ็ด">ร้อยเอ็ด</option>
+                                <option value="เลย">เลย</option>
+                                <option value="สกลนคร">สกลนคร</option>
+                                <option value="สุรินทร์">สุรินทร์</option>
+                                <option value="ศรีสะเกษ">ศรีสะเกษ</option>
+                                <option value="หนองคาย">หนองคาย</option>
+                                <option value="หนองบัวลำภู">หนองบัวลำภู</option>
+                                <option value="อุดรธานี">อุดรธานี</option>
+                                <option value="อุบลราชธานี">อุบลราชธานี</option>
+                                <option value="อำนาจเจริญ">อำนาจเจริญ</option>
+                            </optgroup>
+                            <!-- ภาคกลาง -->
+                            <optgroup label="ภาคกลาง">
+                                <option value="กรุงเทพมหานคร">กรุงเทพมหานคร</option>
+                                <option value="กำแพงเพชร">กำแพงเพชร</option>
+                                <option value="ชัยนาท">ชัยนาท</option>
+                                <option value="นครนายก">นครนายก</option>
+                                <option value="นครปฐม">นครปฐม</option>
+                                <option value="นครสวรรค์">นครสวรรค์</option>
+                                <option value="นนทบุรี">นนทบุรี</option>
+                                <option value="ปทุมธานี">ปทุมธานี</option>
+                                <option value="พระนครศรีอยุธยา">พระนครศรีอยุธยา</option>
+                                <option value="พิจิตร">พิจิตร</option>
+                                <option value="พิษณุโลก">พิษณุโลก</option>
+                                <option value="เพชรบูรณ์">เพชรบูรณ์</option>
+                                <option value="ลพบุรี">ลพบุรี</option>
+                                <option value="สมุทรปราการ">สมุทรปราการ</option>
+                                <option value="สมุทรสงคราม">สมุทรสงคราม</option>
+                                <option value="สมุทรสาคร">สมุทรสาคร</option>
+                                <option value="สระบุรี">สระบุรี</option>
+                                <option value="สิงห์บุรี">สิงห์บุรี</option>
+                                <option value="สุโขทัย">สุโขทัย</option>
+                                <option value="สุพรรณบุรี">สุพรรณบุรี</option>
+                                <option value="อ่างทอง">อ่างทอง</option>
+                                <option value="อุทัยธานี">อุทัยธานี</option>
+                            </optgroup>
+                            <!-- ภาคตะวันออก -->
+                            <optgroup label="ภาคตะวันออก">
+                                <option value="จันทบุรี">จันทบุรี</option>
+                                <option value="ฉะเชิงเทรา">ฉะเชิงเทรา</option>
+                                <option value="ชลบุรี">ชลบุรี</option>
+                                <option value="ตราด">ตราด</option>
+                                <option value="ปราจีนบุรี">ปราจีนบุรี</option>
+                                <option value="ระยอง">ระยอง</option>
+                                <option value="สระแก้ว">สระแก้ว</option>
+                            </optgroup>
+                            <!-- ภาคตะวันตก -->
+                            <optgroup label="ภาคตะวันตก">
+                                <option value="กาญจนบุรี">กาญจนบุรี</option>
+                                <option value="ตาก">ตาก</option>
+                                <option value="ประจวบคีรีขันธ์">ประจวบคีรีขันธ์</option>
+                                <option value="เพชรบุรี">เพชรบุรี</option>
+                                <option value="ราชบุรี">ราชบุรี</option>
+                            </optgroup>
+                            <!-- ภาคใต้ -->
+                            <optgroup label="ภาคใต้">
+                                <option value="กระบี่">กระบี่</option>
+                                <option value="ชุมพร">ชุมพร</option>
+                                <option value="ตรัง">ตรัง</option>
+                                <option value="นครศรีธรรมราช">นครศรีธรรมราช</option>
+                                <option value="นราธิวาส">นราธิวาส</option>
+                                <option value="ปัตตานี">ปัตตานี</option>
+                                <option value="พังงา">พังงา</option>
+                                <option value="พัทลุง">พัทลุง</option>
+                                <option value="ภูเก็ต">ภูเก็ต</option>
+                                <option value="ยะลา">ยะลา</option>
+                                <option value="ระนอง">ระนอง</option>
+                                <option value="สงขลา">สงขลา</option>
+                                <option value="สตูล">สตูล</option>
+                                <option value="สุราษฎร์ธานี">สุราษฎร์ธานี</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label><span class="icon">🌱</span>พืชที่ปลูก (เลือกได้หลายชนิด)</label>
+                        <div class="crops-container" id="cropsContainer">
+                            <div class="crop-btn" data-crop="ข้าว">
+                                <span class="crop-icon">🌾</span>
+                                ข้าว
+                            </div>
+                            <div class="crop-btn" data-crop="ข้าวโพด">
+                                <span class="crop-icon">🌽</span>
+                                ข้าวโพด
+                            </div>
+                            <div class="crop-btn" data-crop="อ้อย">
+                                <span class="crop-icon">🎋</span>
+                                อ้อย
+                            </div>
+                            <div class="crop-btn" data-crop="มันสำปะหลัง">
+                                <span class="crop-icon">🥔</span>
+                                มันสำปะหลัง
+                            </div>
+                            <div class="crop-btn" data-crop="ทุเรียน">
+                                <span class="crop-icon">🍈</span>
+                                ทุเรียน
+                            </div>
+                            <div class="crop-btn" data-crop="มะม่วง">
+                                <span class="crop-icon">🥭</span>
+                                มะม่วง
+                            </div>
+                            <div class="crop-btn" data-crop="ยางพารา">
+                                <span class="crop-icon">🌳</span>
+                                ยางพารา
+                            </div>
+                            <div class="crop-btn" data-crop="ปาล์มน้ำมัน">
+                                <span class="crop-icon">🌴</span>
+                                ปาล์มน้ำมัน
+                            </div>
+                            <div class="crop-btn" data-crop="other" id="otherCropBtn">
+                                <span class="crop-icon">➕</span>
+                                อื่นๆ
+                            </div>
+                        </div>
+
+                        <div class="custom-crop-input" id="customCropInput">
+                            <input type="text" id="customCrop" placeholder="ระบุพืชอื่นๆ (คั่นด้วยเครื่องหมาย ,)">
+                        </div>
+
+                        <div class="selected-crops" id="selectedCrops">
+                            พืชที่เลือก: <span id="cropsList">ยังไม่ได้เลือก</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        ✅ ยืนยันลงทะเบียน
+                    </button>
+                </form>
+            </div>
+
+            <!-- Success Section -->
+            <div class="success-section" id="successSection">
+                <div class="success-icon">🎉</div>
+                <h2>ลงทะเบียนสำเร็จ!</h2>
+                <p>ขอบคุณที่ลงทะเบียนกับ ICP<br>คุณสามารถใช้งานบอทได้ทันที</p>
+                <button class="close-btn" onclick="closeLiff()">
+                    กลับไปที่ LINE
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>🌿 ICP - ระบบดูแลพืชอัจฉริยะ</p>
+        </div>
+    </div>
+
+    <script>
+        // LIFF ID - ต้องเปลี่ยนเป็น LIFF ID จริงหลังสร้างใน LINE Developer Console
+        const LIFF_ID = 'YOUR_LIFF_ID_HERE';
+
+        // API Endpoint
+        const API_BASE_URL = ''; // จะเป็น relative path เมื่อ deploy บน Railway
+
+        // State
+        let lineProfile = null;
+        let selectedCrops = [];
+
+        // Initialize LIFF
+        async function initLiff() {
+            try {
+                showLoading(true);
+
+                await liff.init({ liffId: LIFF_ID });
+
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // Get profile
+                lineProfile = await liff.getProfile();
+                console.log('LINE Profile:', lineProfile);
+
+                // Update UI with profile
+                document.getElementById('profilePic').src = lineProfile.pictureUrl || 'https://via.placeholder.com/80';
+                document.getElementById('profileName').textContent = lineProfile.displayName || 'ผู้ใช้งาน';
+
+                // Pre-fill name if available
+                document.getElementById('fullName').value = lineProfile.displayName || '';
+
+                showLoading(false);
+                document.getElementById('formSection').style.display = 'block';
+
+            } catch (error) {
+                console.error('LIFF init error:', error);
+                showError('ไม่สามารถเชื่อมต่อกับ LINE ได้ กรุณาลองใหม่อีกครั้ง');
+                showLoading(false);
+                document.getElementById('formSection').style.display = 'block';
+            }
+        }
+
+        // Crop selection
+        document.getElementById('cropsContainer').addEventListener('click', function(e) {
+            const cropBtn = e.target.closest('.crop-btn');
+            if (!cropBtn) return;
+
+            const crop = cropBtn.dataset.crop;
+
+            if (crop === 'other') {
+                document.getElementById('customCropInput').classList.toggle('show');
+                cropBtn.classList.toggle('selected');
+                return;
+            }
+
+            cropBtn.classList.toggle('selected');
+
+            if (cropBtn.classList.contains('selected')) {
+                if (!selectedCrops.includes(crop)) {
+                    selectedCrops.push(crop);
+                }
+            } else {
+                selectedCrops = selectedCrops.filter(c => c !== crop);
+            }
+
+            updateCropsList();
+        });
+
+        function updateCropsList() {
+            const cropsListEl = document.getElementById('cropsList');
+            if (selectedCrops.length === 0) {
+                cropsListEl.textContent = 'ยังไม่ได้เลือก';
+            } else {
+                cropsListEl.textContent = selectedCrops.join(', ');
+            }
+        }
+
+        // Form submission
+        document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'กำลังบันทึก...';
+
+            try {
+                // Get form data
+                const fullName = document.getElementById('fullName').value.trim();
+                const phoneNumber = document.getElementById('phoneNumber').value.trim();
+                const province = document.getElementById('province').value;
+
+                // Get custom crops
+                const customCropInput = document.getElementById('customCrop').value.trim();
+                if (customCropInput) {
+                    const customCrops = customCropInput.split(',').map(c => c.trim()).filter(c => c);
+                    selectedCrops = [...selectedCrops, ...customCrops];
+                }
+
+                // Validate
+                if (!fullName || fullName.length < 2) {
+                    throw new Error('กรุณาระบุชื่อ-นามสกุลที่ถูกต้อง');
+                }
+
+                if (!phoneNumber || !/^[0-9]{9,10}$/.test(phoneNumber)) {
+                    throw new Error('กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง (9-10 หลัก)');
+                }
+
+                if (!province) {
+                    throw new Error('กรุณาเลือกจังหวัด');
+                }
+
+                // Prepare data
+                const registrationData = {
+                    line_user_id: lineProfile?.userId || 'unknown',
+                    display_name: lineProfile?.displayName || fullName,
+                    full_name: fullName,
+                    phone_number: phoneNumber,
+                    province: province,
+                    crops_grown: selectedCrops,
+                    picture_url: lineProfile?.pictureUrl || null
+                };
+
+                console.log('Registration data:', registrationData);
+
+                // Send to API
+                const response = await fetch(`${API_BASE_URL}/api/liff/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(registrationData)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || result.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                }
+
+                // Success!
+                document.getElementById('formSection').style.display = 'none';
+                document.getElementById('successSection').classList.add('show');
+
+            } catch (error) {
+                console.error('Registration error:', error);
+                showError(error.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '✅ ยืนยันลงทะเบียน';
+            }
+        });
+
+        // Close LIFF
+        function closeLiff() {
+            if (liff.isInClient()) {
+                liff.closeWindow();
+            } else {
+                window.close();
+            }
+        }
+
+        // Helper functions
+        function showLoading(show) {
+            document.getElementById('loadingSection').classList.toggle('show', show);
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+
+            setTimeout(() => {
+                errorEl.classList.remove('show');
+            }, 5000);
+        }
+
+        // Phone number input - only allow numbers
+        document.getElementById('phoneNumber').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initLiff);
+    </script>
+</body>
+</html>

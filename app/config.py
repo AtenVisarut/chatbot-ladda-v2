@@ -18,6 +18,10 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ladda")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ladda123")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
+# LIFF Configuration
+LIFF_ID = os.getenv("LIFF_ID", "YOUR_LIFF_ID_HERE")
+LIFF_URL = f"https://liff.line.me/{LIFF_ID}"
+
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
 PENDING_CONTEXT_TTL = 300  # 5 minutes

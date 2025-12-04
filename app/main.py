@@ -5,9 +5,11 @@ import time
 import os
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Header
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -25,7 +27,9 @@ from app.config import (
     MAX_CACHE_SIZE,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
-    SECRET_KEY
+    SECRET_KEY,
+    LIFF_ID,
+    LIFF_URL
 )
 
 # Import services
@@ -43,7 +47,12 @@ from app.services.welcome import (
     get_registration_required_message,
     get_help_menu
 )
-from app.utils.flex_messages import create_chat_response_flex
+from app.utils.flex_messages import (
+    create_chat_response_flex,
+    create_liff_registration_flex,
+    create_liff_welcome_flex
+)
+from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
     cleanup_expired_cache,
     get_cache_stats,
@@ -166,6 +175,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Add Session Middleware
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+# Add CORS Middleware for LIFF
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow LIFF to call our API
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount LIFF static files
+liff_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff")
+if os.path.exists(liff_path):
+    app.mount("/liff", StaticFiles(directory=liff_path, html=True), name="liff")
+
 # ============================================================================#
 # Authentication
 # ============================================================================#
@@ -279,6 +302,39 @@ async def get_alerts(request: Request):
     return await alert_manager.get_active_alerts()
 
 # ============================================================================#
+# LIFF Endpoints
+# ============================================================================#
+
+@app.get("/liff-register")
+async def liff_register_page():
+    """Redirect to LIFF registration page"""
+    liff_html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff", "index.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="LIFF page not found")
+
+@app.post("/api/liff/register")
+async def liff_register(data: LiffRegistrationData):
+    """
+    Register user from LIFF frontend
+    """
+    try:
+        result = await register_user_from_liff(data)
+        return JSONResponse(content=result, status_code=200)
+    except Exception as e:
+        logger.error(f"LIFF registration error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/liff/status/{user_id}")
+async def liff_registration_status(user_id: str):
+    """
+    Check if user has completed registration
+    """
+    from app.services.user_service import is_registration_completed
+    registered = await is_registration_completed(user_id)
+    return {"user_id": user_id, "registered": registered}
+
+# ============================================================================#
 # LINE Webhook
 # ============================================================================#
 
@@ -316,11 +372,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
             from app.services.user_service import ensure_user_exists, is_registration_completed
             await ensure_user_exists(user_id)
             
-            # 1. Handle Follow Event (Welcome Message)
+            # 1. Handle Follow Event (Welcome Message with LIFF)
             if event_type == "follow":
                 logger.info(f"User {user_id} followed the bot")
-                welcome_msg = get_welcome_message()
-                await reply_line(reply_token, welcome_msg)
+                # Send LIFF welcome message
+                welcome_flex = create_liff_welcome_flex(LIFF_URL)
+                await reply_line(reply_token, welcome_flex)
                 continue
 
             # 2. Handle Image Message (Interactive Diagnosis)
@@ -331,8 +388,9 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # Check if user has completed registration
                 if not await is_registration_completed(user_id):
                     logger.info(f"User {user_id} not registered - blocking disease detection")
-                    reg_msg = get_registration_required_message()
-                    await reply_line(reply_token, reg_msg)
+                    # Send LIFF registration message
+                    reg_flex = create_liff_registration_flex(LIFF_URL)
+                    await reply_line(reply_token, reg_flex)
                     continue
 
                 try:
@@ -371,42 +429,29 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 ctx = await get_pending_context(user_id)
                 
                 # ============================================================================#
-                # Registration Flow
+                # Quick Commands
                 # ============================================================================#
-                from app.services.registration import registration_manager
-                
-                logger.info(f"🟢 Checking registration for text: '{text}'")
-                
+                logger.info(f"🟢 Processing text: '{text}'")
+
                 # 0. Check for usage guide request
                 if text in ["วิธีใช้งาน", "วิธีใช้", "ช่วยเหลือ", "help"]:
                     logger.info(f"🟢 User {user_id} requested usage guide")
                     usage_guide = get_usage_guide()
                     await reply_line(reply_token, usage_guide)
                     return JSONResponse(content={"status": "success"})
-                
+
                 # 0.1 Check for product catalog request
                 if text in ["ดูผลิตภัณฑ์", "ผลิตภัณฑ์", "สินค้า", "products"]:
                     logger.info(f"🟢 User {user_id} requested product catalog")
                     catalog = get_product_catalog_message()
                     await reply_line(reply_token, catalog)
                     return JSONResponse(content={"status": "success"})
-                
-                # 1. Check if user wants to start registration
-                if text == "ลงทะเบียน":
-                    logger.info(f"🟢 User {user_id} wants to start registration")
-                    reg_message = await registration_manager.start_registration(user_id)
-                    # Already a dict, no need to convert
-                    await reply_line(reply_token, reg_message)
-                    return JSONResponse(content={"status": "success"})
-                
-                # 2. Check if user is in registration process
-                reg_state = await registration_manager.get_registration_state(user_id)
-                logger.info(f"🟢 Registration state for {user_id}: {reg_state}")
-                if reg_state:
-                    logger.info(f"🟢 User {user_id} is in registration, handling input")
-                    response_msg = await registration_manager.handle_registration_input(user_id, text)
-                    # Already a dict, no need to convert
-                    await reply_line(reply_token, response_msg)
+
+                # 1. Check if user wants to register - send LIFF link
+                if text in ["ลงทะเบียน", "register", "สมัคร"]:
+                    logger.info(f"🟢 User {user_id} wants to register - sending LIFF link")
+                    reg_flex = create_liff_registration_flex(LIFF_URL)
+                    await reply_line(reply_token, reg_flex)
                     return JSONResponse(content={"status": "success"})
                 # ============================================================================#
 
@@ -560,8 +605,9 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         # Check if user has completed registration before chat Q&A
                         if not await is_registration_completed(user_id):
                             logger.info(f"User {user_id} not registered - blocking chat Q&A")
-                            reg_msg = get_registration_required_message()
-                            await reply_line(reply_token, reg_msg)
+                            # Send LIFF registration message
+                            reg_flex = create_liff_registration_flex(LIFF_URL)
+                            await reply_line(reply_token, reg_flex)
                         else:
                             # Natural Conversation Handler
                             response = await handle_natural_conversation(user_id, text)
