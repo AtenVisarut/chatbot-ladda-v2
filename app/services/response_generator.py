@@ -7,6 +7,7 @@ from app.utils.flex_messages import (
     create_disease_result_flex,
     create_product_carousel_flex
 )
+from app.services.product_recommendation import get_search_query_for_disease
 
 logger = logging.getLogger(__name__)
 
@@ -166,13 +167,24 @@ async def generate_flex_response(
             safe_severity = (disease_info.severity or "ปานกลาง")[:100]
             safe_raw = (disease_info.raw_analysis or "")[:500]
 
+            # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
+            pest_vector_info = None
+            try:
+                _, pest_name = get_search_query_for_disease(safe_disease_name)
+                if pest_name:
+                    pest_vector_info = pest_name
+                    logger.info(f"🐛 โรค {safe_disease_name} มีแมลงพาหะ: {pest_name}")
+            except Exception as e:
+                logger.warning(f"Error checking pest vector: {e}")
+
             disease_flex = create_disease_result_flex(
                 disease_name=safe_disease_name,
                 confidence=safe_confidence,
                 symptoms=safe_symptoms,
                 severity=safe_severity,
                 raw_analysis=safe_raw,
-                pest_type=pest_type
+                pest_type=pest_type,
+                pest_vector=pest_vector_info
             )
             messages.append(disease_flex)
             logger.info("  ✓ Disease flex created")

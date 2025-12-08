@@ -797,7 +797,8 @@ def create_disease_result_flex(
     symptoms: str,
     severity: str = "ปานกลาง",
     raw_analysis: str = "",
-    pest_type: str = "โรคพืช"
+    pest_type: str = "โรคพืช",
+    pest_vector: str = None
 ) -> Dict:
     """
     สร้าง Flex Message แสดงผลการวิเคราะห์โรคพืช
@@ -809,6 +810,7 @@ def create_disease_result_flex(
         severity: ระดับความรุนแรง
         raw_analysis: ข้อมูลวิเคราะห์ดิบ
         pest_type: ประเภทศัตรูพืช
+        pest_vector: แมลงพาหะของโรค (ถ้ามี)
     """
     # แปลง confidence เป็น percentage
     try:
@@ -985,7 +987,45 @@ def create_disease_result_flex(
                                 "margin": "sm"
                             }
                         ]
-                    },
+                    }
+                ] + (
+                    # Pest Vector Section - แสดงข้อมูลแมลงพาหะ (ถ้ามี)
+                    [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "margin": "lg",
+                            "backgroundColor": "#FFF3E0",
+                            "cornerRadius": "8px",
+                            "paddingAll": "12px",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "🐛 แมลงพาหะนำโรค",
+                                    "size": "sm",
+                                    "weight": "bold",
+                                    "color": "#E65100"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": pest_vector,
+                                    "size": "md",
+                                    "weight": "bold",
+                                    "color": "#BF360C",
+                                    "margin": "sm"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "⚠️ โรคนี้เกิดจากแมลงพาหะ ควรกำจัดแมลงเพื่อป้องกันการแพร่ระบาด",
+                                    "size": "xs",
+                                    "color": "#795548",
+                                    "wrap": True,
+                                    "margin": "sm"
+                                }
+                            ]
+                        }
+                    ] if pest_vector else []
+                ) + [
                     # Raw Analysis / Recommendation - คำแนะนำครบถ้วน
                     {
                         "type": "box",
