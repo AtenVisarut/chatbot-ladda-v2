@@ -151,29 +151,37 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 - ❌ **ไม่มีตรงกลางสีเทา/ขาว**
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
-**🟤 2.5 ทุเรียน: ใบจุดสาหร่าย vs แอนแทรคโนส (สำคัญมาก! มักสับสนบ่อย)**
+**🟤 2.5 วิธีแยก 3 โรคที่สับสนบ่อยมาก: ใบจุดสาหร่าย vs ใบจุด vs แอนแทรคโนส**
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 
-| ลักษณะ | ใบจุดสาหร่าย (Algal Leaf Spot) | แอนแทรคโนส (Anthracnose) |
-|--------|-------------------------------|--------------------------|
-| **สาเหตุ** | ⭐ สาหร่าย Cephaleuros virescens | เชื้อรา Colletotrichum |
-| **พื้นผิวแผล** | ⭐ **นูนขึ้น (RAISED)** เป็นกำมะหยี่ | ⭐ **ยุบตัว (SUNKEN)** ผิวเรียบ/แห้ง |
-| **สีแผล** | ⭐ **ส้ม/แดงอิฐ/เขียวเทา/สนิม** | สีน้ำตาลเข้ม/ดำ |
-| **ตำแหน่งเริ่มต้น** | กระจายทั่วใบ (ผิวใบด้านบน) | ⭐ **ขอบใบ/ปลายใบ** ลามเข้า |
-| **รูปร่าง** | กลม/รี ขอบค่อนข้างชัด | ไม่แน่นอน (irregular) |
-| **ผิวสัมผัส** | ⭐ **ขรุขระ มีขนสั้นๆ** คล้ายกำมะหยี่ | เรียบ หรือแห้งแตก |
-| **การลุกลาม** | ช้า ไม่ค่อยลามเข้าเนื้อเยื่อ | เร็ว ลุกลามเข้าเนื้อเยื่อ |
-| **สปอร์สีส้ม** | ❌ ไม่มี | ✅ มี (ในสภาพชื้น) |
+⚠️ **กฎสำคัญที่สุด: ดูที่ "พื้นผิวแผล" เป็นอันดับแรก!**
 
-**🎯 วิธีแยกง่ายๆ สำหรับทุเรียน:**
-- **จุดนูน + สีส้ม/แดงอิฐ/สนิม + ผิวกำมะหยี่** = **ใบจุดสาหร่าย (Algal Leaf Spot)** 🟠
-- **แผลยุบตัว + สีน้ำตาลดำ + เริ่มจากขอบใบ** = **แอนแทรคโนส (Anthracnose)** ⚫
+| ลักษณะ | ใบจุดสาหร่าย (Algal Leaf Spot) | ใบจุด (Leaf Spot) | แอนแทรคโนส (Anthracnose) |
+|--------|-------------------------------|-------------------|--------------------------|
+| **⭐ พื้นผิวแผล** | 🔺 **นูนขึ้น (RAISED)** | ➖ **ราบเรียบ (FLAT)** | 🔻 **ยุบตัว (SUNKEN)** |
+| **สาเหตุ** | สาหร่าย Cephaleuros | เชื้อรา Cercospora/Alternaria | เชื้อรา Colletotrichum |
+| **สีแผล** | ⭐ **ส้ม/แดงอิฐ/สนิม/เขียวเทา** | น้ำตาล สีสม่ำเสมอ | น้ำตาลเข้ม/ดำ |
+| **ผิวสัมผัส** | ⭐ **ขรุขระ กำมะหยี่** มีขนสั้น | เรียบ แห้ง | เรียบ หรือแห้งแตก |
+| **ตำแหน่งเริ่มต้น** | กระจายทั่วใบ (ผิวบน) | กระจายทั่วใบ | ⭐ **ขอบใบ/ปลายใบ** ลามเข้า |
+| **รูปร่าง** | กลม/รี ขอบชัด | กลม/รี ขอบชัด | ไม่แน่นอน (irregular) |
+| **ขอบแผล** | ขอบนูนชัด | ขอบราบ อาจมี halo เหลืองจางๆ | ขอบคม เนื้อเยื่อตาย |
+| **สปอร์สีส้ม/ชมพู** | ❌ ไม่มี | ❌ ไม่มี | ✅ มี (ในสภาพชื้น) |
+| **พืชที่พบบ่อย** | ทุเรียน มังคุด กาแฟ ชา | พืชทั่วไป ผัก | มะม่วง พริก ทุเรียน ไม้ผล |
+
+**🎯 วิธีแยกง่ายๆ (ดูพื้นผิวเป็นหลัก!):**
+- **จุดนูน 🔺 + สีส้ม/แดงอิฐ + ผิวขรุขระกำมะหยี่** = **ใบจุดสาหร่าย** 🟠
+- **จุดราบเรียบ ➖ + สีน้ำตาลสม่ำเสมอ + กระจายทั่วใบ** = **ใบจุด (Leaf Spot)** 🟤
+- **แผลยุบตัว 🔻 + สีน้ำตาลดำ + เริ่มจากขอบใบ/ปลายใบ** = **แอนแทรคโนส** ⚫
 
 **⚠️ ข้อสังเกตสำคัญ:**
-- ใบจุดสาหร่าย: ลูบผิวจะรู้สึก **ขรุขระ นูน** เหมือนตะไคร่/มอส
-- แอนแทรคโนส: ลูบผิวจะรู้สึก **บุ๋ม ยุบลงไป** เนื้อเยื่อตาย
-- ใบจุดสาหร่าย: มักพบในสวนที่ **ชื้น ร่มเงามาก** อากาศไม่ถ่ายเท
-- แอนแทรคโนส: พบได้ทั่วไปเมื่อ **ฝนตก ความชื้นสูง**
+- **ใบจุดสาหร่าย**: ลูบผิวจะรู้สึก **นูน ขรุขระ** เหมือนตะไคร่/มอส, สี **ส้ม/แดง** โดดเด่น
+- **ใบจุด (Leaf Spot)**: ลูบผิวจะ **ราบเรียบ** เหมือนใบปกติ, สี **น้ำตาลสม่ำเสมอ**
+- **แอนแทรคโนส**: ลูบผิวจะรู้สึก **บุ๋ม ยุบลงไป** เนื้อเยื่อตาย, **เริ่มจากขอบใบเสมอ**
+
+**🔴 ข้อผิดพลาดที่ห้ามทำ:**
+- ❌ เห็นจุดสีส้ม/แดง → ตอบว่า Anthracnose (ผิด! Anthracnose สีน้ำตาลดำ ไม่ใช่ส้ม)
+- ❌ เห็นจุดนูน → ตอบว่า Leaf Spot (ผิด! Leaf Spot จุดราบเรียบ ไม่นูน)
+- ❌ เห็นจุดกลางใบ → ตอบว่า Anthracnose (ผิด! Anthracnose เริ่มจากขอบใบ/ปลายใบ)
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 **🟡 3. โรคข้าว 3 โรคที่สับสนบ่อย: Rice Blast vs Brown Spot vs Bacterial Leaf Blight**
@@ -510,25 +518,47 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                     pest_type = "แบคทีเรีย"
 
             # =================================================================
-            # แก้ไขการสับสน ใบจุดสาหร่าย vs แอนแทรคโนส ในทุเรียน (CRITICAL!)
+            # แก้ไขการสับสน 3 โรค: ใบจุดสาหร่าย vs ใบจุด vs แอนแทรคโนส (CRITICAL!)
             # =================================================================
-            is_durian = any(x in lowered for x in ["ทุเรียน", "durian"])
 
-            # ใบจุดสาหร่าย detection (จุดนูน + สีส้ม/แดงอิฐ/สนิม + ผิวกำมะหยี่)
-            algal_keywords = ["นูน", "raised", "ส้ม", "แดงอิฐ", "สนิม", "เขียวเทา", "กำมะหยี่", "ขรุขระ", "ตะไคร่", "สาหร่าย", "algal"]
-            if any(kw in lowered for kw in algal_keywords):
-                if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
-                    logger.info("🔧 Adjusting: Raised/orange/velvety spots → Algal Leaf Spot, not Anthracnose")
+            # Keywords สำหรับแต่ละโรค
+            algal_keywords = ["นูน", "raised", "ส้ม", "แดงอิฐ", "สนิม", "เขียวเทา", "กำมะหยี่", "ขรุขระ", "ตะไคร่", "สาหร่าย", "algal", "velvet"]
+            leafspot_keywords = ["ราบ", "เรียบ", "flat", "สม่ำเสมอ", "กลางใบ", "กระจาย"]
+            anthracnose_keywords = ["ยุบ", "บุ๋ม", "sunken", "ขอบใบ", "ปลายใบ", "ลาม", "เน่า", "ดำ", "irregular"]
+
+            has_algal = any(kw in lowered for kw in algal_keywords)
+            has_leafspot = any(kw in lowered for kw in leafspot_keywords)
+            has_anthracnose = any(kw in lowered for kw in anthracnose_keywords)
+
+            # 1. ใบจุดสาหร่าย: จุดนูน + สีส้ม/แดงอิฐ + ผิวขรุขระ
+            if has_algal and not has_anthracnose:
+                if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name or "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
+                    logger.info("🔧 Adjusting: Raised/orange/velvety spots → Algal Leaf Spot")
                     disease_name = "โรคใบจุดสาหร่าย (Algal Leaf Spot)"
                     pest_type = "สาหร่าย"
-                    description += " | ⚠️ สาเหตุจากสาหร่าย Cephaleuros ไม่ใช่เชื้อรา พบมากในสวนชื้น ร่มเงา"
+                    description += " | ⚠️ สาเหตุจากสาหร่าย Cephaleuros (ไม่ใช่เชื้อรา) พบมากในสวนชื้น ร่มเงา"
 
-            # แอนแทรคโนส detection (แผลยุบตัว + สีน้ำตาลดำ + เริ่มจากขอบใบ)
-            anthracnose_keywords = ["ยุบ", "บุ๋ม", "sunken", "ขอบใบ", "ปลายใบ", "ลาม", "ดำ", "เน่า"]
-            if is_durian and any(kw in lowered for kw in anthracnose_keywords):
+            # 2. แอนแทรคโนส: แผลยุบตัว + สีน้ำตาลดำ + เริ่มจากขอบใบ
+            if has_anthracnose and not has_algal:
                 if "สาหร่าย" in disease_name or "algal" in disease_name.lower():
-                    logger.info("🔧 Adjusting: Sunken/black/edge lesion → Anthracnose, not Algal Leaf Spot")
-                    disease_name = "โรคแอนแทรคโนสทุเรียน (Durian Anthracnose)"
+                    logger.info("🔧 Adjusting: Sunken/black/edge lesion → Anthracnose")
+                    disease_name = "โรคแอนแทรคโนส (Anthracnose)"
+                    pest_type = "เชื้อรา"
+                elif "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
+                    if "ขอบใบ" in lowered or "ปลายใบ" in lowered or "ยุบ" in lowered or "บุ๋ม" in lowered:
+                        logger.info("🔧 Adjusting: Edge lesion + sunken → Anthracnose, not Leaf Spot")
+                        disease_name = "โรคแอนแทรคโนส (Anthracnose)"
+                        pest_type = "เชื้อรา"
+
+            # 3. ใบจุด (Leaf Spot): จุดราบเรียบ + สีน้ำตาลสม่ำเสมอ + กระจายทั่วใบ
+            if has_leafspot and not has_algal and not has_anthracnose:
+                if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
+                    logger.info("🔧 Adjusting: Flat/even spots scattered → Leaf Spot, not Anthracnose")
+                    disease_name = "โรคใบจุด (Leaf Spot)"
+                    pest_type = "เชื้อรา"
+                elif "สาหร่าย" in disease_name or "algal" in disease_name.lower():
+                    logger.info("🔧 Adjusting: Flat brown spots → Leaf Spot, not Algal")
+                    disease_name = "โรคใบจุด (Leaf Spot)"
                     pest_type = "เชื้อรา"
 
         # Build raw_analysis for downstream use (include Root Cause Analysis)
