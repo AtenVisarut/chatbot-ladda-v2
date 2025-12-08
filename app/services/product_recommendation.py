@@ -12,6 +12,49 @@ logger = logging.getLogger(__name__)
 # Configuration for re-ranking
 ENABLE_RERANKING = True  # Set to False to disable re-ranking for faster response
 
+# =============================================================================
+# โรคที่มีแมลงพาหะ → ควรแนะนำยาฆ่าแมลงแทนยากำจัดเชื้อ
+# =============================================================================
+VECTOR_DISEASES = {
+    # โรคไวรัสข้าว - พาหะคือเพลี้ยกระโดด
+    "โรคจู๋": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง"},
+    "rice ragged stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง"},
+    "โรคใบหงิก": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง"},
+    "rice grassy stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง"},
+    "โรคใบสีส้ม": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง"},
+    "rice orange leaf": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง"},
+    "โรคใบขาว": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง"},
+    "rice tungro": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง"},
+
+    # โรคไวรัสพืชอื่นๆ
+    "โรคใบด่าง": {"pest": "เพลี้ยอ่อน แมลงหวี่ขาว", "search_query": "เพลี้ยอ่อน แมลงหวี่ขาว ยาฆ่าแมลง"},
+    "mosaic": {"pest": "เพลี้ยอ่อน", "search_query": "เพลี้ยอ่อน ยาฆ่าแมลง"},
+    "โรคกรีนนิ่ง": {"pest": "เพลี้ยไก่แจ้", "search_query": "เพลี้ยไก่แจ้ ยาฆ่าแมลง"},
+    "greening": {"pest": "เพลี้ยไก่แจ้", "search_query": "เพลี้ยไก่แจ้ ยาฆ่าแมลง"},
+    "hlb": {"pest": "เพลี้ยไก่แจ้", "search_query": "เพลี้ยไก่แจ้ ยาฆ่าแมลง"},
+}
+
+def get_search_query_for_disease(disease_name: str, pest_type: str = "") -> tuple:
+    """
+    ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
+    ถ้ามี → return (search_query สำหรับยาฆ่าแมลง, pest_name)
+    ถ้าไม่มี → return (disease_name, None)
+    """
+    disease_lower = disease_name.lower()
+
+    # ตรวจสอบว่าเป็นโรคที่มีพาหะหรือไม่
+    for key, info in VECTOR_DISEASES.items():
+        if key in disease_lower:
+            logger.info(f"🐛 โรคนี้มีแมลงพาหะ: {info['pest']} → ค้นหายาฆ่าแมลง")
+            return (info["search_query"], info["pest"])
+
+    # ถ้าเป็นไวรัส → แนะนำให้หาพาหะ
+    if pest_type and "ไวรัส" in pest_type.lower():
+        logger.info("🦠 โรคไวรัส → ค้นหายาฆ่าแมลงสำหรับพาหะ")
+        return (f"{disease_name} ยาฆ่าแมลง พาหะ", None)
+
+    return (disease_name, None)
+
 
 # =============================================================================
 # Hybrid Search Functions (Vector + BM25/Keyword)
@@ -208,6 +251,8 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
     """
     Query products using Hybrid Search (Vector + Keyword/BM25)
     Returns top 3-6 most relevant products
+
+    สำหรับโรคที่มีแมลงพาหะ (เช่น โรคจู๋ของข้าว) จะค้นหายาฆ่าแมลงแทน
     """
     try:
         logger.info("🔍 Retrieving products with Hybrid Search (Vector + Keyword)")
@@ -217,10 +262,23 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
             return []
 
         disease_name = disease_info.disease_name
-        logger.info(f"📝 Searching products for: {disease_name}")
 
-        # Check cache first
-        cache_key = f"products:{disease_name}"
+        # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ → ถ้ามี ค้นหายาฆ่าแมลงแทน
+        pest_type = ""
+        if hasattr(disease_info, 'raw_analysis') and disease_info.raw_analysis:
+            # ดึง pest_type จาก raw_analysis ถ้ามี
+            if "ไวรัส" in disease_info.raw_analysis:
+                pest_type = "ไวรัส"
+
+        search_query, pest_name = get_search_query_for_disease(disease_name, pest_type)
+
+        if pest_name:
+            logger.info(f"🐛 โรคมีพาหะ: {pest_name} → ค้นหา: {search_query}")
+        else:
+            logger.info(f"📝 Searching products for: {disease_name}")
+
+        # Check cache first (ใช้ search_query เป็น key)
+        cache_key = f"products:{search_query}"
         cached_products = await get_from_cache("products", cache_key)
         if cached_products:
             logger.info("✓ Using cached product recommendations")
@@ -229,7 +287,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         # Strategy 1: Hybrid Search (Vector + Keyword combined)
         try:
             hybrid_results = await hybrid_search_products(
-                query=disease_name,
+                query=search_query,  # ใช้ search_query แทน disease_name
                 match_count=15,
                 vector_weight=0.6,
                 keyword_weight=0.4
