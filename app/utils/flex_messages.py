@@ -95,6 +95,223 @@ def _format_recommendation(raw_analysis: str) -> str:
     return result + extra_info
 
 
+def _parse_root_cause_data(raw_analysis: str) -> Dict:
+    """Parse Root Cause Analysis data จาก raw_analysis string"""
+    data = {
+        "plant_type": "",
+        "key_features": "",
+        "possible_causes": "",
+        "cause_chain": "",
+        "contributing_factors": "",
+        "risk_factors": "",
+        "prevention": "",
+        "treatment_priority": ""
+    }
+
+    if not raw_analysis:
+        return data
+
+    # Parse แต่ละส่วนจาก raw_analysis
+    parts = raw_analysis.split(' | ')
+
+    for part in parts:
+        part = part.strip()
+        if part.startswith("ชนิดพืช:"):
+            data["plant_type"] = part.replace("ชนิดพืช:", "").strip()
+        elif part.startswith("ลักษณะสำคัญ:"):
+            data["key_features"] = part.replace("ลักษณะสำคัญ:", "").strip()
+        elif part.startswith("สาเหตุที่เป็นไปได้:"):
+            data["possible_causes"] = part.replace("สาเหตุที่เป็นไปได้:", "").strip()
+        elif part.startswith("ลำดับสาเหตุ:"):
+            data["cause_chain"] = part.replace("ลำดับสาเหตุ:", "").strip()
+        elif part.startswith("ปัจจัยเสริม:"):
+            data["contributing_factors"] = part.replace("ปัจจัยเสริม:", "").strip()
+        elif part.startswith("ปัจจัยเสี่ยง:"):
+            data["risk_factors"] = part.replace("ปัจจัยเสี่ยง:", "").strip()
+        elif part.startswith("การป้องกัน:"):
+            data["prevention"] = part.replace("การป้องกัน:", "").strip()
+        elif part.startswith("ความเร่งด่วน:"):
+            data["treatment_priority"] = part.replace("ความเร่งด่วน:", "").strip()
+
+    return data
+
+
+def _get_priority_color(priority: str) -> str:
+    """ให้สีตามระดับความเร่งด่วน"""
+    if not priority:
+        return "#888888"
+
+    priority_lower = priority.lower()
+    if any(x in priority_lower for x in ['เร่งด่วน', 'urgent', 'critical', 'ด่วน']):
+        return "#E74C3C"  # Red
+    elif any(x in priority_lower for x in ['ไม่เร่งด่วน', 'low', 'ไม่ด่วน']):
+        return "#27AE60"  # Green
+    else:
+        return "#F39C12"  # Orange
+
+
+def _create_root_cause_section(raw_analysis: str) -> List[Dict]:
+    """สร้าง Flex contents สำหรับ Root Cause Analysis section"""
+    contents = []
+    data = _parse_root_cause_data(raw_analysis)
+
+    # ถ้าไม่มีข้อมูล Root Cause ให้ return empty list
+    has_data = any([
+        data["possible_causes"],
+        data["cause_chain"],
+        data["risk_factors"],
+        data["prevention"]
+    ])
+
+    if not has_data:
+        return contents
+
+    # Separator ก่อน Root Cause Section
+    contents.append({
+        "type": "separator",
+        "margin": "lg"
+    })
+
+    # Header สำหรับ Root Cause Analysis
+    contents.append({
+        "type": "text",
+        "text": "🔬 การวิเคราะห์เชิงลึก",
+        "size": "sm",
+        "weight": "bold",
+        "color": "#8E44AD",
+        "margin": "lg"
+    })
+
+    # 1. สาเหตุที่เป็นไปได้
+    if data["possible_causes"]:
+        contents.append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "📊 สาเหตุที่เป็นไปได้:",
+                    "size": "xs",
+                    "color": "#E67E22",
+                    "weight": "bold"
+                },
+                {
+                    "type": "text",
+                    "text": data["possible_causes"][:150],
+                    "size": "xs",
+                    "color": "#333333",
+                    "wrap": True,
+                    "margin": "sm"
+                }
+            ]
+        })
+
+    # 2. ลำดับสาเหตุ (Cause Chain)
+    if data["cause_chain"]:
+        contents.append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🔗 ลำดับสาเหตุ:",
+                    "size": "xs",
+                    "color": "#3498DB",
+                    "weight": "bold"
+                },
+                {
+                    "type": "text",
+                    "text": data["cause_chain"][:150],
+                    "size": "xs",
+                    "color": "#333333",
+                    "wrap": True,
+                    "margin": "sm"
+                }
+            ]
+        })
+
+    # 3. ปัจจัยเสี่ยง
+    if data["risk_factors"]:
+        contents.append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "⚠️ ปัจจัยเสี่ยง:",
+                    "size": "xs",
+                    "color": "#E74C3C",
+                    "weight": "bold"
+                },
+                {
+                    "type": "text",
+                    "text": data["risk_factors"][:100],
+                    "size": "xs",
+                    "color": "#333333",
+                    "wrap": True,
+                    "margin": "sm"
+                }
+            ]
+        })
+
+    # 4. การป้องกัน
+    if data["prevention"]:
+        contents.append({
+            "type": "box",
+            "layout": "vertical",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🛡️ การป้องกัน:",
+                    "size": "xs",
+                    "color": "#27AE60",
+                    "weight": "bold"
+                },
+                {
+                    "type": "text",
+                    "text": data["prevention"][:100],
+                    "size": "xs",
+                    "color": "#333333",
+                    "wrap": True,
+                    "margin": "sm"
+                }
+            ]
+        })
+
+    # 5. ความเร่งด่วน
+    if data["treatment_priority"]:
+        priority_color = _get_priority_color(data["treatment_priority"])
+        contents.append({
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🚨 ความเร่งด่วน:",
+                    "size": "xs",
+                    "color": "#888888",
+                    "flex": 0
+                },
+                {
+                    "type": "text",
+                    "text": data["treatment_priority"][:50],
+                    "size": "xs",
+                    "color": priority_color,
+                    "weight": "bold",
+                    "margin": "sm",
+                    "wrap": True
+                }
+            ]
+        })
+
+    return contents
+
+
 def create_welcome_flex() -> Dict:
     """
     สร้าง Flex Message สำหรับต้อนรับ user ใหม่
@@ -792,7 +1009,7 @@ def create_disease_result_flex(
                             }
                         ]
                     }
-                ]
+                ] + _create_root_cause_section(raw_analysis)
             },
             "footer": {
                 "type": "box",

@@ -115,7 +115,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=300,
-                temperature=0.8  # เพิ่มความหลากหลายในการตอบ
+                temperature=0.7  # เพิ่มความหลากหลายในการตอบ
             )
             answer = post_process_answer(response.choices[0].message.content)
             
