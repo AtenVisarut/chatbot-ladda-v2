@@ -397,13 +397,30 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         # Parse JSON (Gemini may wrap JSON in markdown code blocks)
         # -----------------------------------------------------------------
         try:
-            # Try to extract JSON from markdown code block if present
-            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_text)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                json_str = raw_text
-            
+            # Clean up raw_text - remove markdown code blocks
+            json_str = raw_text.strip()
+
+            # Remove ```json or ``` at the beginning
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            elif json_str.startswith("```"):
+                json_str = json_str[3:]
+
+            # Remove ``` at the end
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+
+            json_str = json_str.strip()
+
+            # Try to find JSON object if there's extra text
+            if not json_str.startswith("{"):
+                # Find the first { and last }
+                start_idx = json_str.find("{")
+                end_idx = json_str.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    json_str = json_str[start_idx:end_idx + 1]
+
+            logger.info(f"Cleaned JSON string (first 200 chars): {json_str[:200]}...")
             data = json.loads(json_str)
         except Exception as e:
             logger.warning(f"Failed to parse JSON from response: {e}", exc_info=True)
