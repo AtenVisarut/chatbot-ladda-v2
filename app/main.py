@@ -52,7 +52,8 @@ from app.utils.flex_messages import (
     create_liff_registration_flex,
     create_liff_welcome_flex,
     create_initial_questions_flex,
-    create_analyzing_flex
+    create_analyzing_flex,
+    create_product_carousel_flex
 )
 from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
