@@ -80,27 +80,38 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                 unique_docs.append(doc)
         
         # If no docs found, use OpenAI without context (General Knowledge)
+        # แต่ห้ามแนะนำชื่อสินค้าเฉพาะ
         if not unique_docs:
             logger.info("No relevant docs found, using general knowledge")
             prompt = f"""คุณคือผู้เชี่ยวชาญด้านการเกษตรของไทย 20ปี
-            
+
 คำถาม: {question}
 
 บริบทการสนทนา:
 {context}
 
-ตอบคำถามอย่างกระชับ เป็นกันเอง และถูกต้องตามหลักวิชาการ:"""
-            
+**ข้อกำหนดสำคัญ**:
+1. ตอบคำถามอย่างกระชับ เป็นกันเอง และถูกต้องตามหลักวิชาการ
+2. **ห้ามแนะนำชื่อผลิตภัณฑ์/ยา/สารเคมีเฉพาะเจาะจง** เช่น ทริสโซล, เบนโนมิล, ฟอสอีทิลอะลูมิเนียม เป็นต้น
+3. ถ้าถามเรื่องสินค้า/ผลิตภัณฑ์ → บอกให้พิมพ์ "ดูผลิตภัณฑ์" เพื่อดูแคตตาล็อกสินค้า ICP Ladda
+4. แนะนำได้เฉพาะ **ประเภทของสาร** เช่น "ยาฆ่าเชื้อรา", "ยาฆ่าแมลง" แต่ห้ามระบุชื่อสินค้า
+5. แนะนำวิธีการทั่วไป เช่น การตัดแต่งกิ่ง, การจัดการน้ำ, การใช้ปุ๋ย
+
+ตอบคำถาม:"""
+
             if openai_client:
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o-mini",  # Text-only queries use cheaper model
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
+                    messages=[
+                        {"role": "system", "content": "คุณคือผู้เชี่ยวชาญด้านการเกษตร ห้ามแนะนำชื่อสินค้าหรือยาเฉพาะเจาะจง เพราะอาจไม่ตรงกับสินค้าในระบบ"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.5
                 )
                 answer = post_process_answer(response.choices[0].message.content)
             else:
                 answer = "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
-            
+
             # Cache result
             # Use "knowledge" as cache type
             await set_to_cache("knowledge", cache_key, answer)
@@ -130,6 +141,10 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 4. ใช้ภาษาไทยที่เข้าใจง่าย เป็นกันเอง
 5. ถ้าเป็นเรื่องโรคพืช ให้แนะนำวิธีป้องกันกำจัด
 6. ถ้าเป็นเรื่องผลิตภัณฑ์ ให้แนะนำวิธีใช้
+
+**ข้อกำหนดสำคัญ**:
+- ห้ามแนะนำชื่อสินค้า/ยา/สารเคมี ที่ไม่ได้อยู่ในข้อมูลอ้างอิง
+- ถ้าถามเรื่องสินค้า/ผลิตภัณฑ์ที่ไม่มีในข้อมูลอ้างอิง → บอกให้พิมพ์ "ดูผลิตภัณฑ์"
 
 ตอบคำถาม:"""
 

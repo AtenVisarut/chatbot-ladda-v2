@@ -160,19 +160,27 @@ def extract_keywords_from_question(question: str) -> dict:
     
     # Pest/Disease keywords (expanded)
     pest_keywords = [
-        # Thai
+        # Thai - แมลง
         "เพลี้ยไฟ", "เพลี้ยอ่อน", "เพลี้ย", "หนอน", "แมลง", "ด้วงงวง",
-        "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา", "แอนแทรคโนส",
-        "ไวรัส", "โรคใบด่าง", "โรคใบหงิก",
-        "วัชพืช", "หญ้า", "ผักบุ้ง", "หญ้าคา",
-        "โรคพืช", "ศัตรูพืช", "ไร", "เพลี้ยแป้ง", "หนอนกระทู้ข้าว",
         "จักจั่น", "หนอนเจาะ", "หนอนกอ", "หนอนใย", "ด้วง", "มด", "ปลวก",
         "เพลี้ยจักจั่น", "แมลงวันผล", "แมลงหวี่ขาว", "ทริปส์",
+        "ศัตรูพืช", "ไร", "เพลี้ยแป้ง", "หนอนกระทู้ข้าว",
+        # Thai - โรคเชื้อรา
+        "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา", "รา", "แอนแทรคโนส",
+        "โรคผลเน่า", "ผลเน่า", "โรคใบไหม้", "ใบไหม้", "โรคราดำ", "ราดำ",
+        "โรคใบจุด", "ใบจุด", "โรคกิ่งแห้ง", "กิ่งแห้ง", "โรครากเน่า", "รากเน่า",
+        "โรคลำต้นเน่า", "ลำต้นเน่า", "โรคโคนเน่า", "โคนเน่า",
+        # Thai - ไวรัส
+        "ไวรัส", "โรคใบด่าง", "โรคใบหงิก", "โรคจู๋", "โรคเหลือง",
+        # Thai - วัชพืช
+        "วัชพืช", "หญ้า", "ผักบุ้ง", "หญ้าคา",
+        # Thai - ทั่วไป
+        "โรคพืช", "โรค",
         # English
         "aphid", "thrips", "whitefly", "moth", "caterpillar", "worm", "beetle",
         "mildew", "powdery mildew", "rust", "fungus", "fungal", "anthracnose",
         "virus", "viral", "disease", "weed", "grass", "mite", "borer", "leaf miner",
-        "insect", "pest", "armyworm", "thrips"
+        "insect", "pest", "armyworm", "thrips", "fruit rot", "root rot", "stem rot"
     ]
     
     # Crop keywords (expanded)
@@ -210,7 +218,7 @@ def extract_keywords_from_question(question: str) -> dict:
         ],
         "solve_problem": [
             # Thai
-            "แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม",
+            "แก้ปัญหา", "แก้ไข", "รักษา", "กำจัด", "ป้องกัน", "ควบคุม", "แก้โรค", "แก้",
             # English
             "solve problem", "control", "kill", "manage pest", "prevent", "control pest", "treat"
         ],
@@ -221,8 +229,11 @@ def extract_keywords_from_question(question: str) -> dict:
             "care", "fertilize", "general care", "maintenance", "nurture"
         ],
         "product_inquiry": [
-            # Thai
+            # Thai - เพิ่ม patterns สำหรับถามหาสินค้า
             "มีอะไรบ้าง", "มีไหม", "แนะนำ", "ควรใช้", "ใช้อะไร", "ซื้อ",
+            "ตัวไหน", "ยาอะไร", "ใช้ตัวไหน", "ใช้ยาอะไร", "พ่นอะไร", "ฉีดอะไร",
+            "สารอะไร", "ใช้สารอะไร", "ใช้อะไรดี", "ตัวไหนดี", "ยาตัวไหน",
+            "มียาอะไร", "มีตัวไหน", "ได้บ้าง", "บ้าง",
             # English
             "what products", "what is available", "recommend product", "recommend", "what to use", "is there"
         ]
