@@ -383,7 +383,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                     ],
                 }
             ],
-            max_tokens=2000,
+            max_tokens=4096,
             extra_headers={
                 "HTTP-Referer": "https://ladda-chatbot.railway.app",
                 "X-Title": "Ladda Plant Disease Detection",
