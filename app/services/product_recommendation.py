@@ -541,13 +541,7 @@ def build_recommendations_from_data(products_data: List[Dict], pest_name: str = 
         if not pest or pest.strip() == "":
             continue
 
-        # Add recommendation type prefix to target_pest for context
-        rec_type = product.get("recommendation_type", "")
-        if rec_type == "vector_control" and pest_name:
-            # Prepend vector info
-            pest = f"🐛 กำจัดพาหะ ({pest_name}): {pest}"
-        elif rec_type == "disease_treatment":
-            pest = f"💊 รักษา/บำรุง: {pest}"
+        # ไม่ต้องเพิ่ม prefix เพราะข้อมูล product มีอยู่แล้ว
 
         rec = ProductRecommendation(
             product_name=pname,
