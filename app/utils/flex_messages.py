@@ -1129,7 +1129,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('active_ingredient', '-')[:50],
+                                "text": product.get('active_ingredient', '-')[:150],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
@@ -1150,7 +1150,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('target_pest', '-')[:60],
+                                "text": product.get('target_pest', '-')[:200],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
@@ -1171,7 +1171,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('applicable_crops', '-')[:60],
+                                "text": product.get('applicable_crops', '-')[:200],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
@@ -1192,7 +1192,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('usage_period', '-')[:60],
+                                "text": product.get('usage_period', '-')[:200],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
@@ -1213,7 +1213,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('how_to_use', '-')[:80],
+                                "text": product.get('how_to_use', '-')[:300],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
@@ -1234,7 +1234,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('usage_rate', '-')[:50],
+                                "text": product.get('usage_rate', '-')[:150],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True
