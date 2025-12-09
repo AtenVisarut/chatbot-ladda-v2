@@ -167,7 +167,34 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 - ❌ **ไม่มีตรงกลางสีเทา/ขาว**
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
-**🟤 2.5 วิธีแยก 4 โรคที่สับสนบ่อยมาก: ใบจุดสาหร่าย vs ราสนิม vs ใบจุด vs แอนแทรคโนส**
+**🥭 2.5 วิธีแยก Anthracnose vs Leaf Spot ในทุเรียน (CRITICAL!)**
+**━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
+
+⚠️ **ทุเรียนเป็นพืชที่พบทั้ง 2 โรคนี้บ่อยมาก ต้องดูลักษณะให้ดี!**
+
+| ลักษณะ | Anthracnose (แอนแทรคโนส) | Leaf Spot (ใบจุด) |
+|--------|--------------------------|-------------------|
+| **⭐ พื้นผิวแผล** | 🔻 **ยุบตัว/บุ๋ม (SUNKEN)** | ➖ **ราบเรียบ** |
+| **⭐ ตำแหน่งเริ่มต้น** | **ขอบใบ/ปลายใบ** → ลามเข้า | **กระจายทั่วใบ** ไม่เริ่มจากขอบ |
+| **รูปแบบการลาม** | เป็นรูป **V** จากปลายใบ | จุดแยกกัน ไม่รวมตัว |
+| **สีแผล** | น้ำตาลเข้ม/ดำ | น้ำตาลอ่อน-กลาง สม่ำเสมอ |
+| **ขอบแผล** | ไม่ชัด เนื้อเยื่อตาย | ขอบชัดเจน |
+| **สปอร์สีส้ม/ชมพู** | ✅ มี (สภาพชื้น) | ❌ ไม่มี |
+| **Halo สีเหลือง** | ❌ ไม่มี | ⚠️ อาจมีบ้าง |
+| **เชื้อสาเหตุ** | Colletotrichum | Pestalotiopsis, Cercospora |
+
+**🎯 วิธีจำง่ายสำหรับทุเรียน:**
+- **แผลยุบตัว 🔻 + เริ่มจากขอบ/ปลายใบ + ลามเป็น V + สีดำ** = **Anthracnose** ✅
+- **จุดราบเรียบ ➖ + กระจายทั่วใบ + ขอบชัด + สีน้ำตาลสม่ำเสมอ** = **Leaf Spot** ✅
+
+**🔴 ข้อผิดพลาดที่ห้ามทำ (ทุเรียน):**
+- ❌ เห็นจุดบนใบทุเรียน → ตอบว่า Anthracnose ทันที (ผิด! ต้องดูว่ายุบตัวไหม เริ่มจากขอบไหม)
+- ❌ เห็นจุดกระจายทั่วใบทุเรียน → ตอบว่า Anthracnose (ผิด! Anthracnose เริ่มจากขอบ/ปลายใบ)
+- ✅ จุดกระจายทั่วใบ + ไม่ยุบตัว = **Leaf Spot**
+- ✅ แผลจากขอบใบ + ยุบตัว + สีดำ = **Anthracnose**
+
+**━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
+**🟤 2.6 วิธีแยก 4 โรคที่สับสนบ่อยมาก: ใบจุดสาหร่าย vs ราสนิม vs ใบจุด vs แอนแทรคโนส**
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 
 ⚠️ **กฎสำคัญที่สุด: ดูที่ "พื้นผิวแผล" และ "สี" เป็นอันดับแรก!**
@@ -477,15 +504,42 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         if extra_user_info:
             lowered = extra_user_info.lower()
 
-            # แก้ไขการสับสน Leaf Spot vs Anthracnose
-            if "จุด" in lowered and "กลม" in lowered:
-                if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
-                    logger.info("🔧 Adjusting: User described round spots → Leaf Spot")
-                    disease_name = "โรคใบจุด (Leaf Spot)"
-            if ("ขอบใบ" in lowered or "ปลายใบ" in lowered) and "แผล" in lowered:
-                if "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
-                    logger.info("🔧 Adjusting: User described edge lesions → Anthracnose")
-                    disease_name = "โรคแอนแทรคโนส (Anthracnose)"
+            # =================================================================
+            # แก้ไขการสับสน Leaf Spot vs Anthracnose (โดยเฉพาะทุเรียน!)
+            # =================================================================
+            is_durian = any(x in lowered for x in ["ทุเรียน", "durian"])
+
+            # ลักษณะของ Leaf Spot: จุดกลม กระจายทั่วใบ ราบเรียบ
+            leafspot_signs = ["จุดกลม", "กระจาย", "ราบเรียบ", "ไม่ยุบ", "กลางใบ", "ทั่วใบ"]
+            has_leafspot_signs = any(kw in lowered for kw in leafspot_signs)
+
+            # ลักษณะของ Anthracnose: ยุบตัว เริ่มจากขอบ/ปลายใบ ลามเป็น V สีดำ
+            anthracnose_signs = ["ยุบ", "บุ๋ม", "sunken", "ขอบใบ", "ปลายใบ", "ลาม", "รูป v", "สีดำ"]
+            has_anthracnose_signs = any(kw in lowered for kw in anthracnose_signs)
+
+            # ถ้าเป็นทุเรียน ให้ใช้กฎเฉพาะ
+            if is_durian:
+                if has_leafspot_signs and not has_anthracnose_signs:
+                    if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
+                        logger.info("🔧 Durian: Round scattered flat spots → Leaf Spot, not Anthracnose")
+                        disease_name = "โรคใบจุดทุเรียน (Durian Leaf Spot)"
+                        description += " | ⚠️ เป็นโรคใบจุด ไม่ใช่แอนแทรคโนส เพราะจุดกระจายทั่วใบและไม่ยุบตัว"
+
+                if has_anthracnose_signs and not has_leafspot_signs:
+                    if "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
+                        logger.info("🔧 Durian: Sunken edge lesions → Anthracnose, not Leaf Spot")
+                        disease_name = "โรคแอนแทรคโนสทุเรียน (Durian Anthracnose)"
+                        description += " | ⚠️ เป็นแอนแทรคโนส ไม่ใช่ใบจุด เพราะแผลยุบตัวและเริ่มจากขอบใบ"
+            else:
+                # กฎทั่วไปสำหรับพืชอื่น
+                if "จุด" in lowered and "กลม" in lowered:
+                    if "anthracnose" in disease_name.lower() or "แอนแทรคโนส" in disease_name:
+                        logger.info("🔧 Adjusting: User described round spots → Leaf Spot")
+                        disease_name = "โรคใบจุด (Leaf Spot)"
+                if ("ขอบใบ" in lowered or "ปลายใบ" in lowered) and "แผล" in lowered:
+                    if "leaf spot" in disease_name.lower() or "ใบจุด" in disease_name:
+                        logger.info("🔧 Adjusting: User described edge lesions → Anthracnose")
+                        disease_name = "โรคแอนแทรคโนส (Anthracnose)"
 
             # แก้ไขการสับสนเพลี้ย
             if "สีเขียว" in lowered and "เพลี้ยไฟ" in disease_name.lower():
