@@ -19,19 +19,19 @@ VECTOR_DISEASES = {
     # =========================================================================
     # 🌾 ข้าว (RICE) - โรคไวรัสที่มีเพลี้ยเป็นพาหะ
     # =========================================================================
-    "โรคจู๋": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "rice ragged stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "ragged stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "โรคใบหงิก": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "rice grassy stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "grassy stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH"},
-    "โรคใบสีส้ม": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "rice orange leaf": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "orange leaf": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "โรคใบขาวข้าว": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "rice tungro": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "tungro": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
-    "โรคทังโร": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH"},
+    "โรคจู๋": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคจู๋ ข้าว บำรุงต้น ฟื้นฟู"},
+    "rice ragged stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคจู๋ ข้าว บำรุงต้น"},
+    "ragged stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคจู๋ ข้าว บำรุงต้น"},
+    "โรคใบหงิก": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคใบหงิก ข้าว บำรุงต้น ฮอร์โมน"},
+    "rice grassy stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคใบหงิก ข้าว บำรุงต้น"},
+    "grassy stunt": {"pest": "เพลี้ยกระโดดสีน้ำตาล", "search_query": "เพลี้ยกระโดดสีน้ำตาล ยาฆ่าแมลง BPH", "disease_query": "โรคใบหงิก ข้าว บำรุงต้น"},
+    "โรคใบสีส้ม": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคใบสีส้ม ข้าว บำรุงต้น"},
+    "rice orange leaf": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคใบสีส้ม ข้าว บำรุงต้น"},
+    "orange leaf": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคใบสีส้ม ข้าว บำรุงต้น"},
+    "โรคใบขาวข้าว": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคใบขาว ข้าว บำรุงต้น"},
+    "rice tungro": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคทังโร ข้าว บำรุงต้น"},
+    "tungro": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคทังโร ข้าว บำรุงต้น"},
+    "โรคทังโร": {"pest": "เพลี้ยจักจั่นเขียว", "search_query": "เพลี้ยจักจั่น ยาฆ่าแมลง GLH", "disease_query": "โรคทังโร ข้าว บำรุงต้น"},
 
     # =========================================================================
     # 🍬 อ้อย (SUGARCANE) - โรคไวรัสและไฟโตพลาสมา
@@ -114,23 +114,27 @@ VECTOR_DISEASES = {
 def get_search_query_for_disease(disease_name: str, pest_type: str = "") -> tuple:
     """
     ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
-    ถ้ามี → return (search_query สำหรับยาฆ่าแมลง, pest_name)
-    ถ้าไม่มี → return (disease_name, None)
+    ถ้ามี → return (search_query สำหรับยาฆ่าแมลง, pest_name, disease_search_query)
+    ถ้าไม่มี → return (disease_name, None, None)
+
+    Returns: (vector_search_query, pest_name, disease_search_query)
     """
     disease_lower = disease_name.lower()
 
     # ตรวจสอบว่าเป็นโรคที่มีพาหะหรือไม่
     for key, info in VECTOR_DISEASES.items():
         if key in disease_lower:
-            logger.info(f"🐛 โรคนี้มีแมลงพาหะ: {info['pest']} → ค้นหายาฆ่าแมลง")
-            return (info["search_query"], info["pest"])
+            logger.info(f"🐛 โรคนี้มีแมลงพาหะ: {info['pest']} → ค้นหาทั้งยาฆ่าแมลงและยารักษาโรค")
+            # Return both: vector search + disease treatment search
+            disease_treatment_query = info.get("disease_query", f"{disease_name} ยารักษา โรคพืช")
+            return (info["search_query"], info["pest"], disease_treatment_query)
 
     # ถ้าเป็นไวรัส → แนะนำให้หาพาหะ
     if pest_type and "ไวรัส" in pest_type.lower():
         logger.info("🦠 โรคไวรัส → ค้นหายาฆ่าแมลงสำหรับพาหะ")
-        return (f"{disease_name} ยาฆ่าแมลง พาหะ", None)
+        return (f"{disease_name} ยาฆ่าแมลง พาหะ", None, None)
 
-    return (disease_name, None)
+    return (disease_name, None, None)
 
 
 # =============================================================================
@@ -340,18 +344,22 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         disease_name = disease_info.disease_name
 
-        # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ → ถ้ามี ค้นหายาฆ่าแมลงแทน
+        # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ → ถ้ามี ค้นหาทั้งยาฆ่าแมลงและยารักษาโรค
         pest_type = ""
         if hasattr(disease_info, 'raw_analysis') and disease_info.raw_analysis:
             # ดึง pest_type จาก raw_analysis ถ้ามี
             if "ไวรัส" in disease_info.raw_analysis:
                 pest_type = "ไวรัส"
 
-        search_query, pest_name = get_search_query_for_disease(disease_name, pest_type)
+        vector_search_query, pest_name, disease_treatment_query = get_search_query_for_disease(disease_name, pest_type)
 
         if pest_name:
-            logger.info(f"🐛 โรคมีพาหะ: {pest_name} → ค้นหา: {search_query}")
+            logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
+            logger.info(f"   → ค้นหายาฆ่าแมลง: {vector_search_query}")
+            logger.info(f"   → ค้นหายารักษาโรค: {disease_treatment_query}")
+            search_query = vector_search_query  # Primary search is for vector
         else:
+            search_query = vector_search_query
             logger.info(f"📝 Searching products for: {disease_name}")
 
         # Check cache first (ใช้ search_query เป็น key)
@@ -363,15 +371,42 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         # Strategy 1: Hybrid Search (Vector + Keyword combined)
         try:
+            all_results = []
+
+            # 1. ค้นหายากำจัดพาหะ (ถ้ามี)
             hybrid_results = await hybrid_search_products(
                 query=search_query,  # ใช้ search_query แทน disease_name
                 match_count=15,
                 vector_weight=0.6,
                 keyword_weight=0.4
             )
+            if hybrid_results:
+                # Mark these as vector control products
+                for p in hybrid_results:
+                    p['recommendation_type'] = 'vector_control' if pest_name else 'disease_treatment'
+                all_results.extend(hybrid_results)
+                logger.info(f"✓ Primary search found {len(hybrid_results)} products")
+
+            # 2. ค้นหายารักษาโรคเพิ่มเติม (ถ้าโรคมีพาหะ)
+            if pest_name and disease_treatment_query:
+                disease_results = await hybrid_search_products(
+                    query=disease_treatment_query,
+                    match_count=10,
+                    vector_weight=0.5,
+                    keyword_weight=0.5
+                )
+                if disease_results:
+                    # Mark these as disease treatment products
+                    for p in disease_results:
+                        p['recommendation_type'] = 'disease_treatment'
+                    all_results.extend(disease_results)
+                    logger.info(f"✓ Disease treatment search found {len(disease_results)} products")
+
+            # Combine and deduplicate
+            hybrid_results = all_results
 
             if hybrid_results:
-                logger.info(f"✓ Hybrid search found {len(hybrid_results)} candidates")
+                logger.info(f"✓ Total hybrid search found {len(hybrid_results)} candidates")
 
                 # Apply simple relevance boost first
                 for p in hybrid_results:
@@ -399,7 +434,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
                 if filtered_data:
                     logger.info(f"✓ Final {len(filtered_data)} products after re-ranking")
-                    filtered_products = build_recommendations_from_data(filtered_data)
+                    filtered_products = build_recommendations_from_data(filtered_data, pest_name=pest_name)
 
                     # Cache the results
                     if filtered_products:
@@ -464,7 +499,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
             return []
 
         logger.info(f"Total products found: {len(matches_data)}")
-        recommendations = build_recommendations_from_data(matches_data[:6])
+        recommendations = build_recommendations_from_data(matches_data[:6], pest_name=pest_name)
 
         # Cache the results
         if recommendations:
@@ -477,22 +512,43 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         return []
 
 
-def build_recommendations_from_data(products_data: List[Dict]) -> List[ProductRecommendation]:
-    """Build ProductRecommendation list from raw data"""
+def build_recommendations_from_data(products_data: List[Dict], pest_name: str = None) -> List[ProductRecommendation]:
+    """Build ProductRecommendation list from raw data
+
+    Args:
+        products_data: List of product dictionaries
+        pest_name: Name of pest vector (if disease has one) - used to add context to recommendations
+    """
     recommendations = []
     seen_products = set()
-    
+
+    # Sort to prioritize vector control products first if pest_name is provided
+    if pest_name:
+        # Put vector_control products first
+        products_data = sorted(
+            products_data,
+            key=lambda x: (0 if x.get('recommendation_type') == 'vector_control' else 1, -x.get('hybrid_score', x.get('similarity', 0)))
+        )
+
     for product in products_data:
         pname = product.get("product_name", "ไม่ระบุชื่อ")
-        
+
         if pname in seen_products:
             continue
         seen_products.add(pname)
-        
+
         pest = product.get("target_pest", "")
         if not pest or pest.strip() == "":
             continue
-        
+
+        # Add recommendation type prefix to target_pest for context
+        rec_type = product.get("recommendation_type", "")
+        if rec_type == "vector_control" and pest_name:
+            # Prepend vector info
+            pest = f"🐛 กำจัดพาหะ ({pest_name}): {pest}"
+        elif rec_type == "disease_treatment":
+            pest = f"💊 รักษา/บำรุง: {pest}"
+
         rec = ProductRecommendation(
             product_name=pname,
             active_ingredient=product.get("active_ingredient", ""),
@@ -505,7 +561,7 @@ def build_recommendations_from_data(products_data: List[Dict]) -> List[ProductRe
             score=product.get("similarity", 0.7)
         )
         recommendations.append(rec)
-    
+
     return recommendations
 
 async def recommend_products_by_intent(question: str, keywords: dict) -> str:
