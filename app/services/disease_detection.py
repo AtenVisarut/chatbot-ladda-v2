@@ -1,14 +1,16 @@
 import logging
 import json
+import re
 import io
 import datetime
 from typing import Optional
 import base64
 from PIL import Image
 from fastapi import HTTPException
+from openai import AsyncOpenAI
 
 from app.models import DiseaseDetectionResult
-from app.services.services import openai_client
+from app.config import OPENROUTER_API_KEY
 from app.services.cache import get_image_hash, get_from_cache, set_to_cache
 from app.services.disease_database import (
     generate_disease_prompt_section,
@@ -23,20 +25,34 @@ from app.services.disease_database import (
 
 logger = logging.getLogger(__name__)
 
+# Initialize OpenRouter client for Gemini 2.5 Pro (disease detection)
+gemini_client = None
+if OPENROUTER_API_KEY:
+    gemini_client = AsyncOpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+    )
+    logger.info("OpenRouter (Gemini 2.5 Pro) initialized for disease detection")
+
 
 async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = None) -> DiseaseDetectionResult:
-    """Detect plant disease/pest from an image, optionally using extra user description.
+    """Detect plant disease/pest from an image using Gemini 2.5 Pro via OpenRouter.
 
     The function:
     1. Checks cache (if no extra info).
     2. Builds a detailed prompt with examples.
-    3. Calls GPT‑4o (vision) and expects a JSON response.
+    3. Calls Gemini 2.5 Pro (vision) via OpenRouter and expects a JSON response.
     4. Parses the response, applies simple post‑processing based on extra_user_info
        to disambiguate common confusions (e.g., leaf spot vs. Anthracnose).
     5. Returns a ``DiseaseDetectionResult`` model.
     """
 
-    logger.info("Starting pest/disease detection with GPT‑4o")
+    logger.info("Starting pest/disease detection with Gemini 2.5 Pro (via OpenRouter)")
+
+    # Check if Gemini client is initialized
+    if not gemini_client:
+        logger.error("OpenRouter API key not configured for Gemini")
+        raise HTTPException(status_code=500, detail="Disease detection service not configured")
 
     # ---------------------------------------------------------------------
     # Cache lookup (only when we don't have extra user info – otherwise the
@@ -348,20 +364,18 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
             prompt_text += f"\n\nเพิ่มเติมจากผู้ใช้: {extra_user_info}"
 
         # -----------------------------------------------------------------
-        # Call OpenAI GPT-4o Vision model (single call, direct analysis)
+        # Call Gemini 2.5 Pro via OpenRouter (vision model)
         # -----------------------------------------------------------------
 
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",
+        system_instruction = "คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืช ต้องวิเคราะห์ภาพและตอบเป็น JSON เท่านั้น\n\n"
+
+        response = await gemini_client.chat.completions.create(
+            model="google/gemini-2.5-pro-preview",
             messages=[
-                {
-                    "role": "system",
-                    "content": "คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืช ต้องวิเคราะห์ภาพและตอบเป็น JSON เท่านั้น"
-                },
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt_text},
+                        {"type": "text", "text": system_instruction + prompt_text},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
@@ -369,18 +383,28 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                     ],
                 }
             ],
-            response_format={"type": "json_object"},
-            max_tokens=1500,
+            max_tokens=2000,
+            extra_headers={
+                "HTTP-Referer": "https://ladda-chatbot.railway.app",
+                "X-Title": "Ladda Plant Disease Detection",
+            },
         )
 
         raw_text = response.choices[0].message.content
-        logger.info(f"OpenAI raw response: {raw_text}")
+        logger.info(f"Gemini raw response: {raw_text[:500]}...")
 
         # -----------------------------------------------------------------
-        # Parse JSON (fallback to raw text if parsing fails)
+        # Parse JSON (Gemini may wrap JSON in markdown code blocks)
         # -----------------------------------------------------------------
         try:
-            data = json.loads(raw_text)
+            # Try to extract JSON from markdown code block if present
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_text)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                json_str = raw_text
+            
+            data = json.loads(json_str)
         except Exception as e:
             logger.warning(f"Failed to parse JSON from response: {e}", exc_info=True)
             data = {
@@ -637,6 +661,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                 "confidence": confidence,
                 "severity": result.severity,
                 "has_user_input": bool(extra_user_info),
+                "model": "gemini-2.5-pro-preview",
             }
             logger.debug(f"Detection log: {log_entry}")
         except Exception as e:

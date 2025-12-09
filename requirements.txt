@@ -6,8 +6,11 @@ pydantic==2.9.2
 # HTTP client
 # httpx==0.28.1  <-- ***ลบออก หรือ คอมเมนต์ไว้***
 
-# OpenAI
+# OpenAI (for chat, Q&A)
 openai==1.54.0
+
+# OpenRouter (for Gemini 2.5 Pro disease detection - vision)
+# Uses OpenAI-compatible API via openai library
 
 # Supabase client (ลดเวอร์ชันลงเพื่อเลี่ยง Conflict)
 supabase==2.8.0 
