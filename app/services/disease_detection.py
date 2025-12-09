@@ -367,7 +367,11 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         # Call Gemini 2.5 Pro via OpenRouter (vision model)
         # -----------------------------------------------------------------
 
-        system_instruction = "คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืช ต้องวิเคราะห์ภาพและตอบเป็น JSON เท่านั้น\n\n"
+        system_instruction = """คุณคือผู้เชี่ยวชาญโรคพืช ตอบเป็น JSON เท่านั้น (ไม่ต้องใส่ ```json)
+ตอบกระชับ แต่ละ field ไม่เกิน 100 ตัวอักษร
+ห้ามมี field ซ้ำกัน
+
+"""
 
         response = await gemini_client.chat.completions.create(
             model="google/gemini-2.5-pro-preview",
@@ -383,7 +387,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                     ],
                 }
             ],
-            max_tokens=4096,
+            max_tokens=8192,
             extra_headers={
                 "HTTP-Referer": "https://ladda-chatbot.railway.app",
                 "X-Title": "Ladda Plant Disease Detection",
