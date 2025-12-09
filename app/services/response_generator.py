@@ -170,7 +170,7 @@ async def generate_flex_response(
             # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
             pest_vector_info = None
             try:
-                _, pest_name = get_search_query_for_disease(safe_disease_name)
+                _, pest_name, _ = get_search_query_for_disease(safe_disease_name)
                 if pest_name:
                     pest_vector_info = pest_name
                     logger.info(f"🐛 โรค {safe_disease_name} มีแมลงพาหะ: {pest_name}")
