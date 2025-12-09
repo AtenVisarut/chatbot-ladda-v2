@@ -11,6 +11,85 @@ from app.services.product_recommendation import get_search_query_for_disease
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Growth Stage Quick Reply - ตามชนิดพืช
+# =============================================================================
+GROWTH_STAGES = {
+    "ข้าว": [
+        {"label": "🌱 กล้า/ปักดำ", "text": "ระยะกล้า ปักดำ 0-20 วัน"},
+        {"label": "🌿 แตกกอ", "text": "ระยะแตกกอ 20-50 วัน"},
+        {"label": "🌾 ตั้งท้อง", "text": "ระยะตั้งท้อง 50-80 วัน"},
+        {"label": "🌻 ออกรวง", "text": "ระยะออกรวง 80+ วัน"},
+    ],
+    "มะม่วง": [
+        {"label": "🌿 ก่อนออกดอก", "text": "ระยะก่อนออกดอก"},
+        {"label": "🌸 ออกดอก", "text": "ระยะออกดอก"},
+        {"label": "🥭 ติดผล", "text": "ระยะติดผล"},
+        {"label": "📦 เก็บเกี่ยว", "text": "ระยะเก็บเกี่ยว"},
+    ],
+    "ทุเรียน": [
+        {"label": "🌿 ก่อนออกดอก", "text": "ระยะก่อนออกดอก"},
+        {"label": "🌸 ออกดอก", "text": "ระยะออกดอก"},
+        {"label": "🍈 ติดผล", "text": "ระยะติดผล"},
+        {"label": "📦 เก็บเกี่ยว", "text": "ระยะเก็บเกี่ยว"},
+    ],
+    "ส้ม": [
+        {"label": "🌿 ก่อนออกดอก", "text": "ระยะก่อนออกดอก"},
+        {"label": "🌸 ออกดอก", "text": "ระยะออกดอก"},
+        {"label": "🍊 ติดผล", "text": "ระยะติดผล"},
+        {"label": "📦 เก็บเกี่ยว", "text": "ระยะเก็บเกี่ยว"},
+    ],
+    "ผัก": [
+        {"label": "🌱 ต้นอ่อน", "text": "ระยะต้นอ่อน 0-15 วัน"},
+        {"label": "🌿 เจริญเติบโต", "text": "ระยะเจริญเติบโต 15-30 วัน"},
+        {"label": "📦 ก่อนเก็บเกี่ยว", "text": "ระยะก่อนเก็บเกี่ยว"},
+    ],
+    "default": [
+        {"label": "🌱 ต้นอ่อน", "text": "ระยะต้นอ่อน"},
+        {"label": "🌿 เจริญเติบโต", "text": "ระยะเจริญเติบโต"},
+        {"label": "🌸 ออกดอก/ผล", "text": "ระยะออกดอก ติดผล"},
+        {"label": "📦 เก็บเกี่ยว", "text": "ระยะเก็บเกี่ยว"},
+    ],
+}
+
+def get_growth_stage_options(plant_type: str) -> list:
+    """Get growth stage options based on plant type"""
+    plant_lower = plant_type.lower() if plant_type else ""
+
+    # Match plant type to growth stages
+    if "ข้าว" in plant_lower or "rice" in plant_lower:
+        return GROWTH_STAGES["ข้าว"]
+    elif "มะม่วง" in plant_lower or "mango" in plant_lower:
+        return GROWTH_STAGES["มะม่วง"]
+    elif "ทุเรียน" in plant_lower or "durian" in plant_lower:
+        return GROWTH_STAGES["ทุเรียน"]
+    elif "ส้ม" in plant_lower or "มะนาว" in plant_lower or "citrus" in plant_lower:
+        return GROWTH_STAGES["ส้ม"]
+    elif any(v in plant_lower for v in ["ผัก", "พริก", "มะเขือ", "แตง", "กะหล่ำ", "คะน้า"]):
+        return GROWTH_STAGES["ผัก"]
+    else:
+        return GROWTH_STAGES["default"]
+
+
+def create_growth_stage_quick_reply(plant_type: str) -> dict:
+    """Create Quick Reply asking for growth stage based on plant type"""
+    stages = get_growth_stage_options(plant_type)
+
+    quick_reply_items = []
+    for stage in stages:
+        quick_reply_items.append({
+            "type": "action",
+            "action": {
+                "type": "message",
+                "label": stage["label"][:20],  # LINE limit 20 chars
+                "text": stage["text"]
+            }
+        })
+
+    return {
+        "items": quick_reply_items
+    }
+
 async def generate_final_response(
     disease_info: DiseaseDetectionResult, 
     products: List[ProductRecommendation],
@@ -294,3 +373,80 @@ async def generate_flex_response(
         logger.error(f"Error generating flex response: {e}", exc_info=True)
         # Fallback to simple text
         return [{"type": "text", "text": build_simple_response(disease_info)}]
+
+
+async def generate_diagnosis_with_stage_question(
+    disease_info: DiseaseDetectionResult
+) -> list:
+    """
+    Generate Flex Message for disease diagnosis + Quick Reply asking for growth stage
+    NO product recommendations yet - wait for user to select growth stage first
+    """
+    try:
+        logger.info("Generating diagnosis response with growth stage question")
+
+        messages = []
+
+        # Extract pest type from raw_analysis
+        pest_type = "โรคพืช"
+        try:
+            if disease_info.raw_analysis:
+                parts = disease_info.raw_analysis.split(":")
+                if len(parts) > 0 and parts[0].strip():
+                    pest_type = parts[0].strip()[:50]
+        except Exception:
+            pass
+
+        # 1. Disease Result Flex
+        try:
+            safe_disease_name = (disease_info.disease_name or "ไม่ทราบ")[:100]
+            safe_confidence = str(disease_info.confidence or "75")[:20]
+            safe_symptoms = (disease_info.symptoms or "ไม่ระบุอาการ")[:500]
+            safe_severity = (disease_info.severity or "ปานกลาง")[:100]
+            safe_raw = (disease_info.raw_analysis or "")[:500]
+
+            # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
+            pest_vector_info = None
+            try:
+                _, pest_name, _ = get_search_query_for_disease(safe_disease_name)
+                if pest_name:
+                    pest_vector_info = pest_name
+            except Exception:
+                pass
+
+            disease_flex = create_disease_result_flex(
+                disease_name=safe_disease_name,
+                confidence=safe_confidence,
+                symptoms=safe_symptoms,
+                severity=safe_severity,
+                raw_analysis=safe_raw,
+                pest_type=pest_type,
+                pest_vector=pest_vector_info
+            )
+            messages.append(disease_flex)
+        except Exception as e:
+            logger.error(f"Error creating disease flex: {e}", exc_info=True)
+            messages.append({
+                "type": "text",
+                "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}"
+            })
+
+        # 2. Ask for growth stage with Quick Reply
+        plant_type = disease_info.plant_type or ""
+        plant_display = plant_type if plant_type else "พืช"
+
+        growth_stage_qr = create_growth_stage_quick_reply(plant_type)
+
+        question_msg = {
+            "type": "text",
+            "text": f"🌱 เพื่อแนะนำผลิตภัณฑ์ที่เหมาะสมที่สุด\n\n{plant_display} อยู่ในระยะไหนคะ? 👇",
+            "quickReply": growth_stage_qr
+        }
+        messages.append(question_msg)
+
+        logger.info(f"✓ Diagnosis with stage question generated for plant: {plant_type}")
+        return messages
+
+    except Exception as e:
+        logger.error(f"Error generating diagnosis with stage question: {e}", exc_info=True)
+        return [{"type": "text", "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\n\nพืชอยู่ในระยะไหนคะ?"}]

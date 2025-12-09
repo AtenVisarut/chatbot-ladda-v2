@@ -72,8 +72,8 @@ from app.services.memory import (
     save_recommended_products
 )
 from app.services.disease_detection import detect_disease
-from app.services.product_recommendation import retrieve_product_recommendation
-from app.services.response_generator import generate_final_response, generate_flex_response
+from app.services.product_recommendation import retrieve_product_recommendation, retrieve_products_with_matching_score
+from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
 
 # Import utils
@@ -493,15 +493,6 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
                                         break
                                 
-                                if should_recommend:
-                                    recommendations = await retrieve_product_recommendation(detection_result)
-                                else:
-                                    logger.info(f"Skipping product recommendation for: {detection_result.disease_name}")
-                                    recommendations = []
-
-                                # Generate Flex Message response
-                                flex_messages = await generate_flex_response(detection_result, recommendations)
-
                                 # Extract pest_type from raw_analysis
                                 pest_type = "ศัตรูพืช"
                                 if detection_result.raw_analysis:
@@ -519,33 +510,44 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         response_time_ms=0.0
                                     )
 
-                                    # Track product recommendations
-                                    if recommendations:
-                                        product_names = [p.product_name for p in recommendations]
-                                        await analytics_tracker.track_product_recommendation(
-                                            user_id=user_id,
-                                            disease_name=detection_result.disease_name,
-                                            products=product_names
-                                        )
+                                if should_recommend:
+                                    # ถามระยะปลูกก่อนแนะนำสินค้า
+                                    logger.info(f"🌱 Asking for growth stage before product recommendation")
 
-                                # Send Flex Messages via push (reply_token already used)
-                                await push_line(user_id, flex_messages)
+                                    # Save detection result to context for later use
+                                    await save_pending_context(user_id, {
+                                        "state": "awaiting_growth_stage",
+                                        "detection_result": detection_result.dict(),
+                                        "plant_type": detection_result.plant_type or "",
+                                    })
 
-                                # Clear context
-                                await delete_pending_context(user_id)
+                                    # Generate diagnosis with growth stage question
+                                    flex_messages = await generate_diagnosis_with_stage_question(detection_result)
 
-                                # Add to memory
-                                await add_to_memory(user_id, "user", f"[ข้าม] {text}")
-                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
+                                    # Send Flex Messages
+                                    await push_line(user_id, flex_messages)
 
-                                # Save recommended products to memory for follow-up questions
-                                if recommendations:
-                                    await save_recommended_products(
-                                        user_id,
-                                        recommendations,
-                                        disease_name=detection_result.disease_name
-                                    )
-                                    logger.info(f"✓ Saved {len(recommendations)} products to memory for user {user_id[:8]}...")
+                                    # Add to memory
+                                    await add_to_memory(user_id, "user", f"[ข้าม] {text}")
+                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
+
+                                else:
+                                    # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
+                                    logger.info(f"Skipping product recommendation for: {detection_result.disease_name}")
+                                    recommendations = []
+
+                                    # Generate Flex Message response without products
+                                    flex_messages = await generate_flex_response(detection_result, recommendations)
+
+                                    # Send Flex Messages via push
+                                    await push_line(user_id, flex_messages)
+
+                                    # Clear context
+                                    await delete_pending_context(user_id)
+
+                                    # Add to memory
+                                    await add_to_memory(user_id, "user", f"[ข้าม] {text}")
+                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
 
                             except Exception as e:
                                 logger.error(f"Error in skip analysis: {e}")
@@ -576,14 +578,6 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
                                         break
 
-                                if should_recommend:
-                                    recommendations = await retrieve_product_recommendation(detection_result)
-                                else:
-                                    recommendations = []
-
-                                # Generate Flex Message response
-                                flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=text)
-
                                 # Extract pest_type from raw_analysis
                                 pest_type = "ศัตรูพืช"
                                 if detection_result.raw_analysis:
@@ -601,33 +595,44 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                         response_time_ms=0.0
                                     )
 
-                                    # Track product recommendations
-                                    if recommendations:
-                                        product_names = [p.product_name for p in recommendations]
-                                        await analytics_tracker.track_product_recommendation(
-                                            user_id=user_id,
-                                            disease_name=detection_result.disease_name,
-                                            products=product_names
-                                        )
+                                if should_recommend:
+                                    # ถามระยะปลูกก่อนแนะนำสินค้า
+                                    logger.info(f"🌱 Asking for growth stage before product recommendation")
 
-                                # Send Flex Messages via push (reply_token already used)
-                                await push_line(user_id, flex_messages)
+                                    # Save detection result to context for later use
+                                    await save_pending_context(user_id, {
+                                        "state": "awaiting_growth_stage",
+                                        "detection_result": detection_result.dict(),
+                                        "plant_type": detection_result.plant_type or "",
+                                        "extra_user_info": text,
+                                    })
 
-                                # Clear context
-                                await delete_pending_context(user_id)
+                                    # Generate diagnosis with growth stage question
+                                    flex_messages = await generate_diagnosis_with_stage_question(detection_result)
 
-                                # Add to memory
-                                await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
-                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
+                                    # Send Flex Messages
+                                    await push_line(user_id, flex_messages)
 
-                                # Save recommended products to memory for follow-up questions
-                                if recommendations:
-                                    await save_recommended_products(
-                                        user_id,
-                                        recommendations,
-                                        disease_name=detection_result.disease_name
-                                    )
-                                    logger.info(f"✓ Saved {len(recommendations)} products to memory for user {user_id[:8]}...")
+                                    # Add to memory
+                                    await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
+                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
+
+                                else:
+                                    # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
+                                    recommendations = []
+
+                                    # Generate Flex Message response without products
+                                    flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=text)
+
+                                    # Send Flex Messages via push
+                                    await push_line(user_id, flex_messages)
+
+                                    # Clear context
+                                    await delete_pending_context(user_id)
+
+                                    # Add to memory
+                                    await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
+                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
 
                             except Exception as e:
                                 logger.error(f"Error in analysis with info: {e}", exc_info=True)
@@ -636,9 +641,85 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                     await push_line(user_id, f"ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢\n\nError: {str(e)[:100]}")
                                 except Exception as e2:
                                     logger.error(f"Failed to send error message: {e2}")
+                    elif ctx.get("state") == "awaiting_growth_stage":
+                        # User selected growth stage - now recommend products with matching score
+                        logger.info(f"🌱 User {user_id} selected growth stage: {text}")
+
+                        try:
+                            # Get stored detection result
+                            detection_dict = ctx.get("detection_result", {})
+                            plant_type = ctx.get("plant_type", "")
+                            growth_stage = text  # User's response (e.g., "ระยะแตกกอ 20-50 วัน")
+
+                            # Recreate DiseaseDetectionResult from stored dict
+                            from app.models import DiseaseDetectionResult
+                            detection_result = DiseaseDetectionResult(**detection_dict)
+
+                            # Get product recommendations with matching score
+                            recommendations = await retrieve_products_with_matching_score(
+                                detection_result=detection_result,
+                                plant_type=plant_type,
+                                growth_stage=growth_stage
+                            )
+
+                            # Track analytics
+                            if analytics_tracker and recommendations:
+                                product_names = [p.product_name for p in recommendations]
+                                await analytics_tracker.track_product_recommendation(
+                                    user_id=user_id,
+                                    disease_name=detection_result.disease_name,
+                                    products=product_names
+                                )
+
+                            # Generate product carousel with context
+                            if recommendations:
+                                product_list = []
+                                for p in recommendations[:5]:
+                                    product_list.append({
+                                        "product_name": (p.product_name or "ไม่ระบุ")[:100],
+                                        "active_ingredient": (p.active_ingredient or "-")[:100],
+                                        "target_pest": (p.target_pest or "-")[:200],
+                                        "applicable_crops": (p.applicable_crops or "-")[:150],
+                                        "usage_period": (p.usage_period or "-")[:100],
+                                        "how_to_use": (p.how_to_use or "-")[:200],
+                                        "usage_rate": (p.usage_rate or "-")[:100],
+                                        "link_product": (p.link_product or "")[:500] if p.link_product and str(p.link_product).startswith("http") else "",
+                                        "similarity": p.score if hasattr(p, 'score') else 0.8
+                                    })
+
+                                product_flex = create_product_carousel_flex(product_list)
+
+                                # Send header text + product carousel
+                                header_text = f"✅ แนะนำสำหรับ {plant_type} {growth_stage}\n\n💊 ผลิตภัณฑ์ที่เหมาะสม:"
+                                await reply_line(reply_token, [
+                                    {"type": "text", "text": header_text},
+                                    product_flex
+                                ])
+
+                                # Save recommended products to memory
+                                await save_recommended_products(
+                                    user_id,
+                                    recommendations,
+                                    disease_name=detection_result.disease_name
+                                )
+                            else:
+                                await reply_line(reply_token, "ขออภัยค่ะ ไม่พบผลิตภัณฑ์ที่เหมาะสมสำหรับระยะนี้ 😢")
+
+                            # Clear context
+                            await delete_pending_context(user_id)
+
+                            # Add to memory
+                            await add_to_memory(user_id, "user", f"[ระยะปลูก] {text}")
+                            await add_to_memory(user_id, "assistant", f"[แนะนำสินค้า] {len(recommendations)} รายการ")
+
+                        except Exception as e:
+                            logger.error(f"Error processing growth stage response: {e}", exc_info=True)
+                            await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง 😢")
+                            await delete_pending_context(user_id)
+
                     else:
-                        # Context exists but not awaiting info (shouldn't happen normally)
-                        logger.warning(f"Found context for {user_id} but state is not awaiting_info")
+                        # Context exists but unknown state
+                        logger.warning(f"Found context for {user_id} but state is unknown: {ctx.get('state')}")
                         # Fall through to normal conversation
                 
                 else:

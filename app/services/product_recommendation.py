@@ -911,6 +911,325 @@ async def format_product_list_simple(products: list, question: str, intent: str)
     response += "\n📚 ดูรายละเอียดเพิ่มเติม: https://www.icpladda.com/about/"
     return response
 
+# =============================================================================
+# Matching Score Product Recommendation
+# =============================================================================
+
+def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, growth_stage: str) -> float:
+    """
+    คำนวณ Matching Score ระหว่าง product กับข้อมูล user
+
+    Weights:
+    - 40% - โรค/แมลง ตรงกับ target_pest
+    - 30% - พืช ตรงกับ applicable_crops
+    - 30% - ระยะ ตรงกับ usage_period
+
+    Returns: score 0.0 - 1.0
+    """
+    score = 0.0
+
+    target_pest = (product.get("target_pest") or "").lower()
+    applicable_crops = (product.get("applicable_crops") or "").lower()
+    usage_period = (product.get("usage_period") or "").lower()
+
+    disease_lower = disease_name.lower()
+    plant_lower = plant_type.lower() if plant_type else ""
+    stage_lower = growth_stage.lower() if growth_stage else ""
+
+    # 1. Disease/Pest Match (40%)
+    disease_score = 0.0
+
+    # Direct disease name match
+    if disease_lower and disease_lower in target_pest:
+        disease_score = 1.0
+    else:
+        # Check partial matches
+        disease_keywords = disease_lower.replace("โรค", "").strip().split()
+        for kw in disease_keywords:
+            if len(kw) > 2 and kw in target_pest:
+                disease_score = max(disease_score, 0.7)
+                break
+
+        # Check if product targets related issues
+        pest_check_query, pest_name, _ = get_search_query_for_disease(disease_name)
+        if pest_name:
+            # Disease has vector - check if product targets the vector
+            pest_keywords = pest_name.lower().split()
+            for kw in pest_keywords:
+                if len(kw) > 2 and kw in target_pest:
+                    disease_score = max(disease_score, 0.9)
+                    break
+
+        # Generic disease type match (เชื้อรา, ไวรัส, etc.)
+        disease_types = ["เชื้อรา", "ไวรัส", "แบคทีเรีย", "แมลง", "เพลี้ย", "หนอน"]
+        for dt in disease_types:
+            if dt in disease_lower and dt in target_pest:
+                disease_score = max(disease_score, 0.5)
+                break
+
+    score += disease_score * 0.4
+
+    # 2. Plant/Crop Match (30%)
+    plant_score = 0.0
+
+    if plant_lower:
+        # Direct plant match
+        if plant_lower in applicable_crops:
+            plant_score = 1.0
+        else:
+            # Check plant synonyms/variants
+            plant_synonyms = {
+                "ข้าว": ["ข้าว", "rice", "นาข้าว"],
+                "มะม่วง": ["มะม่วง", "mango"],
+                "ทุเรียน": ["ทุเรียน", "durian"],
+                "ส้ม": ["ส้ม", "มะนาว", "citrus", "ส้มโอ"],
+                "ผัก": ["ผัก", "vegetable", "ผักกาด", "คะน้า", "กะหล่ำ"],
+                "มันสำปะหลัง": ["มัน", "cassava", "มันสำปะหลัง"],
+                "ข้าวโพด": ["ข้าวโพด", "corn", "maize"],
+                "อ้อย": ["อ้อย", "sugarcane"],
+                "ลำไย": ["ลำไย", "longan"],
+                "ยางพารา": ["ยาง", "rubber", "ยางพารา"],
+                "ปาล์ม": ["ปาล์ม", "palm", "ปาล์มน้ำมัน"],
+                "พริก": ["พริก", "chili", "pepper"],
+                "มะเขือ": ["มะเขือ", "eggplant", "tomato", "มะเขือเทศ"],
+            }
+
+            for main_plant, synonyms in plant_synonyms.items():
+                if any(s in plant_lower for s in synonyms):
+                    if any(s in applicable_crops for s in synonyms):
+                        plant_score = 0.9
+                        break
+                    elif main_plant in applicable_crops:
+                        plant_score = 0.8
+                        break
+
+            # Generic crop match
+            if plant_score == 0 and ("พืช" in applicable_crops or "ทุกชนิด" in applicable_crops):
+                plant_score = 0.3
+
+    score += plant_score * 0.3
+
+    # 3. Growth Stage Match (30%)
+    stage_score = 0.0
+
+    if stage_lower:
+        # Extract stage keywords from user input
+        stage_keywords_map = {
+            "กล้า": ["กล้า", "ปักดำ", "เพาะ", "ต้นอ่อน", "seedling"],
+            "แตกกอ": ["แตกกอ", "tillering", "แตกใบ"],
+            "ตั้งท้อง": ["ตั้งท้อง", "booting", "ท้อง"],
+            "ออกรวง": ["ออกรวง", "flowering", "ออกดอก", "รวง", "heading"],
+            "ออกดอก": ["ออกดอก", "ดอก", "flower", "บาน"],
+            "ติดผล": ["ติดผล", "ผลอ่อน", "fruiting", "ติดลูก"],
+            "ผลโต": ["ผลโต", "ขยายผล", "fruit development"],
+            "เก็บเกี่ยว": ["เก็บเกี่ยว", "harvest", "สุก"],
+            "ทุกระยะ": ["ทุกระยะ", "ตลอด", "all stage"],
+        }
+
+        # Check stage match in usage_period
+        for stage_name, keywords in stage_keywords_map.items():
+            # Check if user's stage matches
+            user_stage_match = any(kw in stage_lower for kw in keywords)
+
+            if user_stage_match:
+                # Check if product's usage_period covers this stage
+                if any(kw in usage_period for kw in keywords):
+                    stage_score = 1.0
+                    break
+                elif "ทุกระยะ" in usage_period or "ตลอด" in usage_period:
+                    stage_score = 0.7
+                    break
+
+        # If no specific match, check for general compatibility
+        if stage_score == 0:
+            # Extract day ranges if present (e.g., "0-20 วัน")
+            import re
+            user_days = re.findall(r'(\d+)', stage_lower)
+            product_days = re.findall(r'(\d+)', usage_period)
+
+            if user_days and product_days:
+                # Check if ranges overlap
+                try:
+                    user_mid = sum(int(d) for d in user_days[:2]) / len(user_days[:2])
+                    prod_mid = sum(int(d) for d in product_days[:2]) / len(product_days[:2])
+
+                    # If within 30 days, partial match
+                    if abs(user_mid - prod_mid) < 30:
+                        stage_score = 0.5
+                except:
+                    pass
+
+    score += stage_score * 0.3
+
+    return score
+
+
+async def retrieve_products_with_matching_score(
+    detection_result: DiseaseDetectionResult,
+    plant_type: str,
+    growth_stage: str
+) -> List[ProductRecommendation]:
+    """
+    ค้นหาและแนะนำสินค้าโดยใช้ Matching Score
+
+    Flow:
+    1. ค้นหาสินค้าจาก Hybrid Search ตามโรค/แมลง
+    2. คำนวณ Matching Score แต่ละสินค้า
+    3. เรียงลำดับตาม score
+    4. Return top products
+
+    Args:
+        detection_result: ผลการวินิจฉัยโรค
+        plant_type: ชนิดพืชที่ปลูก
+        growth_stage: ระยะการเจริญเติบโต
+
+    Returns:
+        List[ProductRecommendation] เรียงตาม matching score
+    """
+    try:
+        logger.info("🎯 Retrieving products with Matching Score")
+        logger.info(f"   Disease: {detection_result.disease_name}")
+        logger.info(f"   Plant: {plant_type}")
+        logger.info(f"   Stage: {growth_stage}")
+
+        if not supabase_client:
+            logger.warning("Supabase not configured")
+            return []
+
+        disease_name = detection_result.disease_name
+
+        # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
+        pest_type = ""
+        if hasattr(detection_result, 'raw_analysis') and detection_result.raw_analysis:
+            if "ไวรัส" in detection_result.raw_analysis:
+                pest_type = "ไวรัส"
+
+        vector_search_query, pest_name, disease_treatment_query = get_search_query_for_disease(disease_name, pest_type)
+
+        if pest_name:
+            logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
+
+        # 1. Hybrid Search for products
+        all_results = []
+
+        # Primary search (vector control if has pest, or disease treatment)
+        search_query = vector_search_query
+        if plant_type:
+            search_query = f"{search_query} {plant_type}"
+
+        logger.info(f"🔍 Primary search: {search_query}")
+
+        hybrid_results = await hybrid_search_products(
+            query=search_query,
+            match_count=20,
+            vector_weight=0.5,
+            keyword_weight=0.5
+        )
+
+        if hybrid_results:
+            all_results.extend(hybrid_results)
+            logger.info(f"   → Found {len(hybrid_results)} products")
+
+        # Secondary search for disease treatment (if has vector)
+        if pest_name and disease_treatment_query:
+            if plant_type:
+                disease_treatment_query = f"{disease_treatment_query} {plant_type}"
+
+            logger.info(f"🔍 Disease treatment search: {disease_treatment_query}")
+
+            disease_results = await hybrid_search_products(
+                query=disease_treatment_query,
+                match_count=15,
+                vector_weight=0.5,
+                keyword_weight=0.5
+            )
+
+            if disease_results:
+                all_results.extend(disease_results)
+                logger.info(f"   → Found {len(disease_results)} disease treatment products")
+
+        # 2. Calculate Matching Score for each product
+        scored_products = []
+        seen_products = set()
+
+        for product in all_results:
+            pname = product.get("product_name", "")
+            if not pname or pname in seen_products:
+                continue
+            seen_products.add(pname)
+
+            # Skip products without target_pest
+            if not product.get("target_pest"):
+                continue
+
+            # Calculate matching score
+            match_score = calculate_matching_score(
+                product=product,
+                disease_name=disease_name,
+                plant_type=plant_type,
+                growth_stage=growth_stage
+            )
+
+            # Combine hybrid score with matching score
+            hybrid_score = product.get("hybrid_score", product.get("similarity", 0))
+
+            # Final score: 50% matching + 50% hybrid (search relevance)
+            final_score = (match_score * 0.5) + (hybrid_score * 0.5)
+
+            product["matching_score"] = match_score
+            product["final_score"] = final_score
+
+            scored_products.append(product)
+
+        # 3. Sort by final score
+        scored_products.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+
+        # Log top products
+        logger.info(f"📊 Top products by Matching Score:")
+        for p in scored_products[:5]:
+            logger.info(f"   → {p.get('product_name')}: "
+                       f"match={p.get('matching_score', 0):.2f}, "
+                       f"final={p.get('final_score', 0):.2f}")
+
+        # 4. Filter and build recommendations
+        # Keep products with reasonable score (>0.15) or top 6
+        min_score = 0.15
+        filtered_products = [p for p in scored_products if p.get("final_score", 0) >= min_score]
+
+        if len(filtered_products) < 3:
+            # If too few pass threshold, take top 6 anyway
+            filtered_products = scored_products[:6]
+        else:
+            filtered_products = filtered_products[:6]
+
+        if not filtered_products:
+            logger.warning("⚠️ No products found with matching score")
+            return []
+
+        # Build recommendations
+        recommendations = []
+        for product in filtered_products:
+            rec = ProductRecommendation(
+                product_name=product.get("product_name", "ไม่ระบุชื่อ"),
+                active_ingredient=product.get("active_ingredient", ""),
+                target_pest=product.get("target_pest", ""),
+                applicable_crops=product.get("applicable_crops", ""),
+                how_to_use=product.get("how_to_use", ""),
+                usage_period=product.get("usage_period", ""),
+                usage_rate=product.get("usage_rate", ""),
+                link_product=product.get("link_product", ""),
+                score=product.get("final_score", 0)
+            )
+            recommendations.append(rec)
+
+        logger.info(f"✓ Returning {len(recommendations)} products with matching score")
+        return recommendations
+
+    except Exception as e:
+        logger.error(f"Error in retrieve_products_with_matching_score: {e}", exc_info=True)
+        return []
+
+
 async def answer_product_question(question: str, keywords: dict) -> str:
     """Answer product-specific questions with high accuracy"""
     try:

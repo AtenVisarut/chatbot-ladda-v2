@@ -7,6 +7,7 @@ class DiseaseDetectionResult(BaseModel):
     symptoms: str
     severity: str
     raw_analysis: str
+    plant_type: Optional[str] = ""  # ชนิดพืชจากการวินิจฉัย
 
 class ProductRecommendation(BaseModel):
     product_name: str

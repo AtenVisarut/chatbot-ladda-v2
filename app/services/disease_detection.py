@@ -710,6 +710,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
             symptoms=str(symptoms),
             severity=str(severity),
             raw_analysis=" | ".join(raw_parts),
+            plant_type=str(plant_type) if plant_type else "",
         )
 
         # Warn if confidence is low
