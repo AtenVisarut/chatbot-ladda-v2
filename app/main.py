@@ -68,7 +68,8 @@ from app.services.cache import (
 from app.services.memory import (
     clear_memory,
     get_memory_stats,
-    add_to_memory
+    add_to_memory,
+    save_recommended_products
 )
 from app.services.disease_detection import detect_disease
 from app.services.product_recommendation import retrieve_product_recommendation
@@ -536,7 +537,16 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[ข้าม] {text}")
                                 await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
-                                
+
+                                # Save recommended products to memory for follow-up questions
+                                if recommendations:
+                                    await save_recommended_products(
+                                        user_id,
+                                        recommendations,
+                                        disease_name=detection_result.disease_name
+                                    )
+                                    logger.info(f"✓ Saved {len(recommendations)} products to memory for user {user_id[:8]}...")
+
                             except Exception as e:
                                 logger.error(f"Error in skip analysis: {e}")
                                 await push_line(user_id, "ขออภัยค่า เกิดข้อผิดพลาดในการวิเคราะห์ 😢")
@@ -609,6 +619,15 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
                                 await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
+
+                                # Save recommended products to memory for follow-up questions
+                                if recommendations:
+                                    await save_recommended_products(
+                                        user_id,
+                                        recommendations,
+                                        disease_name=detection_result.disease_name
+                                    )
+                                    logger.info(f"✓ Saved {len(recommendations)} products to memory for user {user_id[:8]}...")
 
                             except Exception as e:
                                 logger.error(f"Error in analysis with info: {e}", exc_info=True)

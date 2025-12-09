@@ -116,24 +116,165 @@ async def get_memory_stats(user_id: str) -> dict:
     try:
         if not supabase_client:
             return {"total": 0, "user_messages": 0, "assistant_messages": 0}
-        
+
         result = supabase_client.table('conversation_memory')\
             .select('role')\
             .eq('user_id', user_id)\
             .execute()
-        
+
         if not result.data:
             return {"total": 0, "user_messages": 0, "assistant_messages": 0}
-        
+
         user_count = sum(1 for msg in result.data if msg['role'] == 'user')
         assistant_count = sum(1 for msg in result.data if msg['role'] == 'assistant')
-        
+
         return {
             "total": len(result.data),
             "user_messages": user_count,
             "assistant_messages": assistant_count
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get memory stats: {e}")
         return {"total": 0, "user_messages": 0, "assistant_messages": 0}
+
+
+async def save_recommended_products(user_id: str, products: list, disease_name: str = ""):
+    """
+    เก็บข้อมูลสินค้าที่แนะนำใน memory พร้อม metadata
+    เพื่อให้สามารถถามวิธีใช้ต่อได้
+    """
+    try:
+        if not supabase_client:
+            logger.warning("Supabase not available, skipping product memory")
+            return
+
+        import json
+
+        # สร้าง product data สำหรับเก็บ
+        products_data = []
+        for p in products:
+            if hasattr(p, 'dict'):
+                # ProductRecommendation model
+                prod_dict = p.dict()
+            elif isinstance(p, dict):
+                prod_dict = p
+            else:
+                continue
+
+            products_data.append({
+                "product_name": prod_dict.get("product_name", ""),
+                "how_to_use": prod_dict.get("how_to_use", ""),
+                "usage_rate": prod_dict.get("usage_rate", ""),
+                "usage_period": prod_dict.get("usage_period", ""),
+                "target_pest": prod_dict.get("target_pest", ""),
+                "active_ingredient": prod_dict.get("active_ingredient", ""),
+                "applicable_crops": prod_dict.get("applicable_crops", ""),
+            })
+
+        if not products_data:
+            return
+
+        # เก็บใน memory พร้อม metadata
+        metadata = {
+            "type": "product_recommendation",
+            "disease_name": disease_name,
+            "products": products_data
+        }
+
+        # สร้างข้อความสรุปสินค้า
+        product_names = [p["product_name"] for p in products_data]
+        content = f"[แนะนำสินค้า] {', '.join(product_names[:5])}"
+        if disease_name:
+            content = f"[แนะนำสินค้าสำหรับ {disease_name}] {', '.join(product_names[:5])}"
+
+        data = {
+            "user_id": user_id,
+            "role": "assistant",
+            "content": content,
+            "metadata": metadata
+        }
+
+        result = supabase_client.table('conversation_memory').insert(data).execute()
+        logger.info(f"✓ Saved {len(products_data)} recommended products to memory for user {user_id[:8]}...")
+
+    except Exception as e:
+        logger.error(f"Failed to save recommended products: {e}")
+
+
+async def get_recommended_products(user_id: str, limit: int = 5) -> list:
+    """
+    ดึงข้อมูลสินค้าที่แนะนำล่าสุดจาก memory
+    สำหรับตอบคำถามวิธีใช้/การพ่นยา
+    """
+    try:
+        if not supabase_client:
+            return []
+
+        # ค้นหาข้อความที่มี metadata เป็น product_recommendation
+        result = supabase_client.table('conversation_memory')\
+            .select('content, metadata, created_at')\
+            .eq('user_id', user_id)\
+            .order('created_at', desc=True)\
+            .limit(20)\
+            .execute()
+
+        if not result.data:
+            return []
+
+        # หา product recommendations จาก metadata
+        all_products = []
+        for msg in result.data:
+            metadata = msg.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                products = metadata.get("products", [])
+                if products:
+                    all_products.extend(products)
+                    # ได้สินค้าพอแล้ว
+                    if len(all_products) >= limit:
+                        break
+
+        # ลบ duplicate
+        seen = set()
+        unique_products = []
+        for p in all_products:
+            name = p.get("product_name", "")
+            if name and name not in seen:
+                seen.add(name)
+                unique_products.append(p)
+
+        logger.info(f"✓ Retrieved {len(unique_products)} products from memory for user {user_id[:8]}...")
+        return unique_products[:limit]
+
+    except Exception as e:
+        logger.error(f"Failed to get recommended products: {e}")
+        return []
+
+
+async def get_full_conversation_history(user_id: str, limit: int = MEMORY_CONTEXT_WINDOW) -> list:
+    """
+    ดึงประวัติการสนทนาแบบเต็มรูปแบบ (รวม metadata)
+    สำหรับใช้ใน AI ที่ต้องการ context ละเอียด
+    """
+    try:
+        if not supabase_client:
+            return []
+
+        result = supabase_client.table('conversation_memory')\
+            .select('role, content, metadata, created_at')\
+            .eq('user_id', user_id)\
+            .order('created_at', desc=True)\
+            .limit(limit)\
+            .execute()
+
+        if not result.data:
+            return []
+
+        # Reverse to get chronological order
+        messages = list(reversed(result.data))
+        logger.info(f"✓ Retrieved {len(messages)} full messages from memory")
+        return messages
+
+    except Exception as e:
+        logger.error(f"Failed to get full conversation history: {e}")
+        return []

@@ -32,5 +32,5 @@ USER_RATE_LIMIT = 10  # requests per minute
 USER_RATE_WINDOW = 60  # seconds
 
 # Memory configuration
-MAX_MEMORY_MESSAGES = 20 # Keep last 20messages for context
-MEMORY_CONTEXT_WINDOW = 10 # Use last 10messages for context
+MAX_MEMORY_MESSAGES = 40  # Keep last 40 messages for context
+MEMORY_CONTEXT_WINDOW = 20  # Use last 20 messages for context (จำบทสนทนา 20 ข้อความ)

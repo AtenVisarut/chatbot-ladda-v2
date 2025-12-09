@@ -1,25 +1,161 @@
 import logging
+import re
 from app.services.services import openai_client
-from app.services.memory import add_to_memory, get_conversation_context
+from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products
 from app.services.knowledge_base import answer_question_with_knowledge
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product_recommendation import recommend_products_by_intent
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# คำถามเกี่ยวกับวิธีใช้สินค้า / การพ่นยา / การฉีด
+# =============================================================================
+USAGE_QUESTION_PATTERNS = [
+    # วิธีใช้ทั่วไป
+    r"วิธี(?:ใช้|พ่น|ฉีด|ผสม)",
+    r"ใช้(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
+    r"พ่น(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
+    r"ฉีด(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
+    r"ผสม(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
+    # อัตราส่วน
+    r"อัตรา(?:ใช้|ผสม|ส่วน)",
+    r"ผสม(?:กี่|เท่าไหร่|เท่าไร)",
+    r"ใช้(?:กี่|เท่าไหร่|เท่าไร)",
+    # ช่วงเวลา
+    r"(?:พ่น|ฉีด|ใช้)(?:ตอน|เมื่อ|ช่วง)",
+    r"(?:ตอน|เมื่อ|ช่วง)(?:ไหน|ใด).*(?:พ่น|ฉีด|ใช้)",
+    # คำถามเฉพาะ
+    r"(?:แนะนำ)?(?:วิธี|ขั้นตอน).*(?:พ่น|ฉีด|ใช้|รักษา)",
+    r"(?:พ่น|ฉีด).*(?:กี่|บ่อย|ถี่)",
+    r"(?:ละลาย|เจือจาง).*(?:น้ำ|ยัง)",
+    # ถามต่อจากสินค้าที่แนะนำ
+    r"(?:ตัว)?(?:นี้|นั้น|แรก|ที่\d).*(?:ใช้|พ่น|ฉีด)",
+    r"(?:ใช้|พ่น|ฉีด).*(?:ตัว)?(?:นี้|นั้น|แรก|ที่\d)",
+]
+
+
+def is_usage_question(message: str) -> bool:
+    """ตรวจสอบว่าเป็นคำถามเกี่ยวกับวิธีใช้สินค้าหรือไม่"""
+    message_lower = message.lower()
+    for pattern in USAGE_QUESTION_PATTERNS:
+        if re.search(pattern, message_lower):
+            return True
+    return False
+
+
+async def answer_usage_question(user_id: str, message: str, context: str = "") -> str:
+    """
+    ตอบคำถามเกี่ยวกับวิธีใช้สินค้าจากข้อมูลที่เก็บใน memory
+    """
+    try:
+        # ดึงข้อมูลสินค้าที่แนะนำล่าสุด
+        products = await get_recommended_products(user_id, limit=5)
+
+        if not products:
+            return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
+
+        # สร้าง prompt สำหรับ AI
+        products_text = ""
+        for idx, p in enumerate(products, 1):
+            products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
+            if p.get('how_to_use'):
+                products_text += f"\n   • วิธีใช้: {p.get('how_to_use')}"
+            if p.get('usage_rate'):
+                products_text += f"\n   • อัตราใช้: {p.get('usage_rate')}"
+            if p.get('usage_period'):
+                products_text += f"\n   • ช่วงการใช้: {p.get('usage_period')}"
+            if p.get('target_pest'):
+                products_text += f"\n   • ศัตรูพืชที่กำจัด: {p.get('target_pest')[:100]}"
+            if p.get('applicable_crops'):
+                products_text += f"\n   • ใช้กับพืช: {p.get('applicable_crops')[:100]}"
+            products_text += "\n"
+
+        prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืชจาก ICP Ladda
+
+📋 **สินค้าที่เพิ่งแนะนำให้ผู้ใช้:**
+{products_text}
+
+💬 **บทสนทนาก่อนหน้า:**
+{context if context else "(ไม่มี)"}
+
+❓ **คำถามจากผู้ใช้:** {message}
+
+📝 **วิธีตอบ:**
+1. ตอบคำถามเกี่ยวกับวิธีใช้/การพ่นยา/การฉีด โดยใช้ข้อมูลจากสินค้าข้างต้น
+2. ถ้าผู้ใช้ถามเกี่ยวกับสินค้าตัวใดตัวหนึ่ง → ตอบเฉพาะตัวนั้น
+3. ถ้าถามทั่วไป → แนะนำวิธีใช้ของสินค้าตัวแรกที่แนะนำ
+4. อธิบายให้ละเอียดและเข้าใจง่าย
+5. เพิ่มคำเตือนความปลอดภัย (ใส่ถุงมือ หน้ากาก ฯลฯ)
+6. ใช้ภาษาง่ายๆ เป็นกันเอง + emoji เล็กน้อย
+7. ไม่ใช้ markdown (** หรือ ##)
+
+⚠️ **ข้อควรระวัง:**
+- ห้ามแต่งข้อมูลเอง ใช้เฉพาะข้อมูลจากสินค้าที่ให้มา
+- ถ้าไม่มีข้อมูลวิธีใช้ → บอกให้อ่านฉลากบนผลิตภัณฑ์
+
+ตอบ:"""
+
+        if not openai_client:
+            # Fallback: แสดงข้อมูลดิบ
+            response = "📖 วิธีใช้ผลิตภัณฑ์ที่แนะนำ:\n"
+            for idx, p in enumerate(products[:3], 1):
+                response += f"\n{idx}. {p.get('product_name', 'N/A')}"
+                if p.get('how_to_use'):
+                    response += f"\n   วิธีใช้: {p.get('how_to_use')}"
+                if p.get('usage_rate'):
+                    response += f"\n   อัตราใช้: {p.get('usage_rate')}"
+            response += "\n\n⚠️ อ่านฉลากก่อนใช้ทุกครั้งนะคะ"
+            return response
+
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "คุณคือผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืช ตอบสั้น กระชับ เข้าใจง่าย"},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=600,
+            temperature=0.3
+        )
+
+        answer = response.choices[0].message.content.strip()
+        answer = answer.replace("**", "").replace("##", "").replace("```", "")
+
+        # เพิ่ม footer
+        answer += "\n\n💡 หากต้องการข้อมูลเพิ่มเติม สอบถามได้เลยค่ะ 😊"
+
+        logger.info(f"✓ Answered usage question from memory products")
+        return answer
+
+    except Exception as e:
+        logger.error(f"Error answering usage question: {e}", exc_info=True)
+        return None
+
 async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
         # 1. Add user message to memory
         await add_to_memory(user_id, "user", message)
-        
+
         # 2. Get conversation context
         context = await get_conversation_context(user_id)
-        
-        # 3. Analyze intent and keywords
+
+        # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
+        if is_usage_question(message):
+            logger.info(f"🔧 Detected usage question: {message[:50]}...")
+            usage_answer = await answer_usage_question(user_id, message, context)
+            if usage_answer:
+                # Add assistant response to memory
+                await add_to_memory(user_id, "assistant", usage_answer)
+                return usage_answer
+            # ถ้าไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
+            logger.info("No products in memory, falling back to normal flow")
+
+        # 4. Analyze intent and keywords
         keywords = extract_keywords_from_question(message)
-        
-        # 4. Route based on intent
+
+        # 5. Route based on intent
         if keywords["is_product_query"]:
             logger.info(f"Routing to product recommendation (Intent: {keywords.get('intent')})")
             answer = await recommend_products_by_intent(message, keywords)
