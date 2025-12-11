@@ -156,10 +156,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         keywords = extract_keywords_from_question(message)
 
         # 5. Route based on intent
-        if keywords["is_product_query"]:
+        # Priority 1: Knowledge Base (ถ้ามี pests หรือ crops)
+        if keywords["pests"] or keywords["crops"]:
+            logger.info(f"Routing to knowledge base first (pests={keywords['pests']}, crops={keywords['crops']})")
+            answer = await answer_question_with_knowledge(message, context)
+
+            # Add assistant response to memory
+            await add_to_memory(user_id, "assistant", answer)
+            return answer
+
+        # Priority 2: Product Recommendation (ถ้าเป็น product query แต่ไม่มี pests/crops)
+        elif keywords["is_product_query"]:
             logger.info(f"Routing to product recommendation (Intent: {keywords.get('intent')})")
             answer = await recommend_products_by_intent(message, keywords)
-            
+
             # Extract product names from the answer for analytics
             from app.services.services import analytics_tracker
             if analytics_tracker:
@@ -176,7 +186,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     clean_name = clean_name.replace('ชื่อผลิตภัณฑ์:', '').strip()
                     if clean_name and len(clean_name) > 3:  # Avoid junk
                         product_names.append(clean_name)
-                
+
                 if product_names:
                     await analytics_tracker.track_product_recommendation(
                         user_id=user_id,
@@ -184,15 +194,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         products=product_names[:5]  # Top 5 products
                     )
                     logger.info(f"Tracked {len(product_names)} products from Q&A")
-            
-            # Add assistant response to memory
-            await add_to_memory(user_id, "assistant", answer)
-            return answer
-            
-        elif keywords["pests"] or keywords["crops"]:
-            logger.info("Routing to knowledge base (Agricultural query)")
-            answer = await answer_question_with_knowledge(message, context)
-            
+
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
             return answer
