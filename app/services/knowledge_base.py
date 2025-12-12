@@ -40,7 +40,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                     'match_knowledge',
                     {
                         'query_embedding': query_embedding,
-                        'match_threshold': 0.4,
+                        'match_threshold': 0.35,  # ลด threshold เพื่อให้ค้นหาปุ๋ยได้ดีขึ้น
                         'match_count': 5
                     }
                 ).execute()

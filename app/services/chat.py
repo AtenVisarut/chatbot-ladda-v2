@@ -156,9 +156,9 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         keywords = extract_keywords_from_question(message)
 
         # 5. Route based on intent
-        # Priority 1: Knowledge Base (ถ้ามี pests หรือ crops)
-        if keywords["pests"] or keywords["crops"]:
-            logger.info(f"Routing to knowledge base first (pests={keywords['pests']}, crops={keywords['crops']})")
+        # Priority 1: Knowledge Base (ถ้ามี pests, crops, หรือ fertilizers)
+        if keywords["pests"] or keywords["crops"] or keywords.get("is_fertilizer_query"):
+            logger.info(f"Routing to knowledge base (pests={keywords['pests']}, crops={keywords['crops']}, fertilizers={keywords.get('fertilizers', [])})")
             answer = await answer_question_with_knowledge(message, context)
 
             # Add assistant response to memory

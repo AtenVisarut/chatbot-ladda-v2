@@ -207,6 +207,28 @@ def extract_keywords_from_question(question: str) -> dict:
         # English
         "product", "products", "fertilizer", "pesticide", "insecticide", "fungicide", "recommend"
     ]
+
+    # Fertilizer-specific keywords (NEW)
+    fertilizer_keywords = [
+        # ประเภทปุ๋ย/สารบำรุง
+        "ปุ๋ย", "สารบำรุง", "ธาตุอาหาร", "ฮอร์โมน", "สารเร่ง",
+        "ปุ๋ยเคมี", "ปุ๋ยอินทรีย์", "ปุ๋ยชีวภาพ",
+        # ชื่อสินค้าปุ๋ย ICP (จาก CSV)
+        "กระรัต", "การูก้า", "คอนทาฟ", "ซอยบอม", "ซีเอ็มจี",
+        "ท๊อปกัน", "พานาส", "ราเซอร์", "เวคเตอร์", "รีโนเวท",
+        "อิมิดาโกลด์", "เกรค", "เทอราโน", "เมทามอร์ป", "แมสฟอร์ด",
+        "แอนดาแม็กซ์", "แอ็คนาว", "โฮป", "ไกลโฟเสท", "อัพดาว",
+        "ไดพิม", "ไฮซีส", "บอมส์", "พรีดิคท์", "วอแรนด์",
+        "อินเนอร์", "เบนซาน่า", "แจ๊ส", "นาแดน", "คาซ่า",
+        "ซิมเมอร์", "อาทราซีน", "คาริสมา",
+        # ประเภทสารเคมี
+        "สารกำจัดแมลง", "สารป้องกันโรค", "สารกำจัดวัชพืช",
+        "ยาฆ่าแมลง", "ยาฆ่าหญ้า", "ยาฆ่าเชื้อรา",
+        # คำถามเกี่ยวกับปุ๋ย
+        "อัตราใช้", "อัตราผสม", "วิธีใช้ปุ๋ย", "ใส่ปุ๋ย",
+        # English
+        "fertilizer", "nutrient", "hormone", "chemical"
+    ]
     
     # Intent keywords (NEW)
     intent_keywords = {
@@ -243,8 +265,10 @@ def extract_keywords_from_question(question: str) -> dict:
         "pests": [],
         "crops": [],
         "products": [],
+        "fertilizers": [],  # NEW: fertilizer keywords
         "intent": None,  # NEW: detect user intent
-        "is_product_query": False
+        "is_product_query": False,
+        "is_fertilizer_query": False  # NEW: flag for fertilizer questions
     }
     
     # Extract pests
@@ -262,7 +286,14 @@ def extract_keywords_from_question(question: str) -> dict:
         if keyword in question_norm:
             found["products"].append(keyword)
             found["is_product_query"] = True
-    
+
+    # Extract fertilizer-related (NEW)
+    for keyword in fertilizer_keywords:
+        if keyword in question_norm:
+            found["fertilizers"].append(keyword)
+            found["is_fertilizer_query"] = True
+            found["is_product_query"] = True
+
     # Detect intent (NEW)
     # Detect intent (MATCH ON NORMALIZED TEXT)
     for intent, keywords in intent_keywords.items():
