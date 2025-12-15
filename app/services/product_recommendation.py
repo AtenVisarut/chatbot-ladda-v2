@@ -113,10 +113,10 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
 
     Args:
         products: รายการสินค้าทั้งหมด
-        required_category: ประเภทที่ต้องการ ("fungicide", "insecticide", "herbicide")
+        required_category: ประเภทที่ต้องการ (ป้องกันโรค, กำจัดแมลง, กำจัดวัชพืช)
 
     Returns:
-        รายการสินค้าที่ตรงประเภท (ถ้าไม่พบให้ return สินค้าที่ไม่ใช่ประเภทตรงข้าม)
+        รายการสินค้าที่ตรงประเภท (ถ้าไม่พบให้ return สินค้าที่ไม่แน่ใจประเภท)
     """
     if not required_category:
         return products
@@ -125,20 +125,22 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
     matched_products = []
     unknown_products = []  # สินค้าที่ไม่แน่ใจประเภท
 
-    # ประเภทตรงข้ามที่ห้ามแนะนำ
-    forbidden_categories = set(["fungicide", "insecticide", "herbicide"]) - {required_category}
+    # ประเภททั้งหมดใน DB (ภาษาไทย)
+    all_categories = {"ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง"}
 
     for product in products:
         product_category = get_product_category(product)
         product["detected_category"] = product_category  # เก็บไว้ใช้ debug
 
+        logger.debug(f"   Product: {product.get('product_name')} → category: {product_category}")
+
         if product_category == required_category:
             matched_products.append(product)
-        elif product_category == "unknown":
+        elif product_category == "unknown" or product_category is None:
             unknown_products.append(product)
-        # ถ้าเป็นประเภทตรงข้าม → ไม่เอา
+        # ถ้าเป็นประเภทอื่น → ไม่เอา
 
-    logger.info(f"🔍 Filter by {required_category}: {len(matched_products)} matched, {len(unknown_products)} unknown, {len(products) - len(matched_products) - len(unknown_products)} excluded")
+    logger.info(f"🔍 Filter by '{required_category}': {len(matched_products)} matched, {len(unknown_products)} unknown, {len(products) - len(matched_products) - len(unknown_products)} excluded")
 
     # ถ้ามีสินค้าตรงประเภท → ใช้เฉพาะสินค้าตรงประเภท
     if matched_products:

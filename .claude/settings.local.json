@@ -9,7 +9,11 @@
       "Bash(python:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nเพิ่ม Flex Message สำหรับทุกการตอบกลับ\n\n- เพิ่ม Help Menu Flex (เมนูช่วยเหลือ)\n- เพิ่ม Usage Guide Flex (วิธีใช้งาน) \n- เพิ่ม Product Catalog Flex (แคตตาล็อกสินค้า)\n- เพิ่ม Chat Response Flex (คำตอบ Q&A)\n- แก้ไข main.py ใช้ Flex ทุกที่\n\nทุกการตอบกลับเป็น Flex Message แล้ว:\n- Welcome, Help, Usage Guide, Product Catalog\n- Disease Result, Product Carousel  \n- Registration Required/Complete\n- Chat Q&A Response\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git commit:*)",
-      "Bash(railway logs:*)"
+      "Bash(railway logs:*)",
+      "Bash(powershell -Command \"(Get-Content ''C:\\chatbot ladda ตัวหลัก 2.5 มีการถามตอบขอระยะการปลูก\\ข้อมูลปุ๋ยicp.csv'').Count\")",
+      "Bash(powershell -Command \"Get-Content ''C:\\chatbot ladda ตัวหลัก 2.5 มีการถามตอบขอระยะการปลูก\\ข้อมูลปุ๋ยicp.csv'' -TotalCount 20\")",
+      "Bash(powershell:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
