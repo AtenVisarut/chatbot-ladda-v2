@@ -211,9 +211,31 @@ def filter_products_by_plant(products: List[Dict], plant_type: str) -> List[Dict
 
     matched_products = []
     general_products = []  # สินค้าที่ใช้ได้กับพืชหลายชนิด
+    excluded_products = []  # สินค้าที่ห้ามใช้กับพืชนี้
+
+    # คำที่บ่งบอกว่า "ห้ามใช้"
+    exclusion_keywords = ["ยกเว้น", "ห้ามใช้", "ไม่ควรใช้", "ห้าม"]
 
     for product in products:
         applicable_crops = (product.get("applicable_crops") or "").lower()
+        product_name = product.get("product_name", "")
+
+        # ตรวจสอบว่าสินค้า "ห้ามใช้" กับพืชนี้หรือไม่
+        is_excluded = False
+        for excl_kw in exclusion_keywords:
+            if excl_kw in applicable_crops:
+                # ถ้ามีคำว่า "ยกเว้น/ห้ามใช้" + ชื่อพืช → ห้ามใช้
+                for plant_kw in plant_keywords:
+                    if plant_kw in applicable_crops:
+                        is_excluded = True
+                        logger.debug(f"   ❌ {product_name}: ห้ามใช้กับ {plant_type}")
+                        break
+                if is_excluded:
+                    break
+
+        if is_excluded:
+            excluded_products.append(product)
+            continue
 
         # ตรวจสอบว่าสินค้าใช้ได้กับพืชที่ระบุหรือไม่
         is_matched = False
@@ -224,10 +246,11 @@ def filter_products_by_plant(products: List[Dict], plant_type: str) -> List[Dict
 
         if is_matched:
             matched_products.append(product)
-        elif "พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops or "หลายชนิด" in applicable_crops:
+        elif "พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops or "ทุกพืช" in applicable_crops:
+            # สินค้าใช้ได้กับพืชทั่วไป (แต่ต้องไม่มีข้อยกเว้น)
             general_products.append(product)
 
-    logger.info(f"🌱 Filter by plant '{plant_type}': {len(matched_products)} matched, {len(general_products)} general")
+    logger.info(f"🌱 Filter by plant '{plant_type}': {len(matched_products)} matched, {len(general_products)} general, {len(excluded_products)} excluded")
 
     # ถ้ามีสินค้าตรงพืช → ใช้เฉพาะสินค้าตรงพืช
     if matched_products:
