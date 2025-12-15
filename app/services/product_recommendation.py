@@ -1332,6 +1332,19 @@ async def retrieve_products_with_matching_score(
                 all_results.extend(disease_results)
                 logger.info(f"   → Found {len(disease_results)} disease treatment products")
 
+        # 🆕 Filter by product category (ป้องกันโรค/กำจัดแมลง/กำจัดวัชพืช)
+        required_category, required_category_th = get_required_category(disease_name)
+
+        # ถ้าโรคมีพาหะ → ต้องการ กำจัดแมลง
+        if pest_name:
+            required_category = "กำจัดแมลง"
+            required_category_th = "ยากำจัดแมลง"
+
+        if required_category and all_results:
+            logger.info(f"🏷️ Filtering by category: {required_category_th} ({required_category})")
+            all_results = filter_products_by_category(all_results, required_category)
+            logger.info(f"   → After filter: {len(all_results)} products")
+
         # 2. Calculate Matching Score for each product
         scored_products = []
         seen_products = set()
