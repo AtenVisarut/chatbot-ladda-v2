@@ -13,6 +13,196 @@ logger = logging.getLogger(__name__)
 ENABLE_RERANKING = True  # Set to False to disable re-ranking for faster response
 
 # =============================================================================
+# Mapping โรค/ปัญหา → ประเภทสินค้าที่เหมาะสม
+# =============================================================================
+DISEASE_TO_CATEGORY = {
+    # โรคจากเชื้อรา → ใช้ fungicide
+    "fungal": {
+        "keywords": [
+            "โรคไหม้", "rice blast", "blast", "pyricularia",
+            "โรคใบจุด", "leaf spot", "brown spot", "จุดสีน้ำตาล",
+            "โรคกาบใบแห้ง", "sheath blight", "rhizoctonia",
+            "โรคถอดฝัก", "bakanae", "fusarium",
+            "โรคเน่า", "rot", "anthracnose", "แอนแทรคโนส",
+            "โรคราน้ำค้าง", "downy mildew", "ราน้ำค้าง",
+            "โรคราสนิม", "rust", "ราสนิม",
+            "โรคราแป้ง", "powdery mildew", "ราแป้ง",
+            "โรคใบไหม้", "leaf blight", "ใบไหม้",
+            "โรคโคนเน่า", "stem rot", "โคนเน่า",
+            "โรครากเน่า", "root rot", "รากเน่า",
+            "เชื้อรา", "fungus", "fungi",
+        ],
+        "category": "fungicide",
+        "category_th": "ยาฆ่าเชื้อรา"
+    },
+    # โรคจากแมลง → ใช้ insecticide
+    "insect": {
+        "keywords": [
+            "เพลี้ย", "aphid", "planthopper", "leafhopper",
+            "หนอน", "worm", "caterpillar", "borer",
+            "แมลง", "insect", "pest",
+            "เพลี้ยกระโดด", "brown planthopper", "bph",
+            "เพลี้ยจักจั่น", "green leafhopper", "glh",
+            "เพลี้ยอ่อน", "aphids",
+            "เพลี้ยไฟ", "thrips",
+            "เพลี้ยแป้ง", "mealybug",
+            "หนอนกอ", "stem borer",
+            "หนอนห่อใบ", "leaf roller",
+            "หนอนเจาะ", "fruit borer",
+            "แมลงหวี่ขาว", "whitefly",
+            "ไร", "mite", "spider mite",
+            "ด้วง", "beetle",
+            "มด", "ant",
+            "ปลวก", "termite",
+        ],
+        "category": "insecticide",
+        "category_th": "ยาฆ่าแมลง"
+    },
+    # วัชพืช → ใช้ herbicide
+    "weed": {
+        "keywords": [
+            "วัชพืช", "weed", "หญ้า", "grass",
+            "หญ้าข้าวนก", "barnyard grass",
+            "หญ้าแดง", "red sprangletop",
+            "กก", "sedge",
+            "ผักตบ", "water hyacinth",
+            "สาหร่าย", "algae",
+        ],
+        "category": "herbicide",
+        "category_th": "ยาฆ่าวัชพืช"
+    }
+}
+
+# สารสำคัญ → ประเภทสินค้า (ใช้ระบุประเภทจาก active_ingredient)
+ACTIVE_INGREDIENT_CATEGORY = {
+    "fungicide": [
+        "propiconazole", "prochloraz", "difenoconazole", "azoxystrobin",
+        "tebuconazole", "carbendazim", "mancozeb", "chlorothalonil",
+        "metalaxyl", "fosetyl", "trifloxystrobin", "hexaconazole",
+        "tricyclazole", "isoprothiolane", "kasugamycin", "validamycin",
+        "copper", "sulfur", "thiram", "captan", "iprodione",
+        "โพรพิโคนาโซล", "โปรคลอราซ", "ไดฟีโนโคนาโซล",
+    ],
+    "insecticide": [
+        "cartap", "cypermethrin", "deltamethrin", "lambda-cyhalothrin",
+        "chlorpyrifos", "profenofos", "abamectin", "emamectin",
+        "fipronil", "imidacloprid", "thiamethoxam", "clothianidin",
+        "acetamiprid", "dinotefuran", "chlorantraniliprole", "flubendiamide",
+        "spinosad", "spinetoram", "lufenuron", "buprofezin",
+        "คาร์แทป", "ไซเปอร์เมทริน", "อิมิดาโคลพริด",
+    ],
+    "herbicide": [
+        "bispyribac", "pretilachlor", "butachlor", "propanil",
+        "glyphosate", "paraquat", "2,4-d", "atrazine",
+        "pendimethalin", "oxadiazon", "quinclorac", "cyhalofop",
+        "fenoxaprop", "pyrazosulfuron", "bensulfuron", "metsulfuron",
+        "บิสไพริแบค", "พรีทิลาคลอร์", "ไกลโฟเสท", "พาราควอต",
+    ]
+}
+
+
+def get_required_category(disease_name: str) -> tuple:
+    """
+    ระบุประเภทสินค้าที่เหมาะสมจากชื่อโรค/ปัญหา
+
+    Returns: (category, category_th) หรือ (None, None) ถ้าไม่แน่ใจ
+    """
+    disease_lower = disease_name.lower()
+
+    for disease_type, info in DISEASE_TO_CATEGORY.items():
+        for keyword in info["keywords"]:
+            if keyword.lower() in disease_lower:
+                logger.info(f"🏷️ โรค '{disease_name}' → ต้องใช้ {info['category_th']} ({info['category']})")
+                return (info["category"], info["category_th"])
+
+    return (None, None)
+
+
+def get_product_category(product: dict) -> str:
+    """
+    ระบุประเภทสินค้าจาก active_ingredient และ target_pest
+
+    Returns: "fungicide", "insecticide", "herbicide" หรือ "unknown"
+    """
+    active_ingredient = (product.get("active_ingredient") or "").lower()
+    target_pest = (product.get("target_pest") or "").lower()
+
+    # ตรวจสอบจาก active_ingredient ก่อน (แม่นยำกว่า)
+    for category, ingredients in ACTIVE_INGREDIENT_CATEGORY.items():
+        for ingredient in ingredients:
+            if ingredient.lower() in active_ingredient:
+                return category
+
+    # ตรวจสอบจาก target_pest
+    # ถ้ามีคำว่า "โรค", "เชื้อรา" → fungicide
+    fungal_keywords = ["โรค", "เชื้อรา", "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "ใบไหม้", "ใบจุด", "เน่า", "blast", "blight", "rot", "rust", "mildew"]
+    for kw in fungal_keywords:
+        if kw in target_pest:
+            return "fungicide"
+
+    # ถ้ามีคำว่า "เพลี้ย", "หนอน", "แมลง" → insecticide
+    insect_keywords = ["เพลี้ย", "หนอน", "แมลง", "ด้วง", "ไร", "มด", "ปลวก", "aphid", "worm", "borer", "insect", "mite", "pest"]
+    for kw in insect_keywords:
+        if kw in target_pest:
+            return "insecticide"
+
+    # ถ้ามีคำว่า "วัชพืช", "หญ้า" → herbicide
+    weed_keywords = ["วัชพืช", "หญ้า", "กก", "weed", "grass"]
+    for kw in weed_keywords:
+        if kw in target_pest:
+            return "herbicide"
+
+    return "unknown"
+
+
+def filter_products_by_category(products: List[Dict], required_category: str) -> List[Dict]:
+    """
+    กรองสินค้าให้เหลือเฉพาะประเภทที่ต้องการ
+
+    Args:
+        products: รายการสินค้าทั้งหมด
+        required_category: ประเภทที่ต้องการ ("fungicide", "insecticide", "herbicide")
+
+    Returns:
+        รายการสินค้าที่ตรงประเภท (ถ้าไม่พบให้ return สินค้าที่ไม่ใช่ประเภทตรงข้าม)
+    """
+    if not required_category:
+        return products
+
+    # กรองสินค้าตรงประเภท
+    matched_products = []
+    unknown_products = []  # สินค้าที่ไม่แน่ใจประเภท
+
+    # ประเภทตรงข้ามที่ห้ามแนะนำ
+    forbidden_categories = set(["fungicide", "insecticide", "herbicide"]) - {required_category}
+
+    for product in products:
+        product_category = get_product_category(product)
+        product["detected_category"] = product_category  # เก็บไว้ใช้ debug
+
+        if product_category == required_category:
+            matched_products.append(product)
+        elif product_category == "unknown":
+            unknown_products.append(product)
+        # ถ้าเป็นประเภทตรงข้าม → ไม่เอา
+
+    logger.info(f"🔍 Filter by {required_category}: {len(matched_products)} matched, {len(unknown_products)} unknown, {len(products) - len(matched_products) - len(unknown_products)} excluded")
+
+    # ถ้ามีสินค้าตรงประเภท → ใช้เฉพาะสินค้าตรงประเภท
+    if matched_products:
+        return matched_products
+
+    # ถ้าไม่มีสินค้าตรงประเภท → ใช้สินค้าที่ไม่แน่ใจ (unknown)
+    if unknown_products:
+        logger.warning(f"⚠️ ไม่พบสินค้าประเภท {required_category} → ใช้สินค้าที่ไม่แน่ใจประเภท")
+        return unknown_products
+
+    # ถ้าไม่มีเลย → return list ว่าง
+    logger.warning(f"⚠️ ไม่พบสินค้าประเภท {required_category}")
+    return []
+
+
+# =============================================================================
 # โรคที่มีแมลงพาหะ → ควรแนะนำยาฆ่าแมลงแทนยากำจัดเชื้อ
 # =============================================================================
 VECTOR_DISEASES = {
@@ -344,6 +534,9 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         disease_name = disease_info.disease_name
 
+        # ระบุประเภทสินค้าที่ต้องการ (fungicide/insecticide/herbicide)
+        required_category, required_category_th = get_required_category(disease_name)
+
         # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ → ถ้ามี ค้นหาทั้งยาฆ่าแมลงและยารักษาโรค
         pest_type = ""
         if hasattr(disease_info, 'raw_analysis') and disease_info.raw_analysis:
@@ -352,6 +545,11 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                 pest_type = "ไวรัส"
 
         vector_search_query, pest_name, disease_treatment_query = get_search_query_for_disease(disease_name, pest_type)
+
+        # ถ้าโรคมีพาหะ (เช่น โรคจู๋) → ต้องการ insecticide
+        if pest_name:
+            required_category = "insecticide"
+            required_category_th = "ยาฆ่าแมลง"
 
         if pest_name:
             logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
@@ -408,6 +606,12 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
             if hybrid_results:
                 logger.info(f"✓ Total hybrid search found {len(hybrid_results)} candidates")
 
+                # 🆕 Filter by product category (fungicide/insecticide/herbicide)
+                if required_category:
+                    logger.info(f"🏷️ Filtering by category: {required_category_th} ({required_category})")
+                    hybrid_results = filter_products_by_category(hybrid_results, required_category)
+                    logger.info(f"   → After filter: {len(hybrid_results)} products")
+
                 # Apply simple relevance boost first
                 for p in hybrid_results:
                     boost = simple_relevance_boost(disease_name, p)
@@ -423,7 +627,9 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                         query=disease_name,
                         products=hybrid_results[:15],  # Top 15 candidates
                         top_k=6,
-                        openai_client=openai_client
+                        openai_client=openai_client,
+                        required_category=required_category,
+                        required_category_th=required_category_th
                     )
 
                 # Filter by hybrid score threshold

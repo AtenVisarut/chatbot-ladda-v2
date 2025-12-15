@@ -13,7 +13,9 @@ async def rerank_products_with_llm(
     query: str,
     products: List[Dict],
     top_k: int = 6,
-    openai_client=None
+    openai_client=None,
+    required_category: str = None,
+    required_category_th: str = None
 ) -> List[Dict]:
     """
     Re-rank products using GPT-4o-mini as cross-encoder
@@ -24,6 +26,8 @@ async def rerank_products_with_llm(
     - products: List of candidate products from hybrid search
     - top_k: Number of top results to return
     - openai_client: OpenAI async client
+    - required_category: Required product category (fungicide/insecticide/herbicide)
+    - required_category_th: Thai name of required category
 
     Returns:
     - Re-ranked list of products
@@ -54,16 +58,34 @@ async def rerank_products_with_llm(
 
         products_str = "\n".join(product_texts)
 
+        # Build category constraint text
+        category_constraint = ""
+        if required_category and required_category_th:
+            category_map = {
+                "fungicide": "ยาฆ่าเชื้อรา (เช่น propiconazole, difenoconazole, azoxystrobin)",
+                "insecticide": "ยาฆ่าแมลง (เช่น cartap, cypermethrin, imidacloprid)",
+                "herbicide": "ยาฆ่าวัชพืช (เช่น bispyribac, glyphosate, pretilachlor)"
+            }
+            category_constraint = f"""
+
+⚠️ สำคัญมาก: คำค้นหานี้ต้องการ **{required_category_th}** เท่านั้น!
+- ถ้าเป็นโรคพืช/เชื้อรา → เลือกเฉพาะ {category_map.get('fungicide')}
+- ถ้าเป็นแมลง/หนอน/เพลี้ย → เลือกเฉพาะ {category_map.get('insecticide')}
+- ถ้าเป็นวัชพืช/หญ้า → เลือกเฉพาะ {category_map.get('herbicide')}
+
+❌ ห้ามจัดอันดับสินค้าที่ไม่ใช่ {required_category_th} ให้อยู่ลำดับต้นๆ"""
+
         # Cross-encoder prompt for relevance scoring
         prompt = f"""เป็นผู้เชี่ยวชาญจัดอันดับความเกี่ยวข้อง
 
 คำค้นหา: "{query}"
+{category_constraint}
 
 รายการผลิตภัณฑ์:
 {products_str}
 
 จัดอันดับผลิตภัณฑ์ตามความเกี่ยวข้องกับคำค้นหา โดยพิจารณา:
-1. ชื่อผลิตภัณฑ์ตรงกับคำค้นหาหรือไม่
+1. ประเภทสินค้าต้องตรงกับประเภทปัญหา (โรค→ยาฆ่าเชื้อรา, แมลง→ยาฆ่าแมลง, วัชพืช→ยาฆ่าวัชพืช)
 2. ศัตรูพืช/โรคที่กำจัดได้ตรงกับที่ค้นหาหรือไม่
 3. พืชที่ใช้ได้ตรงกับที่ค้นหาหรือไม่
 4. สารสำคัญเหมาะสมกับการกำจัดปัญหาหรือไม่
