@@ -3,11 +3,13 @@ import json
 import re
 import io
 import datetime
+import asyncio
 from typing import Optional
 import base64
 from PIL import Image
 from fastapi import HTTPException
 from openai import AsyncOpenAI
+import httpx
 
 from app.models import DiseaseDetectionResult
 from app.config import OPENROUTER_API_KEY
@@ -25,14 +27,28 @@ from app.services.disease_database import (
 
 logger = logging.getLogger(__name__)
 
+# Timeout configuration for API calls
+API_TIMEOUT = 30  # seconds - ต้องตอบภายใน 30 วินาที
+API_CONNECT_TIMEOUT = 10  # seconds - timeout สำหรับ connection
+
 # Initialize OpenRouter client for Gemini 2.5 Pro (disease detection)
 gemini_client = None
 if OPENROUTER_API_KEY:
+    # สร้าง httpx client พร้อม timeout
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(
+            connect=API_CONNECT_TIMEOUT,
+            read=API_TIMEOUT,
+            write=API_TIMEOUT,
+            pool=API_TIMEOUT
+        )
+    )
     gemini_client = AsyncOpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=OPENROUTER_API_KEY,
+        http_client=http_client,
     )
-    logger.info("OpenRouter (Gemini 2.5 Pro) initialized for disease detection")
+    logger.info(f"OpenRouter (Gemini 2.5 Pro) initialized with {API_TIMEOUT}s timeout")
 
 
 async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = None) -> DiseaseDetectionResult:
@@ -400,26 +416,62 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 
 """
 
-        response = await gemini_client.chat.completions.create(
-            model="google/gemini-2.5-pro-preview",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": system_instruction + prompt_text},
+        # เรียก API พร้อม timeout handling
+        try:
+            response = await asyncio.wait_for(
+                gemini_client.chat.completions.create(
+                    model="google/gemini-2.5-pro-preview",
+                    messages=[
                         {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
-                        },
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": system_instruction + prompt_text},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                                },
+                            ],
+                        }
                     ],
-                }
-            ],
-            max_tokens=8192,
-            extra_headers={
-                "HTTP-Referer": "https://ladda-chatbot.railway.app",
-                "X-Title": "Ladda Plant Disease Detection",
-            },
-        )
+                    max_tokens=8192,
+                    extra_headers={
+                        "HTTP-Referer": "https://ladda-chatbot.railway.app",
+                        "X-Title": "Ladda Plant Disease Detection",
+                    },
+                ),
+                timeout=API_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Gemini API timeout after {API_TIMEOUT} seconds")
+            # Return fallback result instead of raising exception
+            return DiseaseDetectionResult(
+                disease_name="ไม่สามารถวิเคราะห์ได้ (Timeout)",
+                confidence="ต่ำ",
+                symptoms="ระบบไม่สามารถวิเคราะห์ภาพได้ในเวลาที่กำหนด",
+                severity="ไม่ทราบ",
+                raw_analysis="API Timeout - กรุณาลองใหม่อีกครั้ง หรือส่งภาพที่ชัดเจนกว่านี้",
+                plant_type="",
+            )
+        except httpx.TimeoutException as e:
+            logger.error(f"HTTP timeout error: {e}")
+            return DiseaseDetectionResult(
+                disease_name="ไม่สามารถวิเคราะห์ได้ (Connection Timeout)",
+                confidence="ต่ำ",
+                symptoms="ไม่สามารถเชื่อมต่อกับระบบวิเคราะห์ได้",
+                severity="ไม่ทราบ",
+                raw_analysis="Connection Timeout - กรุณาลองใหม่อีกครั้ง",
+                plant_type="",
+            )
+        except httpx.ConnectError as e:
+            logger.error(f"HTTP connection error: {e}")
+            return DiseaseDetectionResult(
+                disease_name="ไม่สามารถวิเคราะห์ได้ (Connection Error)",
+                confidence="ต่ำ",
+                symptoms="ไม่สามารถเชื่อมต่อกับระบบวิเคราะห์ได้",
+                severity="ไม่ทราบ",
+                raw_analysis="Connection Error - กรุณาลองใหม่อีกครั้ง",
+                plant_type="",
+            )
 
         raw_text = response.choices[0].message.content
         logger.info(f"Gemini raw response: {raw_text[:500]}...")
