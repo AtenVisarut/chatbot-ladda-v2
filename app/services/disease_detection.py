@@ -28,8 +28,8 @@ from app.services.disease_database import (
 logger = logging.getLogger(__name__)
 
 # Timeout configuration for API calls
-API_TIMEOUT = 30  # seconds - ต้องตอบภายใน 30 วินาที
-API_CONNECT_TIMEOUT = 10  # seconds - timeout สำหรับ connection
+API_TIMEOUT = 60  # seconds - ต้องตอบภายใน 60 วินาที
+API_CONNECT_TIMEOUT = 15  # seconds - timeout สำหรับ connection
 
 # Initialize OpenRouter client for Gemini 2.5 Pro (disease detection)
 gemini_client = None
