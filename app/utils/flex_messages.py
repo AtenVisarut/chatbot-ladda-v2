@@ -1447,6 +1447,22 @@ def create_help_menu_flex() -> Dict:
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
+                            {"type": "text", "text": "🌤️", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ดูสภาพอากาศ", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "เช็คสภาพอากาศและความเสี่ยง", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
                             {"type": "text", "text": "💬", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
@@ -1495,20 +1511,38 @@ def create_help_menu_flex() -> Dict:
             },
             "footer": {
                 "type": "box",
-                "layout": "horizontal",
+                "layout": "vertical",
                 "spacing": "sm",
                 "contents": [
                     {
-                        "type": "button",
-                        "style": "primary",
-                        "height": "sm",
-                        "action": {
-                            "type": "message",
-                            "label": "📝 ลงทะเบียน",
-                            "text": "ลงทะเบียน"
-                        },
-                        "color": "#27AE60",
-                        "flex": 1
+                        "type": "box",
+                        "layout": "horizontal",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "location",
+                                    "label": "🌤️ สภาพอากาศ"
+                                },
+                                "color": "#3498DB",
+                                "flex": 1
+                            },
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "height": "sm",
+                                "action": {
+                                    "type": "message",
+                                    "label": "📝 ลงทะเบียน",
+                                    "text": "ลงทะเบียน"
+                                },
+                                "color": "#27AE60",
+                                "flex": 1
+                            }
+                        ]
                     },
                     {
                         "type": "button",
@@ -1518,8 +1552,7 @@ def create_help_menu_flex() -> Dict:
                             "type": "message",
                             "label": "📖 วิธีใช้",
                             "text": "วิธีใช้งาน"
-                        },
-                        "flex": 1
+                        }
                     }
                 ]
             }

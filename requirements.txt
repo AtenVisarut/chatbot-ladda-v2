@@ -3,8 +3,8 @@ fastapi==0.115.0
 uvicorn==0.32.0
 pydantic==2.9.2
 
-# HTTP client
-# httpx==0.28.1  <-- ***ลบออก หรือ คอมเมนต์ไว้***
+# HTTP client (for Agro-Risk API)
+httpx==0.28.1
 
 # OpenAI (for chat, Q&A)
 openai==1.54.0

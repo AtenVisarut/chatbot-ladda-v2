@@ -23,6 +23,9 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 LIFF_ID = os.getenv("LIFF_ID", "YOUR_LIFF_ID_HERE")
 LIFF_URL = f"https://liff.line.me/{LIFF_ID}"
 
+# Agro-Risk API Configuration
+AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water-c05q4wn2g-visaruts-projects.vercel.app")
+
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
 PENDING_CONTEXT_TTL = 300  # 5 minutes

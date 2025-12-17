@@ -77,6 +77,12 @@ from app.services.disease_detection import detect_disease
 from app.services.product_recommendation import retrieve_product_recommendation, retrieve_products_with_matching_score
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
+from app.services.agro_risk import (
+    check_weather,
+    analyze_crop_risk,
+    create_weather_error_flex,
+    create_crop_selection_flex
+)
 
 # Import utils
 from app.utils.line_helpers import (
@@ -452,6 +458,116 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     await reply_line(reply_token, catalog)
                     return JSONResponse(content={"status": "success"})
 
+                # 0.2 Check for weather request - ส่ง Flex พร้อมปุ่มขอ location
+                if text in ["ดูสภาพอากาศ", "สภาพอากาศ", "อากาศ", "weather", "🌤️"]:
+                    logger.info(f"🟢 User {user_id} requested weather")
+                    weather_request_flex = {
+                        "type": "flex",
+                        "altText": "ดูสภาพอากาศในพื้นที่",
+                        "contents": {
+                            "type": "bubble",
+                            "size": "kilo",
+                            "header": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "🌤️ ดูสภาพอากาศในพื้นที่",
+                                        "color": "#ffffff",
+                                        "size": "lg",
+                                        "weight": "bold",
+                                        "align": "center"
+                                    }
+                                ],
+                                "backgroundColor": "#3498DB",
+                                "paddingAll": "15px"
+                            },
+                            "body": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "แชร์ตำแหน่งของคุณเพื่อดู",
+                                        "size": "sm",
+                                        "color": "#333333",
+                                        "align": "center"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "สภาพอากาศและความเสี่ยงทางการเกษตร",
+                                        "size": "sm",
+                                        "color": "#333333",
+                                        "align": "center",
+                                        "margin": "sm"
+                                    },
+                                    {
+                                        "type": "separator",
+                                        "margin": "lg"
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "margin": "lg",
+                                        "spacing": "sm",
+                                        "contents": [
+                                            {
+                                                "type": "box",
+                                                "layout": "horizontal",
+                                                "contents": [
+                                                    {"type": "text", "text": "☀️", "flex": 0, "size": "sm"},
+                                                    {"type": "text", "text": "อุณหภูมิและความชื้น", "size": "sm", "margin": "md", "color": "#666666"}
+                                                ]
+                                            },
+                                            {
+                                                "type": "box",
+                                                "layout": "horizontal",
+                                                "contents": [
+                                                    {"type": "text", "text": "🌧️", "flex": 0, "size": "sm"},
+                                                    {"type": "text", "text": "โอกาสฝนตก", "size": "sm", "margin": "md", "color": "#666666"}
+                                                ]
+                                            },
+                                            {
+                                                "type": "box",
+                                                "layout": "horizontal",
+                                                "contents": [
+                                                    {"type": "text", "text": "⚠️", "flex": 0, "size": "sm"},
+                                                    {"type": "text", "text": "ความเสี่ยงน้ำท่วม/ภัยแล้ง", "size": "sm", "margin": "md", "color": "#666666"}
+                                                ]
+                                            },
+                                            {
+                                                "type": "box",
+                                                "layout": "horizontal",
+                                                "contents": [
+                                                    {"type": "text", "text": "🌾", "flex": 0, "size": "sm"},
+                                                    {"type": "text", "text": "คำแนะนำสำหรับเกษตรกร", "size": "sm", "margin": "md", "color": "#666666"}
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            "footer": {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "button",
+                                        "style": "primary",
+                                        "action": {
+                                            "type": "location",
+                                            "label": "📍 แชร์ตำแหน่ง"
+                                        },
+                                        "color": "#27AE60"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                    await reply_line(reply_token, weather_request_flex)
+                    return JSONResponse(content={"status": "success"})
+
                 # 1. Check if user wants to register - send LIFF link
                 if text in ["ลงทะเบียน", "register", "สมัคร"]:
                     logger.info(f"🟢 User {user_id} wants to register - sending LIFF link")
@@ -759,7 +875,171 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                     response_time_ms=response_time
                                 )
 
-            # 4. Handle Sticker (Just for fun)
+            # 4. Handle Location Message (Weather Check)
+            elif event_type == "message" and event.get("message", {}).get("type") == "location":
+                lat = event["message"].get("latitude")
+                lng = event["message"].get("longitude")
+                logger.info(f"Received location from {user_id}: ({lat}, {lng})")
+
+                try:
+                    # Call weather API
+                    result = await check_weather(lat, lng)
+
+                    if result["success"] and result.get("flexMessage"):
+                        # ส่ง Flex Message จาก API กลับไป
+                        await reply_line(reply_token, result["flexMessage"])
+
+                        # บันทึก location ไว้สำหรับวิเคราะห์พืช
+                        await save_pending_context(user_id, {
+                            "state": "weather_received",
+                            "lat": lat,
+                            "lng": lng,
+                            "timestamp": asyncio.get_event_loop().time()
+                        })
+                    else:
+                        # ส่ง error message
+                        error_flex = create_weather_error_flex(
+                            result.get("error", "ไม่สามารถดูสภาพอากาศได้ กรุณาลองใหม่")
+                        )
+                        await reply_line(reply_token, error_flex)
+
+                except Exception as e:
+                    logger.error(f"Error processing location: {e}")
+                    error_flex = create_weather_error_flex("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
+                    await reply_line(reply_token, error_flex)
+
+            # 5. Handle Postback Events
+            elif event_type == "postback":
+                postback_data = event.get("postback", {}).get("data", "")
+                logger.info(f"Received postback from {user_id}: {postback_data}")
+
+                try:
+                    # Parse postback data
+                    from urllib.parse import parse_qs
+                    params = parse_qs(postback_data)
+                    action = params.get("action", [""])[0]
+
+                    if action == "refresh_weather":
+                        # ขอ location ใหม่ - ส่งข้อความให้กดปุ่มขอ location
+                        refresh_flex = {
+                            "type": "flex",
+                            "altText": "กรุณาแชร์ตำแหน่งใหม่",
+                            "contents": {
+                                "type": "bubble",
+                                "size": "kilo",
+                                "body": {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "🔄 รีเฟรชข้อมูลสภาพอากาศ",
+                                            "weight": "bold",
+                                            "size": "md",
+                                            "align": "center"
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": "กดปุ่มด้านล่างเพื่อแชร์ตำแหน่งใหม่",
+                                            "size": "sm",
+                                            "color": "#666666",
+                                            "align": "center",
+                                            "margin": "md"
+                                        }
+                                    ]
+                                },
+                                "footer": {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "contents": [
+                                        {
+                                            "type": "button",
+                                            "style": "primary",
+                                            "action": {
+                                                "type": "location",
+                                                "label": "📍 แชร์ตำแหน่ง"
+                                            },
+                                            "color": "#27AE60"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                        await reply_line(reply_token, refresh_flex)
+
+                    elif action == "analyze_crop_risk":
+                        # วิเคราะห์ความเสี่ยงพืช
+                        lat = float(params.get("lat", [0])[0])
+                        lng = float(params.get("lng", [0])[0])
+                        crop = params.get("crop", [""])[0]
+
+                        if lat and lng and crop:
+                            result = await analyze_crop_risk(lat, lng, crop)
+
+                            if result["success"] and result.get("flexMessage"):
+                                await reply_line(reply_token, result["flexMessage"])
+                            else:
+                                error_flex = create_weather_error_flex(
+                                    result.get("error", "ไม่สามารถวิเคราะห์ได้ กรุณาลองใหม่")
+                                )
+                                await reply_line(reply_token, error_flex)
+                        else:
+                            await reply_line(reply_token, "ข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้งค่ะ")
+
+                    elif action == "select_crop_for_risk":
+                        # ผู้ใช้ต้องการวิเคราะห์ความเสี่ยงพืช - แสดงตัวเลือกพืช
+                        ctx = await get_pending_context(user_id)
+                        if ctx and ctx.get("state") == "weather_received":
+                            lat = ctx.get("lat")
+                            lng = ctx.get("lng")
+                            crop_flex = create_crop_selection_flex(lat, lng)
+                            await reply_line(reply_token, crop_flex)
+                        else:
+                            # ไม่มี location - ขอให้ส่ง location ใหม่
+                            await reply_line(reply_token, {
+                                "type": "flex",
+                                "altText": "กรุณาแชร์ตำแหน่งก่อน",
+                                "contents": {
+                                    "type": "bubble",
+                                    "size": "kilo",
+                                    "body": {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน",
+                                                "weight": "bold",
+                                                "size": "md",
+                                                "align": "center"
+                                            }
+                                        ]
+                                    },
+                                    "footer": {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "button",
+                                                "style": "primary",
+                                                "action": {
+                                                    "type": "location",
+                                                    "label": "🌤️ ดูสภาพอากาศ"
+                                                },
+                                                "color": "#3498DB"
+                                            }
+                                        ]
+                                    }
+                                }
+                            })
+                    else:
+                        logger.warning(f"Unknown postback action: {action}")
+
+                except Exception as e:
+                    logger.error(f"Error processing postback: {e}")
+                    await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่")
+
+            # 6. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
                 # Reply with a sticker
                 await reply_line(reply_token, "ขอบคุณค่ะ! 😊", with_sticker=True)
