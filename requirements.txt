@@ -3,8 +3,8 @@ fastapi==0.115.0
 uvicorn==0.32.0
 pydantic==2.9.2
 
-# HTTP client (for Agro-Risk API)
-httpx==0.28.1
+# HTTP client (for Agro-Risk API) - ต้องใช้ <0.28 เพื่อ compatible กับ supabase
+httpx==0.27.2
 
 # OpenAI (for chat, Q&A)
 openai==1.54.0
