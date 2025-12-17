@@ -719,11 +719,38 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
                                 product_flex = create_product_carousel_flex(product_list)
 
-                                # Send header text + product carousel
+                                # Send header text + product carousel + weather suggestion
                                 header_text = f"✅ แนะนำสำหรับ {plant_type} {growth_stage}\n\n💊 ผลิตภัณฑ์ที่เหมาะสม:"
+
+                                # สร้างข้อความถามเรื่องสภาพอากาศพร้อม Quick Reply
+                                weather_suggestion = {
+                                    "type": "text",
+                                    "text": "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ?\n\nเพื่อประเมินความเสี่ยงจากสภาพอากาศที่อาจส่งผลต่อพืชของคุณ",
+                                    "quickReply": {
+                                        "items": [
+                                            {
+                                                "type": "action",
+                                                "action": {
+                                                    "type": "location",
+                                                    "label": "📍 ดูสภาพอากาศ"
+                                                }
+                                            },
+                                            {
+                                                "type": "action",
+                                                "action": {
+                                                    "type": "message",
+                                                    "label": "❌ ไม่ต้องการ",
+                                                    "text": "ไม่ต้องการ"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+
                                 await reply_line(reply_token, [
                                     {"type": "text", "text": header_text},
-                                    product_flex
+                                    product_flex,
+                                    weather_suggestion
                                 ])
 
                                 # Save recommended products to memory
