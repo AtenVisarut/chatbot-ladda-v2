@@ -1524,8 +1524,9 @@ def create_help_menu_flex() -> Dict:
                                 "style": "primary",
                                 "height": "sm",
                                 "action": {
-                                    "type": "location",
-                                    "label": "🌤️ สภาพอากาศ"
+                                    "type": "message",
+                                    "label": "🌤️ สภาพอากาศ",
+                                    "text": "ดูสภาพอากาศ"
                                 },
                                 "color": "#3498DB",
                                 "flex": 1

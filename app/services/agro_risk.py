@@ -132,6 +132,7 @@ async def analyze_crop_risk(lat: float, lng: float, crop_type: str) -> Dict[str,
 def create_weather_error_flex(error_message: str) -> Dict:
     """
     สร้าง Flex Message สำหรับแสดง error
+    หมายเหตุ: ใช้ message action แทน location action เพราะ location ใช้ใน Flex button ไม่ได้
     """
     return {
         "type": "flex",
@@ -177,8 +178,9 @@ def create_weather_error_flex(error_message: str) -> Dict:
                         "type": "button",
                         "style": "primary",
                         "action": {
-                            "type": "location",
-                            "label": "🔄 ลองใหม่อีกครั้ง"
+                            "type": "message",
+                            "label": "🔄 ลองใหม่อีกครั้ง",
+                            "text": "ดูสภาพอากาศ"
                         },
                         "color": "#27AE60"
                     }
