@@ -880,11 +880,27 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
                     elif action == "analyze_crop_risk":
                         # วิเคราะห์ความเสี่ยงพืช
-                        lat = float(params.get("lat", [0])[0])
-                        lng = float(params.get("lng", [0])[0])
+                        lat = float(params.get("lat", [0])[0]) if params.get("lat") else None
+                        lng = float(params.get("lng", [0])[0]) if params.get("lng") else None
                         crop = params.get("crop", [""])[0]
 
+                        # ถ้าไม่มี lat/lng ใน params ให้ดึงจาก context
+                        if not lat or not lng:
+                            ctx = await get_pending_context(user_id)
+                            if ctx and ctx.get("state") == "weather_received":
+                                lat = ctx.get("lat")
+                                lng = ctx.get("lng")
+
+                        # ถ้าไม่มี crop ใน params ให้ดึงจาก user data
+                        if not crop:
+                            user_data = await get_user(user_id)
+                            crops_grown = user_data.get("crops_grown", []) if user_data else []
+                            if crops_grown:
+                                crop = crops_grown[0]
+                                logger.info(f"Using crop from user data: {crop}")
+
                         if lat and lng and crop:
+                            logger.info(f"Analyzing crop risk: lat={lat}, lng={lng}, crop={crop}")
                             result = await analyze_crop_risk(lat, lng, crop)
 
                             if result["success"] and result.get("flexMessage"):
@@ -894,6 +910,28 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                     result.get("error", "ไม่สามารถวิเคราะห์ได้ กรุณาลองใหม่")
                                 )
                                 await reply_line(reply_token, error_flex)
+                        elif not lat or not lng:
+                            # ไม่มี location - ขอให้แชร์ location ก่อน
+                            no_location_message = {
+                                "type": "text",
+                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน\n\nกดปุ่มด้านล่างเพื่อแชร์ตำแหน่งของคุณ",
+                                "quickReply": {
+                                    "items": [
+                                        {
+                                            "type": "action",
+                                            "action": {
+                                                "type": "location",
+                                                "label": "🌤️ ดูสภาพอากาศ"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                            await reply_line(reply_token, no_location_message)
+                        elif not crop:
+                            # ไม่มีพืช - แสดง Flex ให้เลือกพืช
+                            crop_flex = create_crop_selection_flex(lat, lng)
+                            await reply_line(reply_token, crop_flex)
                         else:
                             await reply_line(reply_token, "ข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้งค่ะ")
 
