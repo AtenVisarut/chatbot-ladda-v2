@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 
-async def check_weather(lat: float, lng: float) -> Dict[str, Any]:
+async def check_weather(lat: float, lng: float, address: Optional[str] = None) -> Dict[str, Any]:
     """
     ตรวจสอบสภาพอากาศจากพิกัด GPS
 
     Args:
         lat: ละติจูด
         lng: ลองจิจูด
+        address: ที่อยู่จาก LINE location message (optional)
 
     Returns:
         Dict containing:
@@ -34,10 +35,11 @@ async def check_weather(lat: float, lng: float) -> Dict[str, Any]:
 
         payload = {
             "latitude": lat,
-            "longitude": lng
+            "longitude": lng,
+            "address": address
         }
 
-        logger.info(f"Checking weather for location: ({lat}, {lng})")
+        logger.info(f"Checking weather for location: ({lat}, {lng}), address: {address}")
 
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await client.post(url, json=payload)

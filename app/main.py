@@ -818,11 +818,12 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
             elif event_type == "message" and event.get("message", {}).get("type") == "location":
                 lat = event["message"].get("latitude")
                 lng = event["message"].get("longitude")
-                logger.info(f"Received location from {user_id}: ({lat}, {lng})")
+                address = event["message"].get("address")
+                logger.info(f"Received location from {user_id}: ({lat}, {lng}), address: {address}")
 
                 try:
                     # Call weather API
-                    result = await check_weather(lat, lng)
+                    result = await check_weather(lat, lng, address)
 
                     if result["success"] and result.get("flexMessage"):
                         # ส่ง Flex Message จาก API กลับไป
