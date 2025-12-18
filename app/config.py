@@ -24,7 +24,7 @@ LIFF_ID = os.getenv("LIFF_ID", "YOUR_LIFF_ID_HERE")
 LIFF_URL = f"https://liff.line.me/{LIFF_ID}"
 
 # Agro-Risk API Configuration
-AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water-fuw5rkr1q-visaruts-projects.vercel.app")
+AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water-mzie3u8ot-visaruts-projects.vercel.app")
 
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
