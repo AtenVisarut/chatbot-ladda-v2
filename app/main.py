@@ -380,7 +380,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 continue
             
             # Ensure user exists (auto-register new users)
-            from app.services.user_service import ensure_user_exists, is_registration_completed
+            from app.services.user_service import ensure_user_exists, is_registration_completed, get_user
             await ensure_user_exists(user_id)
             
             # 1. Handle Follow Event (Welcome Message with LIFF)
@@ -898,13 +898,34 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             await reply_line(reply_token, "ข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้งค่ะ")
 
                     elif action == "select_crop_for_risk":
-                        # ผู้ใช้ต้องการวิเคราะห์ความเสี่ยงพืช - แสดงตัวเลือกพืช
+                        # วิเคราะห์ความเสี่ยงพืชจากข้อมูล user ที่ลงทะเบียน
                         ctx = await get_pending_context(user_id)
                         if ctx and ctx.get("state") == "weather_received":
                             lat = ctx.get("lat")
                             lng = ctx.get("lng")
-                            crop_flex = create_crop_selection_flex(lat, lng)
-                            await reply_line(reply_token, crop_flex)
+
+                            # ดึงข้อมูลพืชที่ปลูกจาก user
+                            user_data = await get_user(user_id)
+                            crops_grown = user_data.get("crops_grown", []) if user_data else []
+
+                            if crops_grown:
+                                # วิเคราะห์พืชแรกที่ user ลงทะเบียนไว้
+                                crop_to_analyze = crops_grown[0]
+                                logger.info(f"Analyzing crop risk for user {user_id}: {crop_to_analyze}")
+
+                                result = await analyze_crop_risk(lat, lng, crop_to_analyze)
+
+                                if result["success"] and result.get("flexMessage"):
+                                    await reply_line(reply_token, result["flexMessage"])
+                                else:
+                                    error_flex = create_weather_error_flex(
+                                        result.get("error", "ไม่สามารถวิเคราะห์ความเสี่ยงได้")
+                                    )
+                                    await reply_line(reply_token, error_flex)
+                            else:
+                                # ยังไม่ได้ลงทะเบียนพืช - แสดง Flex ให้เลือกพืช
+                                crop_flex = create_crop_selection_flex(lat, lng)
+                                await reply_line(reply_token, crop_flex)
                         else:
                             # ไม่มี location - ขอให้ส่ง location ใหม่ (ใช้ Quick Reply)
                             no_location_message = {
