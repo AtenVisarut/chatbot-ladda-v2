@@ -822,17 +822,16 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 logger.info(f"Received location from {user_id}: ({lat}, {lng}), address: {address}")
 
                 try:
-                    # ดึงข้อมูลพืชที่ user ลงทะเบียนไว้
+                    # ดึงข้อมูลพืชที่ user ลงทะเบียนไว้ (ทุกพืช)
                     user_data = await get_user(user_id)
-                    crop_type = None
+                    crops = None
                     if user_data and user_data.get("crops_grown"):
                         crops = user_data["crops_grown"]
                         if crops and len(crops) > 0:
-                            crop_type = crops[0]  # ใช้พืชหลักตัวแรก
-                            logger.info(f"User {user_id} has registered crop: {crop_type}")
+                            logger.info(f"User {user_id} has registered crops: {crops}")
 
-                    # Call weather API with crop info
-                    result = await check_weather(lat, lng, address, crop_type)
+                    # Call weather API with all crops info
+                    result = await check_weather(lat, lng, address, crops)
 
                     if result["success"] and result.get("flexMessage"):
                         # ส่ง Flex Message จาก API กลับไป

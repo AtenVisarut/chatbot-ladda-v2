@@ -5,7 +5,7 @@ Agro-Risk Service
 
 import logging
 import httpx
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 from app.config import AGRO_RISK_API_URL
 
@@ -48,7 +48,7 @@ async def check_weather(
     lat: float,
     lng: float,
     address: Optional[str] = None,
-    crop_type: Optional[str] = None,
+    crops: Optional[List[str]] = None,
     growth_stage: str = "vegetative"
 ) -> Dict[str, Any]:
     """
@@ -58,7 +58,7 @@ async def check_weather(
         lat: ละติจูด
         lng: ลองจิจูด
         address: ที่อยู่จาก LINE location message (optional)
-        crop_type: ประเภทพืช (ภาษาไทย) จาก user data (optional)
+        crops: รายการพืชที่ปลูก (ภาษาไทย) จาก user data (optional)
         growth_stage: ระยะการเจริญเติบโต (default: vegetative)
 
     Returns:
@@ -79,17 +79,22 @@ async def check_weather(
             "address": address
         }
 
-        # Add crop info if available
-        if crop_type:
-            api_crop_type = get_crop_type(crop_type)
-            if api_crop_type:
-                payload["crop"] = {
-                    "type": api_crop_type,
-                    "growthStage": growth_stage
-                }
-                logger.info(f"Including crop info: {crop_type} -> {api_crop_type}")
+        # Add crops info if available (support multiple crops)
+        if crops and len(crops) > 0:
+            crops_list = []
+            for crop in crops:
+                api_crop_type = get_crop_type(crop)
+                if api_crop_type:
+                    crops_list.append({
+                        "type": api_crop_type,
+                        "name": crop,  # ส่งชื่อภาษาไทยด้วย
+                        "growthStage": growth_stage
+                    })
+            if crops_list:
+                payload["crops"] = crops_list
+                logger.info(f"Including crops info: {crops} -> {[c['type'] for c in crops_list]}")
 
-        logger.info(f"Checking weather for location: ({lat}, {lng}), address: {address}, crop: {crop_type}")
+        logger.info(f"Checking weather for location: ({lat}, {lng}), address: {address}, crops: {crops}")
 
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await client.post(url, json=payload)
