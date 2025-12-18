@@ -73,7 +73,7 @@ async def check_weather(lat: float, lng: float, address: Optional[str] = None) -
         }
 
 
-async def analyze_crop_risk(lat: float, lng: float, crop_type: str) -> Dict[str, Any]:
+async def analyze_crop_risk(lat: float, lng: float, crop_type: str, growth_stage: str = "vegetative") -> Dict[str, Any]:
     """
     วิเคราะห์ความเสี่ยงสำหรับพืชเฉพาะชนิด
 
@@ -81,6 +81,7 @@ async def analyze_crop_risk(lat: float, lng: float, crop_type: str) -> Dict[str,
         lat: ละติจูด
         lng: ลองจิจูด
         crop_type: ประเภทพืช (เช่น "ข้าว", "ข้าวโพด", "มันสำปะหลัง")
+        growth_stage: ระยะการเจริญเติบโต (default: "vegetative")
 
     Returns:
         Dict containing:
@@ -91,13 +92,30 @@ async def analyze_crop_risk(lat: float, lng: float, crop_type: str) -> Dict[str,
     try:
         url = f"{AGRO_RISK_API_URL}/api/v1/risk/analyze"
 
-        payload = {
-            "latitude": lat,
-            "longitude": lng,
-            "cropType": crop_type
+        # Map Thai crop names to API crop types
+        crop_type_map = {
+            "ข้าว": "rice",
+            "ข้าวโพด": "corn",
+            "มันสำปะหลัง": "cassava",
+            "อ้อย": "sugarcane",
+            "ทุเรียน": "durian",
+            "มะม่วง": "mango"
         }
 
-        logger.info(f"Analyzing crop risk for {crop_type} at ({lat}, {lng})")
+        api_crop_type = crop_type_map.get(crop_type, crop_type.lower())
+
+        payload = {
+            "location": {
+                "latitude": lat,
+                "longitude": lng
+            },
+            "crop": {
+                "type": api_crop_type,
+                "growthStage": growth_stage
+            }
+        }
+
+        logger.info(f"Analyzing crop risk for {crop_type} ({api_crop_type}) at ({lat}, {lng})")
 
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await client.post(url, json=payload)
