@@ -80,6 +80,7 @@ from app.services.chat import handle_natural_conversation
 from app.services.agro_risk import (
     check_weather,
     analyze_crop_risk,
+    get_weather_forecast,
     create_weather_error_flex,
     create_crop_selection_flex
 )
@@ -1000,6 +1001,49 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 }
                             }
                             await reply_line(reply_token, no_location_message)
+
+                    elif action == "forecast_weather":
+                        # พยากรณ์ฝน 7 วัน
+                        logger.info(f"User {user_id} requested 7-day weather forecast")
+
+                        # ดึง location จาก context
+                        ctx = await get_pending_context(user_id)
+                        lat = None
+                        lng = None
+
+                        if ctx and ctx.get("state") == "weather_received":
+                            lat = ctx.get("lat")
+                            lng = ctx.get("lng")
+
+                        if lat and lng:
+                            result = await get_weather_forecast(lat, lng, days=7)
+
+                            if result["success"] and result.get("flexMessage"):
+                                await reply_line(reply_token, result["flexMessage"])
+                            else:
+                                error_flex = create_weather_error_flex(
+                                    result.get("error", "ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้")
+                                )
+                                await reply_line(reply_token, error_flex)
+                        else:
+                            # ไม่มี location - ขอให้ส่ง location ใหม่
+                            no_location_message = {
+                                "type": "text",
+                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน\n\nกดปุ่มด้านล่างเพื่อแชร์ตำแหน่ง แล้วกดปุ่ม 'พยากรณ์ฝน 7 วัน' อีกครั้ง",
+                                "quickReply": {
+                                    "items": [
+                                        {
+                                            "type": "action",
+                                            "action": {
+                                                "type": "location",
+                                                "label": "🌤️ ดูสภาพอากาศ"
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                            await reply_line(reply_token, no_location_message)
+
                     else:
                         logger.warning(f"Unknown postback action: {action}")
 

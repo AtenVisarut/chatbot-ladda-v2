@@ -209,6 +209,64 @@ async def analyze_crop_risk(lat: float, lng: float, crop_type: str, growth_stage
         }
 
 
+async def get_weather_forecast(lat: float, lng: float, days: int = 7) -> Dict[str, Any]:
+    """
+    ดึงพยากรณ์อากาศ 7 วัน
+
+    Args:
+        lat: ละติจูด
+        lng: ลองจิจูด
+        days: จำนวนวันที่ต้องการพยากรณ์ (default: 7)
+
+    Returns:
+        Dict containing:
+        - success: bool
+        - flexMessage: LINE Flex Message พร้อมใช้งาน (ถ้าสำเร็จ)
+        - error: error message (ถ้าล้มเหลว)
+    """
+    try:
+        url = f"{AGRO_RISK_API_URL}/api/v1/weather/forecast"
+
+        payload = {
+            "latitude": lat,
+            "longitude": lng,
+            "days": days
+        }
+
+        logger.info(f"Getting weather forecast for ({lat}, {lng}), days: {days}")
+
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.post(url, json=payload)
+
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Weather forecast successful for ({lat}, {lng})")
+                return {
+                    "success": True,
+                    "flexMessage": data.get("flexMessage"),
+                    "data": data
+                }
+            else:
+                logger.error(f"Forecast API error: {response.status_code} - {response.text}")
+                return {
+                    "success": False,
+                    "error": f"API Error: {response.status_code}"
+                }
+
+    except httpx.TimeoutException:
+        logger.error(f"Forecast API timeout for ({lat}, {lng})")
+        return {
+            "success": False,
+            "error": "การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง"
+        }
+    except Exception as e:
+        logger.error(f"Forecast error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 def create_weather_error_flex(error_message: str) -> Dict:
     """
     สร้าง Flex Message สำหรับแสดง error
