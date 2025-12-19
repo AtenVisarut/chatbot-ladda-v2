@@ -1019,7 +1019,22 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             result = await get_weather_forecast(lat, lng, days=7)
 
                             if result["success"] and result.get("flexMessage"):
-                                await reply_line(reply_token, result["flexMessage"])
+                                flex_msg = result["flexMessage"]
+
+                                # Log flexMessage format for debugging
+                                logger.info(f"Forecast flexMessage type: {type(flex_msg)}, keys: {flex_msg.keys() if isinstance(flex_msg, dict) else 'N/A'}")
+
+                                # Ensure flexMessage has correct LINE format
+                                if isinstance(flex_msg, dict):
+                                    if "type" not in flex_msg:
+                                        # Wrap in LINE Flex Message format
+                                        flex_msg = {
+                                            "type": "flex",
+                                            "altText": "พยากรณ์อากาศ 7 วัน",
+                                            "contents": flex_msg
+                                        }
+
+                                await reply_line(reply_token, flex_msg)
                             else:
                                 error_flex = create_weather_error_flex(
                                     result.get("error", "ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้")
