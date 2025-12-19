@@ -209,7 +209,7 @@ async def analyze_crop_risk(lat: float, lng: float, crop_type: str, growth_stage
         }
 
 
-async def get_weather_forecast(lat: float, lng: float, days: int = 7) -> Dict[str, Any]:
+async def get_weather_forecast(lat: float, lng: float, days: int = 7, address: Optional[str] = None) -> Dict[str, Any]:
     """
     ดึงพยากรณ์อากาศ 7 วัน
 
@@ -217,6 +217,7 @@ async def get_weather_forecast(lat: float, lng: float, days: int = 7) -> Dict[st
         lat: ละติจูด
         lng: ลองจิจูด
         days: จำนวนวันที่ต้องการพยากรณ์ (default: 7)
+        address: ชื่อจังหวัด/ที่อยู่ (optional)
 
     Returns:
         Dict containing:
@@ -228,12 +229,18 @@ async def get_weather_forecast(lat: float, lng: float, days: int = 7) -> Dict[st
         url = f"{AGRO_RISK_API_URL}/api/v1/weather/forecast"
 
         payload = {
-            "latitude": lat,
-            "longitude": lng,
+            "location": {
+                "latitude": lat,
+                "longitude": lng
+            },
             "days": days
         }
 
-        logger.info(f"Getting weather forecast for ({lat}, {lng}), days: {days}")
+        # Add address if provided
+        if address:
+            payload["address"] = address
+
+        logger.info(f"Getting weather forecast for ({lat}, {lng}), days: {days}, address: {address}")
 
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             response = await client.post(url, json=payload)

@@ -853,6 +853,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             "state": "weather_received",
                             "lat": lat,
                             "lng": lng,
+                            "address": address,
                             "timestamp": asyncio.get_event_loop().time()
                         })
                     else:
@@ -1010,13 +1011,15 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         ctx = await get_pending_context(user_id)
                         lat = None
                         lng = None
+                        address = None
 
                         if ctx and ctx.get("state") == "weather_received":
                             lat = ctx.get("lat")
                             lng = ctx.get("lng")
+                            address = ctx.get("address")
 
                         if lat and lng:
-                            result = await get_weather_forecast(lat, lng, days=7)
+                            result = await get_weather_forecast(lat, lng, days=7, address=address)
 
                             if result["success"] and result.get("flexMessage"):
                                 flex_msg = result["flexMessage"]
@@ -1058,6 +1061,43 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 }
                             }
                             await reply_line(reply_token, no_location_message)
+
+                    elif action == "refresh_forecast":
+                        # รีเฟรชพยากรณ์ฝน 7 วัน (มี lat, lng, province จาก postback data)
+                        logger.info(f"User {user_id} requested refresh forecast")
+
+                        lat = float(params.get("lat", [0])[0]) if params.get("lat") else None
+                        lng = float(params.get("lng", [0])[0]) if params.get("lng") else None
+                        province = params.get("province", [""])[0]
+
+                        # URL decode province name
+                        from urllib.parse import unquote
+                        province = unquote(province) if province else None
+
+                        logger.info(f"Refresh forecast: lat={lat}, lng={lng}, province={province}")
+
+                        if lat and lng:
+                            result = await get_weather_forecast(lat, lng, days=7, address=province)
+
+                            if result["success"] and result.get("flexMessage"):
+                                flex_msg = result["flexMessage"]
+
+                                # Ensure flexMessage has correct LINE format
+                                if isinstance(flex_msg, dict) and "type" not in flex_msg:
+                                    flex_msg = {
+                                        "type": "flex",
+                                        "altText": "พยากรณ์อากาศ 7 วัน",
+                                        "contents": flex_msg
+                                    }
+
+                                await reply_line(reply_token, flex_msg)
+                            else:
+                                error_flex = create_weather_error_flex(
+                                    result.get("error", "ไม่สามารถรีเฟรชข้อมูลได้")
+                                )
+                                await reply_line(reply_token, error_flex)
+                        else:
+                            await reply_line(reply_token, "ไม่สามารถรีเฟรชข้อมูลได้ กรุณาลองใหม่อีกครั้ง")
 
                     else:
                         logger.warning(f"Unknown postback action: {action}")
