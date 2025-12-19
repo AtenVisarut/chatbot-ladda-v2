@@ -62,6 +62,8 @@ async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], wi
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                logger.error(f"LINE API error: {response.status_code} - {response.text}")
             response.raise_for_status()
         logger.info("Reply sent to LINE")
     except Exception as e:
