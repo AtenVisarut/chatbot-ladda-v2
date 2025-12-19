@@ -775,10 +775,20 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             await delete_pending_context(user_id)
 
                     else:
-                        # Context exists but unknown state
+                        # Context exists but unknown state (e.g., weather_received)
                         logger.warning(f"Found context for {user_id} but state is unknown: {ctx.get('state')}")
-                        # Fall through to normal conversation
-                
+                        # Clear unknown context and fall through to normal conversation
+                        await delete_pending_context(user_id)
+
+                        # Handle as normal conversation
+                        if not await is_registration_completed(user_id):
+                            reg_flex = create_liff_registration_flex(LIFF_URL)
+                            await reply_line(reply_token, reg_flex)
+                        else:
+                            response = await handle_natural_conversation(user_id, text)
+                            chat_flex = create_chat_response_flex(text, response)
+                            await reply_line(reply_token, chat_flex)
+
                 else:
                     # Normal Chat / Q&A
                     if text.lower() in ["ล้างความจำ", "reset", "clear"]:
