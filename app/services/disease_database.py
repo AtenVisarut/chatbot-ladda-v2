@@ -1686,14 +1686,36 @@ NUTRIENT_DEFICIENCIES = {
 # =============================================================================
 # ฟังก์ชันสร้าง Prompt จากฐานข้อมูล
 # =============================================================================
+# พืชเป้าหมายที่ต้องการเน้น (ข้าว, ทุเรียน, ข้าวโพด, อ้อย)
+TARGET_CROPS = [
+    "ข้าว", "rice",
+    "ทุเรียน", "durian",
+    "ข้าวโพด", "corn", "maize",
+    "อ้อย", "sugarcane",
+    "พืชทั่วไป", "ผัก", "ไม้ผล"  # รวมโรคทั่วไปด้วย
+]
+
+def is_target_crop(host_plants: list) -> bool:
+    """ตรวจสอบว่าโรคนี้เกี่ยวกับพืชเป้าหมายหรือไม่"""
+    if not host_plants:
+        return True  # ถ้าไม่ระบุ host_plants ให้รวมไว้
+    for plant in host_plants:
+        plant_lower = plant.lower()
+        for target in TARGET_CROPS:
+            if target.lower() in plant_lower or plant_lower in target.lower():
+                return True
+    return False
+
 def generate_disease_prompt_section() -> str:
-    """สร้างส่วน prompt ที่อธิบายโรค/แมลง/วัชพืชจากฐานข้อมูล"""
+    """สร้างส่วน prompt ที่อธิบายโรค/แมลง/วัชพืชจากฐานข้อมูล (เน้นพืชเป้าหมาย)"""
 
     sections = []
 
-    # โรคจากเชื้อรา
+    # โรคจากเชื้อรา (filter เฉพาะพืชเป้าหมาย)
     sections.append("## 🍄 โรคจากเชื้อรา (Fungal Diseases)")
     for key, disease in FUNGAL_DISEASES.items():
+        if not is_target_crop(disease.get("host_plants", [])):
+            continue
         symptoms = "; ".join(disease["symptoms"][:3])
         sections.append(
             f"- **{disease['name_th']} ({disease['name_en']})**: {symptoms}"
@@ -1701,23 +1723,27 @@ def generate_disease_prompt_section() -> str:
         if disease.get("distinguish_from"):
             sections.append(f"  ⚠️ แยกจาก: {disease['distinguish_from']}")
 
-    # โรคจากแบคทีเรีย
+    # โรคจากแบคทีเรีย (filter เฉพาะพืชเป้าหมาย)
     sections.append("\n## 🦠 โรคจากแบคทีเรีย (Bacterial Diseases)")
     for key, disease in BACTERIAL_DISEASES.items():
+        if not is_target_crop(disease.get("host_plants", [])):
+            continue
         symptoms = "; ".join(disease["symptoms"][:3])
         sections.append(
             f"- **{disease['name_th']} ({disease['name_en']})**: {symptoms}"
         )
 
-    # โรคจากไวรัส
+    # โรคจากไวรัส (filter เฉพาะพืชเป้าหมาย)
     sections.append("\n## 🧬 โรคจากไวรัส (Viral Diseases)")
     for key, disease in VIRAL_DISEASES.items():
+        if not is_target_crop(disease.get("host_plants", [])):
+            continue
         symptoms = "; ".join(disease["symptoms"][:3])
         sections.append(
             f"- **{disease['name_th']} ({disease['name_en']})**: {symptoms}"
         )
 
-    # แมลงศัตรูพืช
+    # แมลงศัตรูพืช (ยังคงทั้งหมด)
     sections.append("\n## 🐛 แมลงศัตรูพืช (Insect Pests)")
     for key, pest in INSECT_PESTS.items():
         appearance = "; ".join(pest["appearance"][:2])
@@ -1728,7 +1754,7 @@ def generate_disease_prompt_section() -> str:
         if pest.get("distinguish_from"):
             sections.append(f"  ⚠️ แยกจาก: {pest['distinguish_from']}")
 
-    # อาการขาดธาตุ
+    # อาการขาดธาตุ (ยังคงทั้งหมด - ใช้ได้กับทุกพืช)
     sections.append("\n## 🧪 อาการขาดธาตุอาหาร (Nutrient Deficiencies)")
     for key, deficiency in NUTRIENT_DEFICIENCIES.items():
         symptoms = "; ".join(deficiency["symptoms"][:2])
@@ -1736,7 +1762,7 @@ def generate_disease_prompt_section() -> str:
             f"- **{deficiency['name_th']}**: {symptoms}"
         )
 
-    # วัชพืช
+    # วัชพืช (ยังคงทั้งหมด)
     sections.append("\n## 🌿 วัชพืช (Weeds)")
     for key, weed in WEEDS.items():
         appearance = "; ".join(weed["appearance"][:2])
