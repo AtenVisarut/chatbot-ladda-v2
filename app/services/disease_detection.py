@@ -892,14 +892,14 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=500,
+                    max_tokens=1500,
                     temperature=0.1,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
                         "X-Title": "Ladda v2 Quick Vision",
                     },
                 ),
-                timeout=30
+                timeout=45
             )
         except asyncio.TimeoutError:
             logger.error("Quick Vision timeout")
@@ -967,6 +967,11 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         logger.info(f"   → Plant: {plant_type}")
         logger.info(f"   → Problem: {problem_name_th} ({problem_type})")
         logger.info(f"   → Keywords: {keywords}")
+
+        # ถ้า Quick Vision ล้มเหลว (ไม่มี plant_type และ problem เป็น unknown) → ใช้ v1 แทน
+        if not plant_type and problem_type == "unknown" and problem_name_th == "ไม่ทราบ":
+            logger.warning("⚠️ Quick Vision failed - Fallback to v1")
+            return await detect_disease(image_bytes, extra_user_info)
 
         # Handle healthy plants early
         if problem_type == "healthy":
