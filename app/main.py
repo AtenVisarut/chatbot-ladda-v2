@@ -73,7 +73,7 @@ from app.services.memory import (
     add_to_memory,
     save_recommended_products
 )
-from app.services.disease_detection import detect_disease
+from app.services.disease_detection import detect_disease, smart_detect_disease
 from app.services.product_recommendation import retrieve_product_recommendation, retrieve_products_with_matching_score
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
@@ -504,8 +504,8 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 skip_flex = create_analyzing_flex(with_info=False)
                                 await reply_line(reply_token, skip_flex)
                                 
-                                detection_result = await detect_disease(image_bytes)
-                                
+                                detection_result = await smart_detect_disease(image_bytes)
+
                                 # Check if we should recommend products
                                 # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency
                                 skip_keywords = [
@@ -590,7 +590,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 await reply_line(reply_token, analyzing_flex)
 
                                 # Run detection with extra context
-                                detection_result = await detect_disease(image_bytes, extra_user_info=text)
+                                detection_result = await smart_detect_disease(image_bytes, extra_user_info=text)
 
                                 # Check if we should recommend products
                                 skip_keywords = [

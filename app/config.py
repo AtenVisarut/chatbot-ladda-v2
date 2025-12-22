@@ -38,3 +38,8 @@ USER_RATE_WINDOW = 60  # seconds
 # Memory configuration
 MAX_MEMORY_MESSAGES = 40  # Keep last 40 messages for context
 MEMORY_CONTEXT_WINDOW = 20  # Use last 20 messages for context (จำบทสนทนา 20 ข้อความ)
+
+# RAG-based Disease Detection
+# Set to "1" to use RAG + Vector Search (faster, cheaper)
+# Set to "0" to use original hardcoded database (default for rollback)
+USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
