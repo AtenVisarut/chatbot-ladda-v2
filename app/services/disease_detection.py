@@ -911,35 +911,99 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         raw_text1 = response1.choices[0].message.content
         logger.info(f"Quick Vision response: {raw_text1[:200]}...")
 
-        # Parse quick vision result
+        # Parse quick vision result with robust JSON handling
+        import re
+        quick_data = None
+
         try:
             json_str = raw_text1.strip()
-            if json_str.startswith("```"):
-                json_str = json_str.split("```")[1]
-                if json_str.startswith("json"):
-                    json_str = json_str[4:]
-            if json_str.endswith("```"):
-                json_str = json_str[:-3]
 
-            if not json_str.strip().startswith("{"):
-                start_idx = json_str.find("{")
-                end_idx = json_str.rfind("}")
-                if start_idx != -1 and end_idx != -1:
-                    json_str = json_str[start_idx:end_idx + 1]
+            # Extract JSON from markdown code block
+            if "```" in json_str:
+                match = re.search(r'```(?:json)?\s*([\s\S]*?)```', json_str)
+                if match:
+                    json_str = match.group(1)
 
-            quick_data = json.loads(json_str.strip())
-        except Exception as e:
-            logger.warning(f"Failed to parse quick vision JSON: {e}")
-            quick_data = {
-                "plant_type": "",
-                "problem_type": "unknown",
-                "problem_name_th": "ไม่ทราบ",
-                "problem_name_en": "Unknown",
-                "keywords": [],
-                "visual_symptoms": raw_text1[:200],
-                "confidence": 50,
-                "severity": "ปานกลาง"
-            }
+            # Find JSON object
+            start_idx = json_str.find("{")
+            end_idx = json_str.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                json_str = json_str[start_idx:end_idx + 1]
+
+            # Clean JSON - fix common Gemini issues
+            json_str = json_str.strip()
+            json_str = re.sub(r',\s*}', '}', json_str)  # trailing comma before }
+            json_str = re.sub(r',\s*]', ']', json_str)  # trailing comma before ]
+            json_str = re.sub(r'//.*$', '', json_str, flags=re.MULTILINE)  # comments
+            json_str = re.sub(r'/\*[\s\S]*?\*/', '', json_str)  # block comments
+
+            quick_data = json.loads(json_str)
+            logger.info("✓ JSON parsed successfully")
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse failed: {e}, trying regex extraction...")
+
+            # Fallback: Extract fields using regex
+            quick_data = {}
+
+            # Extract plant_type
+            match = re.search(r'"plant_type"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["plant_type"] = match.group(1)
+
+            # Extract problem_type
+            match = re.search(r'"problem_type"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["problem_type"] = match.group(1)
+
+            # Extract problem_name_th
+            match = re.search(r'"problem_name_th"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["problem_name_th"] = match.group(1)
+
+            # Extract problem_name_en
+            match = re.search(r'"problem_name_en"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["problem_name_en"] = match.group(1)
+
+            # Extract keywords array
+            match = re.search(r'"keywords"\s*:\s*\[(.*?)\]', raw_text1, re.DOTALL)
+            if match:
+                keywords_str = match.group(1)
+                quick_data["keywords"] = re.findall(r'"([^"]*)"', keywords_str)
+
+            # Extract visual_symptoms
+            match = re.search(r'"visual_symptoms"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["visual_symptoms"] = match.group(1)
+
+            # Extract confidence
+            match = re.search(r'"confidence"\s*:\s*(\d+)', raw_text1)
+            if match:
+                quick_data["confidence"] = int(match.group(1))
+
+            # Extract severity
+            match = re.search(r'"severity"\s*:\s*"([^"]*)"', raw_text1)
+            if match:
+                quick_data["severity"] = match.group(1)
+
+            if quick_data.get("plant_type") or quick_data.get("problem_name_th"):
+                logger.info(f"✓ Regex extraction successful: {quick_data}")
+            else:
+                logger.warning("✗ Regex extraction failed")
+
+        # Set defaults for missing fields
+        if not quick_data:
+            quick_data = {}
+
+        quick_data.setdefault("plant_type", "")
+        quick_data.setdefault("problem_type", "unknown")
+        quick_data.setdefault("problem_name_th", "ไม่ทราบ")
+        quick_data.setdefault("problem_name_en", "Unknown")
+        quick_data.setdefault("keywords", [])
+        quick_data.setdefault("visual_symptoms", raw_text1[:200] if raw_text1 else "")
+        quick_data.setdefault("confidence", 50)
+        quick_data.setdefault("severity", "ปานกลาง")
 
         plant_type = quick_data.get("plant_type", "")
         problem_type = quick_data.get("problem_type", "unknown")
