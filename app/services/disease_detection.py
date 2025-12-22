@@ -879,7 +879,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         try:
             response1 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.0-flash-001",  # ใช้ Flash สำหรับ quick identify (เร็วกว่า)
+                    model="google/gemini-2.5-pro-preview",  # ใช้ 2.5 Pro สำหรับ vision (แม่นยำ)
                     messages=[
                         {
                             "role": "user",
@@ -892,14 +892,14 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=800,
+                    max_tokens=1000,
                     temperature=0.1,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
-                        "X-Title": "Ladda v2 Quick Vision",
+                        "X-Title": "Ladda v2 Vision",
                     },
                 ),
-                timeout=30
+                timeout=60
             )
         except asyncio.TimeoutError:
             logger.error("Quick Vision timeout - Fallback to v1")
@@ -1055,7 +1055,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         try:
             response2 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.5-pro-preview",  # ใช้ Pro สำหรับ final analysis
+                    model="google/gemini-2.0-flash-001",  # ใช้ Flash สำหรับสรุปผล (เร็ว)
                     messages=[
                         {
                             "role": "user",
@@ -1068,14 +1068,14 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=2000,
+                    max_tokens=1500,
                     temperature=0.2,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
-                        "X-Title": "Ladda v2 Final Analysis",
+                        "X-Title": "Ladda v2 Summary",
                     },
                 ),
-                timeout=60
+                timeout=30
             )
         except asyncio.TimeoutError:
             logger.error("Final Analysis timeout - using quick result")
