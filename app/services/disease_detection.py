@@ -805,27 +805,27 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 
 
 # ============================================================================
-# Disease Detection v2: Gemini Vision First + Vector Search Enhancement
+# Disease Detection v2: Vector Search First (No Hardcode Prompt)
 # ============================================================================
 
 async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] = None) -> DiseaseDetectionResult:
     """
-    Disease Detection v2 - Gemini 2.5 Pro วินิจฉัยหลัก + Vector Search เสริม
+    Disease Detection v2 - Vector Search เป็นหลัก (ไม่ใช้ hardcode prompt)
 
-    Architecture ใหม่:
-    1. Gemini 2.5 Pro (Vision) → วินิจฉัยโรคหลักจากภาพ (~5-10s)
-    2. Vector Search (Supabase) → หาข้อมูลเพิ่มเติมจาก DB (~0.5s)
-    3. Enhance Result → รวมข้อมูลจาก DB เข้ากับผลวินิจฉัย
+    Architecture:
+    1. Gemini Vision (Quick) → ระบุชื่อโรค/keywords จากภาพ (~3-5s) - prompt สั้น
+    2. Vector Search (Supabase) → ดึงข้อมูลโรคจาก DB (~0.5s)
+    3. Gemini Analysis → สรุปผลจากข้อมูล DB (~3-5s)
 
     ข้อดี:
-    - Gemini 2.5 Pro ทำ Vision เป็นหลัก (แม่นยำ)
-    - Vector Search เสริมข้อมูลจาก Database
-    - สามารถหาสินค้าที่เกี่ยวข้องได้
+    - Prompt size ลด 70-80%
+    - Token cost ลดลงมาก
+    - อัพเดทโรคได้ผ่าน Database โดยไม่ต้อง deploy
     """
     from app.services.disease_search import search_diseases, build_context_from_diseases, get_disease_by_key
     from app.services.quick_classifier import ClassificationResult, ProblemCategory
 
-    logger.info("🚀 Starting Disease Detection v2 (Gemini Vision + Vector Search)")
+    logger.info("🚀 Starting Disease Detection v2 (Vector Search First)")
 
     # Check if Gemini client is initialized
     if not gemini_client:
@@ -844,73 +844,47 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
             return DiseaseDetectionResult(**cached)
 
     try:
-        # -----------------------------------------------------------------
-        # Step 1: Gemini 2.5 Pro Vision - วินิจฉัยหลัก
-        # -----------------------------------------------------------------
-        logger.info("🎯 Step 1: Gemini 2.5 Pro Vision (Main Diagnosis)")
-
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
 
-        # ใช้ prompt เดียวกับ v1 (ครบถ้วน)
-        disease_database_section = generate_disease_prompt_section()
+        # -----------------------------------------------------------------
+        # Step 1: Quick Vision - ระบุโรค/แมลง/ปัญหาจากภาพ (prompt สั้น)
+        # -----------------------------------------------------------------
+        logger.info("👁️ Step 1: Quick Vision (Identify Problem)")
 
-        prompt_text = f"""คุณคือผู้เชี่ยวชาญโรคพืชและศัตรูพืชไทย ประสบการณ์ 20 ปี
+        quick_prompt = """คุณคือผู้เชี่ยวชาญโรคพืชไทย ดูภาพและระบุปัญหาที่เห็น
 
-🎯 **ภารกิจ**: วิเคราะห์ภาพพืชเพื่อตรวจจับโรค, ศัตรูพืช, วัชพืช, หรืออาการขาดธาตุ
+ตอบเป็น JSON (ไม่ต้องใส่ ```json):
+{
+  "plant_type": "ชนิดพืช (ข้าว/ทุเรียน/มะม่วง/อ้อย/ข้าวโพด/มันสำปะหลัง/ยางพารา/ไม่ทราบ)",
+  "problem_type": "fungal/bacterial/viral/insect/nutrient/weed/healthy/unknown",
+  "problem_name_th": "ชื่อโรค/แมลง/ปัญหา ภาษาไทย",
+  "problem_name_en": "English name",
+  "keywords": ["คำสำคัญ", "สำหรับค้นหา", "3-5 คำ"],
+  "visual_symptoms": "อาการที่เห็นในภาพ",
+  "confidence": 0-100,
+  "severity": "รุนแรง/ปานกลาง/เล็กน้อย"
+}
 
-⚠️ **ห้ามเดา** — หากไม่มีหลักฐานชัดเจนในภาพ ต้องลดความเชื่อมั่น
-
-══════════════════════════════════════════════════════════════════
-📌 **ขั้นตอนการวิเคราะห์**
-
-1. ระบุชนิดพืช
-2. สังเกตลักษณะแผล: รูปร่าง, สี, พื้นผิว (ยุบ/นูน/ราบ), ขอบแผล, ตำแหน่ง
-3. ตรวจหาแมลง: สี, ขนาด, รูปร่าง, ตำแหน่ง
-4. เปรียบเทียบกับฐานข้อมูลด้านล่าง
-
-══════════════════════════════════════════════════════════════════
-📚 **ฐานข้อมูลโรค/แมลง**
-
-{disease_database_section}
-
-══════════════════════════════════════════════════════════════════
-🚨 **กฎแยกแยะสำคัญ**
-
-- **Brown Spot (ข้าว)**: จุดรูปไข่ + ตรงกลางสีเทา + halo เหลือง
-- **Anthracnose**: แผลยุบตัว + เริ่มจากขอบใบ + สีดำ
-- **Leaf Spot**: จุดกลม กระจายทั่วใบ ราบเรียบ
-- **Rice Blast**: แผลรูปเพชร/ตา หัวท้ายแหลม
-- **ขาดธาตุ**: ใบเหลืองสม่ำเสมอ ไม่มีจุด/แผล
-
-══════════════════════════════════════════════════════════════════
-📤 **ตอบเป็น JSON เท่านั้น** (ไม่ต้องใส่ ```json):
-
-{{
-  "plant_type": "ชนิดพืช",
-  "disease_name": "ชื่อโรค/แมลง ไทย (English)",
-  "disease_key": "key สำหรับค้นหา เช่น rice_blast, brown_spot, aphid",
-  "pest_type": "เชื้อรา/แบคทีเรีย/ไวรัส/แมลง/ขาดธาตุ/วัชพืช/healthy/unknown",
-  "confidence_level_percent": 0-100,
-  "symptoms_in_image": "อาการที่เห็นในภาพ",
-  "key_diagnostic_features": "ลักษณะสำคัญที่ใช้วินิจฉัย",
-  "severity_level": "รุนแรง/ปานกลาง/เล็กน้อย",
-  "description": "คำอธิบายและคำแนะนำ",
-  "affected_area": "ส่วนที่ได้รับผลกระทบ",
-  "spread_risk": "สูง/ปานกลาง/ต่ำ"
-}}"""
+หมายเหตุ:
+- fungal = เชื้อรา (จุด, ไหม้, ราขาว, ราดำ, ราสนิม)
+- bacterial = แบคทีเรีย (เน่าเละ, เหี่ยว, แผลฉ่ำน้ำ)
+- viral = ไวรัส (ด่าง, หงิก, แคระ)
+- insect = แมลง (เพลี้ย, หนอน, ด้วง, ไร)
+- nutrient = ขาดธาตุ (ใบเหลืองสม่ำเสมอ)
+- healthy = ไม่พบปัญหา"""
 
         if extra_user_info:
-            prompt_text += f"\n\nข้อมูลเพิ่มเติมจากผู้ใช้: {extra_user_info}"
+            quick_prompt += f"\n\nข้อมูลจากผู้ใช้: {extra_user_info}"
 
         try:
-            response = await asyncio.wait_for(
+            response1 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.5-pro-preview",
+                    model="google/gemini-2.0-flash-exp",  # ใช้ Flash สำหรับ quick identify
                     messages=[
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": prompt_text},
+                                {"type": "text", "text": quick_prompt},
                                 {
                                     "type": "image_url",
                                     "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
@@ -918,17 +892,17 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=4096,
-                    temperature=0.2,
+                    max_tokens=500,
+                    temperature=0.1,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
-                        "X-Title": "Ladda Disease Detection v2",
+                        "X-Title": "Ladda v2 Quick Vision",
                     },
                 ),
-                timeout=60
+                timeout=30
             )
         except asyncio.TimeoutError:
-            logger.error("Gemini 2.5 Pro timeout")
+            logger.error("Quick Vision timeout")
             return DiseaseDetectionResult(
                 disease_name="ไม่สามารถวิเคราะห์ได้ (Timeout)",
                 confidence="ต่ำ",
@@ -938,7 +912,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                 plant_type="",
             )
         except (httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.error(f"HTTP error in v2: {e}")
+            logger.error(f"HTTP error in quick vision: {e}")
             return DiseaseDetectionResult(
                 disease_name="ไม่สามารถวิเคราะห์ได้ (Connection Error)",
                 confidence="ต่ำ",
@@ -948,113 +922,240 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                 plant_type="",
             )
 
-        raw_text = response.choices[0].message.content
-        logger.info(f"Gemini 2.5 Pro response: {raw_text[:300]}...")
+        raw_text1 = response1.choices[0].message.content
+        logger.info(f"Quick Vision response: {raw_text1[:200]}...")
 
-        # Parse JSON
+        # Parse quick vision result
         try:
-            json_str = raw_text.strip()
-            if json_str.startswith("```json"):
-                json_str = json_str[7:]
-            elif json_str.startswith("```"):
-                json_str = json_str[3:]
+            json_str = raw_text1.strip()
+            if json_str.startswith("```"):
+                json_str = json_str.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
             if json_str.endswith("```"):
                 json_str = json_str[:-3]
-            json_str = json_str.strip()
 
-            if not json_str.startswith("{"):
+            if not json_str.strip().startswith("{"):
                 start_idx = json_str.find("{")
                 end_idx = json_str.rfind("}")
                 if start_idx != -1 and end_idx != -1:
                     json_str = json_str[start_idx:end_idx + 1]
 
-            data = json.loads(json_str)
+            quick_data = json.loads(json_str.strip())
         except Exception as e:
-            logger.warning(f"Failed to parse JSON in v2: {e}")
-            data = {
-                "disease_name": "ไม่ทราบชื่อโรค",
-                "confidence_level_percent": 50,
-                "symptoms": "",
-                "severity_level": "ปานกลาง",
-                "description": raw_text,
+            logger.warning(f"Failed to parse quick vision JSON: {e}")
+            quick_data = {
+                "plant_type": "",
+                "problem_type": "unknown",
+                "problem_name_th": "ไม่ทราบ",
+                "problem_name_en": "Unknown",
+                "keywords": [],
+                "visual_symptoms": raw_text1[:200],
+                "confidence": 50,
+                "severity": "ปานกลาง"
             }
 
-        # Extract fields from Gemini response
-        disease_name = data.get("disease_name") or "ไม่ทราบชื่อโรค"
-        disease_key = data.get("disease_key") or ""
-        confidence = str(data.get("confidence_level_percent", 50))
-        symptoms = data.get("symptoms_in_image") or data.get("symptoms") or ""
-        severity = data.get("severity_level") or data.get("severity") or "ปานกลาง"
-        description = data.get("description") or raw_text
-        pest_type = data.get("pest_type") or "unknown"
-        plant_type = data.get("plant_type") or ""
-        affected_area = data.get("affected_area") or ""
-        spread_risk = data.get("spread_risk") or ""
-        key_diagnostic = data.get("key_diagnostic_features") or ""
+        plant_type = quick_data.get("plant_type", "")
+        problem_type = quick_data.get("problem_type", "unknown")
+        problem_name_th = quick_data.get("problem_name_th", "ไม่ทราบ")
+        problem_name_en = quick_data.get("problem_name_en", "")
+        keywords = quick_data.get("keywords", [])
+        visual_symptoms = quick_data.get("visual_symptoms", "")
+        quick_confidence = quick_data.get("confidence", 50)
+        severity = quick_data.get("severity", "ปานกลาง")
 
-        logger.info(f"   → Diagnosis: {disease_name}")
-        logger.info(f"   → Disease Key: {disease_key}")
-        logger.info(f"   → Confidence: {confidence}%")
+        logger.info(f"   → Plant: {plant_type}")
+        logger.info(f"   → Problem: {problem_name_th} ({problem_type})")
+        logger.info(f"   → Keywords: {keywords}")
 
-        # -----------------------------------------------------------------
-        # Step 2: Vector Search - หาข้อมูลเพิ่มเติมจาก Database
-        # -----------------------------------------------------------------
-        logger.info("🔍 Step 2: Vector Search (Find in Database)")
-
-        db_disease = None
-        matched_diseases = []
-
-        # ลองหาจาก disease_key ก่อน
-        if disease_key:
-            db_disease = await get_disease_by_key(disease_key)
-            if db_disease:
-                logger.info(f"   → Found by key: {db_disease.name_th}")
-
-        # ถ้าไม่เจอ ลองใช้ vector search
-        if not db_disease:
-            # สร้าง classification จากผล Gemini
-            fake_classification = ClassificationResult(
-                category=ProblemCategory(pest_type) if pest_type in [e.value for e in ProblemCategory] else ProblemCategory.UNKNOWN,
+        # Handle healthy plants early
+        if problem_type == "healthy":
+            result = DiseaseDetectionResult(
+                disease_name="ไม่พบปัญหา",
+                confidence="90",
+                symptoms="พืชดูแข็งแรง ไม่พบอาการผิดปกติ",
+                severity="ไม่มี",
+                raw_analysis="พืชแข็งแรงปกติ ไม่พบโรค/แมลง/อาการขาดธาตุ",
                 plant_type=plant_type,
-                confidence=float(confidence) / 100 if confidence.isdigit() else 0.5,
-                keywords=[disease_name, key_diagnostic] if key_diagnostic else [disease_name],
-                summary=disease_name
             )
-            matched_diseases = await search_diseases(fake_classification, top_k=3)
-
-            if matched_diseases:
-                db_disease = matched_diseases[0]
-                logger.info(f"   → Found by vector: {db_disease.name_th} (similarity: {db_disease.similarity:.2f})")
-            else:
-                logger.info("   → No match in database")
+            if cache_key:
+                await set_to_cache("detection_v2", cache_key, result.dict())
+            return result
 
         # -----------------------------------------------------------------
-        # Step 3: Enhance Result - รวมข้อมูลจาก Database
+        # Step 2: Vector Search - ดึงข้อมูลจาก Database
         # -----------------------------------------------------------------
-        logger.info("✨ Step 3: Enhance Result")
+        logger.info("🔍 Step 2: Vector Search (Fetch from Database)")
 
-        raw_parts = [f"{pest_type}: {description}"]
+        # สร้าง classification สำหรับ vector search
+        classification = ClassificationResult(
+            category=ProblemCategory(problem_type) if problem_type in [e.value for e in ProblemCategory] else ProblemCategory.UNKNOWN,
+            plant_type=plant_type,
+            confidence=float(quick_confidence) / 100,
+            keywords=keywords + [problem_name_th, problem_name_en],
+            summary=f"{problem_name_th} ({problem_name_en})"
+        )
 
-        if key_diagnostic:
-            raw_parts.append(f"ลักษณะสำคัญ: {key_diagnostic}")
-        if affected_area:
-            raw_parts.append(f"ส่วนที่ได้รับผลกระทบ: {affected_area}")
-        if spread_risk:
-            raw_parts.append(f"ความเสี่ยงการแพร่: {spread_risk}")
+        matched_diseases = await search_diseases(classification, top_k=5)
 
-        # เพิ่มข้อมูลจาก Database
-        if db_disease:
-            raw_parts.append(f"🔍 DB Match: {db_disease.name_th} ({db_disease.name_en})")
-            if db_disease.distinguish_from:
-                raw_parts.append(f"⚠️ แยกจาก: {db_disease.distinguish_from}")
-            if db_disease.key_features:
-                raw_parts.append(f"📌 ลักษณะเด่น: {'; '.join(db_disease.key_features[:2])}")
+        if matched_diseases:
+            logger.info(f"   → Found {len(matched_diseases)} diseases in DB:")
+            for i, d in enumerate(matched_diseases[:3], 1):
+                logger.info(f"      {i}. {d.name_th} ({d.name_en}) - {d.similarity:.2f}")
+        else:
+            logger.warning("   → No diseases found in database")
+
+        # Build RAG context from matched diseases
+        rag_context = build_context_from_diseases(matched_diseases) if matched_diseases else ""
+
+        # -----------------------------------------------------------------
+        # Step 3: Final Analysis - สรุปผลด้วยข้อมูลจาก DB
+        # -----------------------------------------------------------------
+        logger.info("🎯 Step 3: Final Analysis (Using DB Context)")
+
+        if rag_context:
+            final_prompt = f"""คุณคือผู้เชี่ยวชาญโรคพืช วิเคราะห์ภาพและให้คำแนะนำ
+
+📋 **ข้อมูลเบื้องต้นจากระบบ:**
+- พืช: {plant_type}
+- ปัญหาเบื้องต้น: {problem_name_th} ({problem_name_en})
+- อาการที่เห็น: {visual_symptoms}
+
+📚 **ข้อมูลโรคจากฐานข้อมูล:**
+{rag_context}
+
+══════════════════════════════════════════════════════════════════
+🎯 **ภารกิจ**: ดูภาพและเปรียบเทียบกับข้อมูลข้างต้น แล้วสรุปว่าเป็นโรคใด
+
+ตอบเป็น JSON (ไม่ต้องใส่ ```json):
+{{
+  "disease_name": "ชื่อโรค/แมลง ไทย (English)",
+  "confidence": 0-100,
+  "matched_disease_from_db": "ชื่อโรคที่ match จาก DB (ถ้ามี)",
+  "symptoms": "อาการที่เห็นในภาพ",
+  "severity": "รุนแรง/ปานกลาง/เล็กน้อย",
+  "cause": "สาเหตุ",
+  "treatment": "วิธีรักษา/แก้ไข",
+  "prevention": "การป้องกัน"
+}}"""
+        else:
+            # ไม่มีข้อมูลใน DB - ให้วิเคราะห์ตามความรู้ทั่วไป
+            final_prompt = f"""คุณคือผู้เชี่ยวชาญโรคพืช วิเคราะห์ภาพและให้คำแนะนำ
+
+📋 **ข้อมูลเบื้องต้น:**
+- พืช: {plant_type}
+- ปัญหาเบื้องต้น: {problem_name_th}
+- อาการที่เห็น: {visual_symptoms}
+
+⚠️ ไม่พบข้อมูลในฐานข้อมูล กรุณาวิเคราะห์ตามความรู้ทั่วไป
+
+ตอบเป็น JSON (ไม่ต้องใส่ ```json):
+{{
+  "disease_name": "ชื่อโรค/แมลง ไทย (English)",
+  "confidence": 0-100,
+  "matched_disease_from_db": null,
+  "symptoms": "อาการที่เห็นในภาพ",
+  "severity": "รุนแรง/ปานกลาง/เล็กน้อย",
+  "cause": "สาเหตุ",
+  "treatment": "วิธีรักษา/แก้ไข",
+  "prevention": "การป้องกัน"
+}}"""
+
+        try:
+            response2 = await asyncio.wait_for(
+                gemini_client.chat.completions.create(
+                    model="google/gemini-2.5-pro-preview",  # ใช้ Pro สำหรับ final analysis
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": final_prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                                },
+                            ],
+                        }
+                    ],
+                    max_tokens=2000,
+                    temperature=0.2,
+                    extra_headers={
+                        "HTTP-Referer": "https://ladda-chatbot.railway.app",
+                        "X-Title": "Ladda v2 Final Analysis",
+                    },
+                ),
+                timeout=60
+            )
+        except asyncio.TimeoutError:
+            logger.error("Final Analysis timeout - using quick result")
+            # Fallback to quick vision result
+            result = DiseaseDetectionResult(
+                disease_name=problem_name_th,
+                confidence=str(quick_confidence),
+                symptoms=visual_symptoms,
+                severity=severity,
+                raw_analysis=f"Quick analysis: {problem_name_th}",
+                plant_type=plant_type,
+            )
+            if cache_key:
+                await set_to_cache("detection_v2", cache_key, result.dict())
+            return result
+
+        raw_text2 = response2.choices[0].message.content
+        logger.info(f"Final Analysis response: {raw_text2[:200]}...")
+
+        # Parse final analysis result
+        try:
+            json_str = raw_text2.strip()
+            if json_str.startswith("```"):
+                json_str = json_str.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+
+            if not json_str.strip().startswith("{"):
+                start_idx = json_str.find("{")
+                end_idx = json_str.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    json_str = json_str[start_idx:end_idx + 1]
+
+            final_data = json.loads(json_str.strip())
+        except Exception as e:
+            logger.warning(f"Failed to parse final analysis JSON: {e}")
+            final_data = {
+                "disease_name": problem_name_th,
+                "confidence": quick_confidence,
+                "symptoms": visual_symptoms,
+                "severity": severity,
+            }
+
+        # Extract final result
+        disease_name = final_data.get("disease_name") or problem_name_th
+        confidence = str(final_data.get("confidence", quick_confidence))
+        symptoms = final_data.get("symptoms") or visual_symptoms
+        final_severity = final_data.get("severity") or severity
+        cause = final_data.get("cause", "")
+        treatment = final_data.get("treatment", "")
+        prevention = final_data.get("prevention", "")
+        matched_db = final_data.get("matched_disease_from_db", "")
+
+        # Build raw analysis
+        raw_parts = [f"โรค/ปัญหา: {disease_name}"]
+        if matched_db:
+            raw_parts.append(f"🔍 DB Match: {matched_db}")
+        if cause:
+            raw_parts.append(f"สาเหตุ: {cause}")
+        if treatment:
+            raw_parts.append(f"การรักษา: {treatment}")
+        if prevention:
+            raw_parts.append(f"การป้องกัน: {prevention}")
 
         result = DiseaseDetectionResult(
             disease_name=str(disease_name),
             confidence=str(confidence),
             symptoms=str(symptoms),
-            severity=str(severity),
+            severity=str(final_severity),
             raw_analysis=" | ".join(raw_parts),
             plant_type=str(plant_type),
         )
