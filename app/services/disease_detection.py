@@ -879,7 +879,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         try:
             response1 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.5-pro-preview",  # ใช้ 2.5 Pro
+                    model="google/gemini-2.0-flash-001",  # ใช้ Flash สำหรับ quick identify (เร็วกว่า)
                     messages=[
                         {
                             "role": "user",
@@ -892,35 +892,21 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=1500,
+                    max_tokens=800,
                     temperature=0.1,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
                         "X-Title": "Ladda v2 Quick Vision",
                     },
                 ),
-                timeout=45
+                timeout=30
             )
         except asyncio.TimeoutError:
-            logger.error("Quick Vision timeout")
-            return DiseaseDetectionResult(
-                disease_name="ไม่สามารถวิเคราะห์ได้ (Timeout)",
-                confidence="ต่ำ",
-                symptoms="ระบบไม่สามารถวิเคราะห์ภาพได้ในเวลาที่กำหนด",
-                severity="ไม่ทราบ",
-                raw_analysis="API Timeout - กรุณาลองใหม่อีกครั้ง",
-                plant_type="",
-            )
+            logger.error("Quick Vision timeout - Fallback to v1")
+            return await detect_disease(image_bytes, extra_user_info)
         except (httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.error(f"HTTP error in quick vision: {e}")
-            return DiseaseDetectionResult(
-                disease_name="ไม่สามารถวิเคราะห์ได้ (Connection Error)",
-                confidence="ต่ำ",
-                symptoms="ไม่สามารถเชื่อมต่อกับระบบวิเคราะห์ได้",
-                severity="ไม่ทราบ",
-                raw_analysis="Connection Error - กรุณาลองใหม่อีกครั้ง",
-                plant_type="",
-            )
+            logger.error(f"HTTP error in quick vision - Fallback to v1: {e}")
+            return await detect_disease(image_bytes, extra_user_info)
 
         raw_text1 = response1.choices[0].message.content
         logger.info(f"Quick Vision response: {raw_text1[:200]}...")
