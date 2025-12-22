@@ -879,7 +879,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         try:
             response1 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.0-flash-exp",  # ใช้ Flash สำหรับ quick identify
+                    model="google/gemini-2.5-pro-preview",  # ใช้ 2.5 Pro
                     messages=[
                         {
                             "role": "user",
