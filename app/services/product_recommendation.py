@@ -290,7 +290,9 @@ def is_oomycetes_disease(disease_name: str) -> bool:
 
 def filter_products_for_oomycetes(products: List[Dict], disease_name: str) -> List[Dict]:
     """
-    กรองสินค้าสำหรับโรค Oomycetes ให้เหลือเฉพาะที่มี active ingredient เหมาะสม
+    กรองสินค้าสำหรับโรค Oomycetes ให้เหลือเฉพาะที่มี pathogen_type = 'oomycetes'
+
+    ใช้ pathogen_type column จาก DB เป็นหลัก (ถูกต้องกว่าการ filter ด้วย keyword)
 
     Args:
         products: รายการสินค้าทั้งหมด
@@ -303,63 +305,69 @@ def filter_products_for_oomycetes(products: List[Dict], disease_name: str) -> Li
         return products
 
     logger.info(f"🦠 โรค Oomycetes detected: {disease_name}")
-    logger.info(f"   กรองสินค้าที่มี active ingredient เหมาะสม...")
+    logger.info(f"   กรองสินค้าตาม pathogen_type = 'oomycetes'...")
+
+    # Filter by pathogen_type column (primary method)
+    oomycetes_products = [p for p in products if p.get("pathogen_type") == "oomycetes"]
+
+    if oomycetes_products:
+        logger.info(f"   ✓ พบสินค้า pathogen_type='oomycetes': {len(oomycetes_products)} รายการ")
+        return oomycetes_products
+
+    # Fallback: ถ้าไม่มี pathogen_type → ใช้ active ingredient keyword (backward compatibility)
+    logger.warning(f"⚠️ ไม่พบสินค้า pathogen_type='oomycetes' → ใช้ active ingredient fallback")
 
     suitable_products = []
-    unsuitable_products = []
-    neutral_products = []  # สินค้าที่ไม่แน่ใจ
-
     for product in products:
         active_ingredient = (product.get("active_ingredient") or "").lower()
-        product_name = product.get("product_name", "")
-        target_pest = (product.get("target_pest") or "").lower()
-
-        # ตรวจสอบว่ามี active ingredient ที่เหมาะกับ Oomycetes หรือไม่
-        is_suitable = False
-        is_unsuitable = False
-
         for ai in OOMYCETES_ACTIVE_INGREDIENTS:
             if ai.lower() in active_ingredient:
-                is_suitable = True
+                suitable_products.append(product)
                 break
 
-        # ตรวจสอบว่าระบุว่าใช้กับ Phytophthora/รากเน่าโคนเน่าหรือไม่
-        if not is_suitable:
-            for keyword in ["phytophthora", "ไฟทอฟธอรา", "รากเน่า", "โคนเน่า", "pythium"]:
-                if keyword in target_pest:
-                    is_suitable = True
-                    break
-
-        # ตรวจสอบว่าเป็น active ingredient ที่ไม่เหมาะกับ Oomycetes หรือไม่
-        if not is_suitable:
-            for ai in NON_OOMYCETES_ACTIVE_INGREDIENTS:
-                if ai.lower() in active_ingredient:
-                    is_unsuitable = True
-                    break
-
-        if is_suitable:
-            suitable_products.append(product)
-            logger.debug(f"   ✓ เหมาะสม: {product_name} ({active_ingredient})")
-        elif is_unsuitable:
-            unsuitable_products.append(product)
-            logger.debug(f"   ✗ ไม่เหมาะ: {product_name} ({active_ingredient})")
-        else:
-            neutral_products.append(product)
-            logger.debug(f"   ? ไม่แน่ใจ: {product_name} ({active_ingredient})")
-
-    logger.info(f"   → เหมาะสม: {len(suitable_products)}, ไม่เหมาะ: {len(unsuitable_products)}, ไม่แน่ใจ: {len(neutral_products)}")
-
-    # ถ้ามีสินค้าเหมาะสม → ใช้เฉพาะสินค้าเหมาะสม
     if suitable_products:
+        logger.info(f"   ✓ พบสินค้าจาก active ingredient: {len(suitable_products)} รายการ")
         return suitable_products
-
-    # ถ้าไม่มีสินค้าเหมาะสม → ใช้สินค้าที่ไม่แน่ใจ (ไม่ใช่สินค้าที่ไม่เหมาะ)
-    if neutral_products:
-        logger.warning(f"⚠️ ไม่พบสินค้าที่เหมาะกับ Oomycetes โดยเฉพาะ → ใช้สินค้าที่ไม่แน่ใจ")
-        return neutral_products
 
     # ถ้าไม่มีเลย → return สินค้าทั้งหมด (fallback)
     logger.warning(f"⚠️ ไม่พบสินค้าที่เหมาะกับ Oomycetes → ใช้สินค้าทั้งหมด")
+    return products
+
+
+def filter_products_for_fungi(products: List[Dict], disease_name: str) -> List[Dict]:
+    """
+    กรองสินค้าสำหรับโรคเชื้อรา (True Fungi) ให้เหลือเฉพาะที่มี pathogen_type = 'fungi'
+
+    หลีกเลี่ยงการแนะนำยา Oomycetes (Propamocarb, Fosetyl-Al) สำหรับโรคเชื้อราทั่วไป
+
+    Args:
+        products: รายการสินค้าทั้งหมด
+        disease_name: ชื่อโรค
+
+    Returns:
+        รายการสินค้าที่เหมาะกับเชื้อราแท้
+    """
+    # ถ้าเป็นโรค Oomycetes → ไม่ต้อง filter (ใช้ filter_products_for_oomycetes แทน)
+    if is_oomycetes_disease(disease_name):
+        return products
+
+    logger.info(f"🍄 โรคเชื้อรา detected: {disease_name}")
+    logger.info(f"   กรองสินค้าตาม pathogen_type = 'fungi'...")
+
+    # Filter by pathogen_type column
+    fungi_products = [p for p in products if p.get("pathogen_type") == "fungi"]
+
+    if fungi_products:
+        logger.info(f"   ✓ พบสินค้า pathogen_type='fungi': {len(fungi_products)} รายการ")
+        return fungi_products
+
+    # Fallback: กรองออกยา Oomycetes-specific
+    logger.warning(f"⚠️ ไม่พบสินค้า pathogen_type='fungi' → กรองออก Oomycetes products")
+
+    filtered = [p for p in products if p.get("pathogen_type") != "oomycetes"]
+    if filtered:
+        return filtered
+
     return products
 
 
@@ -987,6 +995,10 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
             if is_oomycetes_disease(disease_name):
                 target_pest_products = filter_products_for_oomycetes(target_pest_products, disease_name)
                 logger.info(f"   → After Oomycetes filter: {len(target_pest_products)} products")
+            else:
+                # Filter for Fungi diseases (exclude Oomycetes-specific products)
+                target_pest_products = filter_products_for_fungi(target_pest_products, disease_name)
+                logger.info(f"   → After Fungi filter: {len(target_pest_products)} products")
 
             if target_pest_products:
                 direct_recommendations = build_recommendations_from_data(target_pest_products[:6])
@@ -1078,6 +1090,10 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                 if is_oomycetes_disease(disease_name):
                     hybrid_results = filter_products_for_oomycetes(hybrid_results, disease_name)
                     logger.info(f"   → After Oomycetes filter: {len(hybrid_results)} products")
+                else:
+                    # 🆕 Filter for Fungi diseases (exclude Oomycetes-specific products like Propamocarb, Fosetyl)
+                    hybrid_results = filter_products_for_fungi(hybrid_results, disease_name)
+                    logger.info(f"   → After Fungi filter: {len(hybrid_results)} products")
 
                 # Apply simple relevance boost first
                 for p in hybrid_results:
