@@ -1868,44 +1868,73 @@ async def retrieve_products_with_matching_score(
         if pest_name:
             logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
 
-        # 1. Hybrid Search for products
+        # 🆕 STEP 1: Direct Query ก่อน (แม่นยำกว่า Hybrid Search)
         all_results = []
 
-        # Primary search (vector control if has pest, or disease treatment)
-        search_query = vector_search_query
-        if plant_type:
-            search_query = f"{search_query} {plant_type}"
+        # 1.1 Direct Query จาก target_pest
+        logger.info(f"📦 Step 1: Direct Query by target_pest for: {disease_name}")
+        direct_results = await query_products_by_target_pest(disease_name)
 
-        logger.info(f"🔍 Primary search: {search_query}")
+        if direct_results:
+            all_results.extend(direct_results)
+            logger.info(f"   → Direct Query พบ {len(direct_results)} products")
 
-        hybrid_results = await hybrid_search_products(
-            query=search_query,
-            match_count=20,
-            vector_weight=0.5,
-            keyword_weight=0.5
-        )
+        # 1.2 ถ้าโรคมีพาหะ → ค้นหายาฆ่าแมลงด้วย
+        if pest_name:
+            logger.info(f"📦 Direct Query for pest: {pest_name}")
+            pest_results = await query_products_by_target_pest(pest_name, required_category="กำจัดแมลง")
+            if pest_results:
+                all_results.extend(pest_results)
+                logger.info(f"   → Direct Query (pest) พบ {len(pest_results)} products")
 
-        if hybrid_results:
-            all_results.extend(hybrid_results)
-            logger.info(f"   → Found {len(hybrid_results)} products")
+        # 🆕 STEP 2: Hybrid Search เป็น fallback (ถ้า Direct Query ได้น้อยกว่า 3 ตัว)
+        if len(all_results) < 3:
+            logger.info(f"⚠️ Direct Query ได้ {len(all_results)} ตัว - ใช้ Hybrid Search เพิ่มเติม")
 
-        # Secondary search for disease treatment (if has vector)
-        if pest_name and disease_treatment_query:
+            search_query = vector_search_query
             if plant_type:
-                disease_treatment_query = f"{disease_treatment_query} {plant_type}"
+                search_query = f"{search_query} {plant_type}"
 
-            logger.info(f"🔍 Disease treatment search: {disease_treatment_query}")
+            logger.info(f"🔍 Hybrid Search: {search_query}")
 
-            disease_results = await hybrid_search_products(
-                query=disease_treatment_query,
-                match_count=15,
+            hybrid_results = await hybrid_search_products(
+                query=search_query,
+                match_count=20,
                 vector_weight=0.5,
                 keyword_weight=0.5
             )
 
-            if disease_results:
-                all_results.extend(disease_results)
-                logger.info(f"   → Found {len(disease_results)} disease treatment products")
+            if hybrid_results:
+                # เพิ่มเฉพาะที่ยังไม่มี
+                seen_ids = {p.get('id') for p in all_results}
+                for p in hybrid_results:
+                    if p.get('id') not in seen_ids:
+                        all_results.append(p)
+                        seen_ids.add(p.get('id'))
+                logger.info(f"   → Hybrid Search เพิ่มอีก {len(hybrid_results)} products")
+
+            # Secondary search for disease treatment (if has vector)
+            if pest_name and disease_treatment_query:
+                if plant_type:
+                    disease_treatment_query = f"{disease_treatment_query} {plant_type}"
+
+                logger.info(f"🔍 Disease treatment search: {disease_treatment_query}")
+
+                disease_results = await hybrid_search_products(
+                    query=disease_treatment_query,
+                    match_count=15,
+                    vector_weight=0.5,
+                    keyword_weight=0.5
+                )
+
+                if disease_results:
+                    for p in disease_results:
+                        if p.get('id') not in seen_ids:
+                            all_results.append(p)
+                            seen_ids.add(p.get('id'))
+                    logger.info(f"   → Disease treatment เพิ่มอีก {len(disease_results)} products")
+
+        logger.info(f"📊 รวมทั้งหมด: {len(all_results)} products")
 
         # 🆕 Filter by product category (ป้องกันโรค/กำจัดแมลง/กำจัดวัชพืช)
         required_category, required_category_th = get_required_category(disease_name)
