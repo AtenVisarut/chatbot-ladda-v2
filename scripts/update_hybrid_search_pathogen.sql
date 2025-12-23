@@ -3,6 +3,10 @@
 -- Run this SQL in Supabase SQL Editor
 -- ============================================================================
 
+-- 0. Drop existing functions (required because return type changed)
+DROP FUNCTION IF EXISTS keyword_search_products(text, integer);
+DROP FUNCTION IF EXISTS hybrid_search_products(vector, text, float, float, float, integer);
+
 -- 1. Update keyword_search_products to include pathogen_type
 CREATE OR REPLACE FUNCTION keyword_search_products(
     search_query text,
