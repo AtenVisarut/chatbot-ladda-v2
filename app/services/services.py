@@ -13,9 +13,6 @@ if OPENAI_API_KEY:
     openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     logger.info("OpenAI initialized successfully")
 
-# E5 model removed - using OpenAI embeddings instead
-e5_model = None
-
 # Initialize Supabase (fallback)
 supabase_client: Client = None
 if SUPABASE_URL and SUPABASE_KEY:

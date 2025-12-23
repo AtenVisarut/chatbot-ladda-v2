@@ -36,7 +36,6 @@ from app.config import (
 # Import services
 from app.services.services import (
     openai_client,
-    e5_model,
     supabase_client,
     analytics_tracker,
     alert_manager
@@ -60,8 +59,6 @@ from app.services.liff_service import LiffRegistrationData, register_user_from_l
 from app.services.cache import (
     cleanup_expired_cache,
     get_cache_stats,
-    set_to_cache,
-    get_image_hash,
     save_pending_context,
     get_pending_context,
     delete_pending_context,
@@ -73,8 +70,8 @@ from app.services.memory import (
     add_to_memory,
     save_recommended_products
 )
-from app.services.disease_detection import detect_disease, smart_detect_disease
-from app.services.product_recommendation import retrieve_product_recommendation, retrieve_products_with_matching_score
+from app.services.disease_detection import smart_detect_disease
+from app.services.product_recommendation import retrieve_products_with_matching_score
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
 from app.services.agro_risk import (
@@ -96,8 +93,7 @@ from app.utils.question_templates import (
     get_initial_questions_message,
     get_analyzing_with_info_message,
     get_skip_analysis_message,
-    should_skip_questions,
-    get_welcome_message
+    should_skip_questions
 )
 from app.utils.rate_limiter import (
     check_user_rate_limit,
@@ -261,8 +257,7 @@ async def health_check():
         "cache_stats": await get_cache_stats(),
         "services": {
             "openai": bool(openai_client),
-            "supabase": bool(supabase_client),
-            "e5_model": bool(e5_model)
+            "supabase": bool(supabase_client)
         }
     }
 

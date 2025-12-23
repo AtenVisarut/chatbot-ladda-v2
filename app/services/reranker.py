@@ -3,8 +3,7 @@ Re-ranking module using Cross-Encoder for higher accuracy
 Uses GPT-4o-mini for Thai language support (better than sentence-transformers for Thai)
 """
 import logging
-from typing import List, Dict, Optional, Tuple
-import asyncio
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -138,80 +137,6 @@ async def rerank_products_with_llm(
     except Exception as e:
         logger.error(f"Re-ranking failed: {e}", exc_info=True)
         return products[:top_k]
-
-
-async def rerank_with_scores(
-    query: str,
-    products: List[Dict],
-    openai_client=None
-) -> List[Tuple[Dict, float]]:
-    """
-    Re-rank products and return with relevance scores
-
-    Returns list of (product, score) tuples
-    """
-    try:
-        if not openai_client or len(products) == 0:
-            return [(p, p.get('similarity', 0.5)) for p in products]
-
-        logger.info(f"🔄 Scoring {len(products)} products for: '{query}'")
-
-        # Limit candidates for efficiency
-        candidates = products[:10]
-
-        # Batch scoring prompt
-        product_texts = []
-        for i, p in enumerate(candidates, 1):
-            text = f"[{i}] {p.get('product_name', 'N/A')}"
-            if p.get('target_pest'):
-                text += f" - {p.get('target_pest', '')[:80]}"
-            product_texts.append(text)
-
-        products_str = "\n".join(product_texts)
-
-        prompt = f"""ให้คะแนนความเกี่ยวข้อง 1-10 สำหรับแต่ละผลิตภัณฑ์
-
-คำค้นหา: "{query}"
-
-ผลิตภัณฑ์:
-{products_str}
-
-ตอบเป็นคะแนนแต่ละตัว (1-10) คั่นด้วย comma
-เช่น: 8,6,9,3,7
-
-คะแนน:"""
-
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "ตอบเฉพาะตัวเลขคะแนน คั่นด้วย comma"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0,
-            max_tokens=50
-        )
-
-        scores_text = response.choices[0].message.content.strip()
-
-        # Parse scores
-        import re
-        scores = [float(s) / 10.0 for s in re.findall(r'\d+', scores_text)]
-
-        # Pair products with scores
-        scored_products = []
-        for i, p in enumerate(candidates):
-            score = scores[i] if i < len(scores) else 0.5
-            scored_products.append((p, score))
-
-        # Sort by score descending
-        scored_products.sort(key=lambda x: x[1], reverse=True)
-
-        logger.info(f"✓ Scored products: {[(p.get('product_name', '')[:15], s) for p, s in scored_products[:5]]}")
-        return scored_products
-
-    except Exception as e:
-        logger.error(f"Scoring failed: {e}", exc_info=True)
-        return [(p, p.get('similarity', 0.5)) for p in products]
 
 
 # Simple relevance check (lightweight, no LLM)

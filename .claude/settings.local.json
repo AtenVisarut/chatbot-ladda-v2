@@ -14,7 +14,8 @@
       "Bash(powershell -Command \"Get-Content ''C:\\chatbot ladda ตัวหลัก 2.5 มีการถามตอบขอระยะการปลูก\\ข้อมูลปุ๋ยicp.csv'' -TotalCount 20\")",
       "Bash(powershell:*)",
       "Bash(cat:*)",
-      "Bash(railway up:*)"
+      "Bash(railway up:*)",
+      "Bash(railway status:*)"
     ],
     "deny": [],
     "ask": []
