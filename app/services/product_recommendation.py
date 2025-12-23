@@ -1879,6 +1879,21 @@ async def retrieve_products_with_matching_score(
             all_results = filter_products_by_plant(all_results, plant_type)
             logger.info(f"   → After plant filter: {len(all_results)} products")
 
+        # 🆕 Filter by pathogen_type (Oomycetes vs Fungi)
+        if all_results:
+            if is_oomycetes_disease(disease_name):
+                all_results = filter_products_for_oomycetes(all_results, disease_name)
+                logger.info(f"   → After Oomycetes filter: {len(all_results)} products")
+            else:
+                # Check if it's a fungal disease
+                disease_lower = disease_name.lower()
+                fungal_keywords = ["โรคใบ", "ราสนิม", "ราน้ำค้าง", "ราแป้ง", "แอนแทรคโนส",
+                                   "โรคเน่า", "ใบไหม้", "leaf spot", "rust", "blight", "rot"]
+                is_fungal = any(kw in disease_lower for kw in fungal_keywords)
+                if is_fungal:
+                    all_results = filter_products_for_fungi(all_results, disease_name)
+                    logger.info(f"   → After Fungi filter: {len(all_results)} products")
+
         # 2. Calculate Matching Score for each product
         scored_products = []
         seen_products = set()
