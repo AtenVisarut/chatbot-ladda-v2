@@ -15,12 +15,48 @@ ENABLE_RERANKING = True  # Set to False to disable re-ranking for faster respons
 # =============================================================================
 # Mapping โรค/ปัญหา → ประเภทสินค้าที่เหมาะสม (ใช้ระบุ required_category)
 # =============================================================================
+# =============================================================================
+# Keywords สำหรับโรคแบคทีเรีย (Bacterial diseases)
+# โรคเหล่านี้ต้องใช้ยาฆ่าแบคทีเรีย (Bactericide) ไม่ใช่ยาฆ่าเชื้อรา (Fungicide)
+# =============================================================================
+BACTERIAL_KEYWORDS = [
+    # โรคข้าว (Rice bacterial diseases)
+    "bacterial leaf blight", "โรคขอบใบแห้ง", "ขอบใบแห้ง", "blb", "xanthomonas",
+    "bacterial leaf streak", "โรคใบขีดโปร่งแสง", "ใบขีดโปร่งแสง",
+    "bacterial panicle blight", "โรครวงเน่า",
+    # โรคผักและไม้ผล
+    "bacterial wilt", "โรคเหี่ยวเขียว", "เหี่ยวเขียว", "ralstonia",
+    "bacterial spot", "จุดแบคทีเรีย",
+    "soft rot", "โรคเน่าเละ", "erwinia",
+    "citrus canker", "โรคแคงเกอร์", "แคงเกอร์",
+    "fire blight", "โรคไฟไหม้",
+    # คำทั่วไป
+    "แบคทีเรีย", "bacteria", "bacterium",
+]
+
+
+def is_bacterial_disease(disease_name: str) -> bool:
+    """ตรวจสอบว่าเป็นโรคที่เกิดจากแบคทีเรียหรือไม่"""
+    disease_lower = disease_name.lower()
+    for keyword in BACTERIAL_KEYWORDS:
+        if keyword.lower() in disease_lower:
+            return True
+    return False
+
+
 # Keywords สำหรับโรคจากเชื้อรา
 FUNGAL_KEYWORDS = [
+    # โรคข้าว (Rice diseases)
     "โรคไหม้", "rice blast", "blast", "pyricularia",
     "โรคใบจุด", "leaf spot", "brown spot", "จุดสีน้ำตาล",
     "โรคกาบใบแห้ง", "sheath blight", "rhizoctonia",
     "โรคถอดฝัก", "bakanae", "fusarium",
+    "โรคดอกกระถิน", "false smut", "smut", "ustilaginoidea",  # เพิ่มใหม่
+    "โรคเมล็ดด่าง", "dirty panicle", "grain discoloration",  # เพิ่มใหม่
+    "โรคเน่าคอรวง", "neck rot", "neck blast",  # เพิ่มใหม่
+    "โรคใบขีด", "narrow brown leaf spot", "cercospora",  # เพิ่มใหม่
+    "โรคกาบใบเน่า", "sheath rot",  # เพิ่มใหม่
+    # โรคทั่วไป (General diseases)
     "โรคเน่า", "rot", "anthracnose", "แอนแทรคโนส",
     "โรคราน้ำค้าง", "downy mildew", "ราน้ำค้าง",
     "โรคราสนิม", "rust", "ราสนิม",
@@ -29,6 +65,9 @@ FUNGAL_KEYWORDS = [
     "โรคโคนเน่า", "stem rot", "โคนเน่า",
     "โรครากเน่า", "root rot", "รากเน่า",
     "เชื้อรา", "fungus", "fungi", "ป้องกันโรค",
+    # โรคไม้ผล (Fruit tree diseases)
+    "โรคราสีชมพู", "pink disease",  # เพิ่มใหม่
+    "โรคใบจุดสาหร่าย", "algal leaf spot",  # เพิ่มใหม่
 ]
 
 # Keywords สำหรับแมลง/ศัตรูพืช
@@ -56,6 +95,261 @@ WEED_KEYWORDS = [
     "หญ้าแดง", "red sprangletop",
     "กก", "sedge", "กำจัดวัชพืช",
 ]
+
+# =============================================================================
+# Dynamic Product Matching - Query จาก column "target_pest" ใน DB โดยตรง
+# ไม่ต้อง maintain hard-code mapping - sync กับ DB อัตโนมัติ
+# =============================================================================
+
+# Keywords สำหรับแยก disease name เป็นคำค้นหา
+DISEASE_SEARCH_PATTERNS = {
+    # โรคข้าว - Thai to searchable keywords
+    "โรคดอกกระถิน": ["ดอกกระถิน", "false smut"],
+    "โรคเมล็ดด่าง": ["เมล็ดด่าง", "dirty panicle"],
+    "โรคไหม้": ["ไหม้", "blast"],
+    "โรคกาบใบแห้ง": ["กาบใบแห้ง", "sheath blight"],
+    "โรคใบจุด": ["ใบจุด", "leaf spot", "brown spot"],
+    # โรค Oomycetes
+    "โรครากเน่าโคนเน่า": ["รากเน่า", "โคนเน่า", "phytophthora"],
+    "โรคราน้ำค้าง": ["ราน้ำค้าง", "downy mildew"],
+    # โรคทั่วไป
+    "โรคแอนแทรคโนส": ["แอนแทรคโนส", "anthracnose"],
+    "โรคราแป้ง": ["ราแป้ง", "powdery mildew"],
+    "โรคราสนิม": ["ราสนิม", "rust"],
+}
+
+
+def extract_search_keywords(disease_name: str) -> List[str]:
+    """
+    แยก keywords จากชื่อโรคเพื่อใช้ค้นหาใน target_pest column
+
+    Args:
+        disease_name: ชื่อโรค เช่น "โรคดอกกระถิน (False Smut)"
+
+    Returns:
+        รายการ keywords สำหรับค้นหา
+    """
+    keywords = []
+    disease_lower = disease_name.lower()
+
+    # 1. ตรวจสอบจาก pattern ที่กำหนดไว้
+    for pattern, search_terms in DISEASE_SEARCH_PATTERNS.items():
+        if pattern.lower() in disease_lower or any(term.lower() in disease_lower for term in search_terms):
+            keywords.extend(search_terms)
+
+    # 2. แยกคำภาษาไทยจากชื่อโรค
+    import re
+    # ดึงส่วนภาษาไทย (ก่อนวงเล็บ)
+    thai_part = re.split(r'[\(\[]', disease_name)[0].strip()
+    # ลบคำนำหน้า "โรค"
+    if thai_part.startswith("โรค"):
+        thai_part = thai_part[3:].strip()
+    if thai_part and thai_part not in keywords:
+        keywords.append(thai_part)
+
+    # 3. ดึงส่วนภาษาอังกฤษ (ในวงเล็บ)
+    eng_match = re.search(r'[\(\[](.*?)[\)\]]', disease_name)
+    if eng_match:
+        eng_part = eng_match.group(1).strip()
+        # แยกเป็นคำ
+        for word in eng_part.split():
+            word_clean = word.strip().lower()
+            if len(word_clean) > 2 and word_clean not in ['the', 'and', 'for', 'rice']:
+                if word_clean not in [k.lower() for k in keywords]:
+                    keywords.append(word_clean)
+
+    # 4. เพิ่มชื่อเต็มเป็น keyword
+    if disease_name not in keywords:
+        keywords.insert(0, disease_name)
+
+    return keywords
+
+
+async def query_products_by_target_pest(disease_name: str, required_category: str = None) -> List[Dict]:
+    """
+    ค้นหาสินค้าจาก DB โดยตรง โดย match กับ column "target_pest" (ศัตรูพืชที่กำจัดได้)
+
+    Args:
+        disease_name: ชื่อโรค/ศัตรูพืช
+        required_category: ประเภทสินค้าที่ต้องการ (optional)
+
+    Returns:
+        รายการสินค้าที่ match กับ target_pest
+    """
+    if not supabase_client:
+        return []
+
+    try:
+        keywords = extract_search_keywords(disease_name)
+        logger.info(f"🔍 Searching target_pest with keywords: {keywords[:5]}")  # Log first 5
+
+        products_found = []
+        seen_ids = set()
+
+        for keyword in keywords[:5]:  # จำกัด 5 keywords แรก
+            try:
+                # Query with ILIKE on target_pest column
+                query = supabase_client.table('products').select('*')
+                query = query.ilike('target_pest', f'%{keyword}%')
+
+                # Filter by category if specified
+                if required_category:
+                    query = query.eq('product_category', required_category)
+
+                result = query.limit(10).execute()
+
+                if result.data:
+                    for p in result.data:
+                        if p['id'] not in seen_ids:
+                            seen_ids.add(p['id'])
+                            # Add match info for debugging
+                            p['matched_keyword'] = keyword
+                            products_found.append(p)
+
+            except Exception as e:
+                logger.debug(f"Error querying with keyword '{keyword}': {e}")
+                continue
+
+        if products_found:
+            logger.info(f"✅ Found {len(products_found)} products from target_pest matching")
+            for p in products_found[:3]:
+                logger.debug(f"   → {p.get('product_name')} (matched: {p.get('matched_keyword')})")
+        else:
+            logger.debug(f"⚠️ No products found for: {disease_name}")
+
+        return products_found
+
+    except Exception as e:
+        logger.error(f"Error in query_products_by_target_pest: {e}")
+        return []
+
+
+# =============================================================================
+# Oomycetes Diseases - โรคที่เกิดจาก Oomycetes (ไม่ใช่เชื้อราแท้)
+# ต้องใช้สารเฉพาะที่ออกฤทธิ์ต่อ Oomycetes
+# =============================================================================
+OOMYCETES_DISEASES = [
+    # โรครากเน่าโคนเน่า (Phytophthora)
+    "phytophthora", "ไฟทอฟธอรา", "ไฟท็อปธอรา", "รากเน่าโคนเน่า", "รากเน่า", "โคนเน่า",
+    "root rot", "stem rot", "crown rot",
+    # โรคราน้ำค้าง (Downy Mildew)
+    "pythium", "พิเทียม", "ราน้ำค้าง", "downy mildew",
+    # โรคเน่าเละ
+    "เน่าเละ", "damping off", "damping-off",
+]
+
+# Active ingredients ที่เหมาะกับ Oomycetes
+OOMYCETES_ACTIVE_INGREDIENTS = [
+    # Carbamate - Propamocarb
+    "propamocarb", "โพรพาโมคาร์บ",
+    # Phenylamides - Metalaxyl
+    "metalaxyl", "เมทาแลกซิล", "metalaxyl-m", "เมฟีโนแซม", "mefenoxam",
+    # Phosphonates - Fosetyl
+    "fosetyl", "ฟอสเอทิล", "ฟอสอีทิล", "phosphonic", "phosphonate",
+    # Cyanoacetamide oxime - Cymoxanil
+    "cymoxanil", "ไซม็อกซานิล", "ไซม๊อกซานิล", "ไซม๊อคซานิล",
+    # Carboxylic acid amide - Dimethomorph
+    "dimethomorph", "ไดเมโทมอร์ฟ",
+    # Quinone outside inhibitors with Oomycete activity
+    "mandipropamid", "แมนดิโพรพามิด",
+    # Cinnamic acid - Dimethomorph related
+    "fluopicolide", "ฟลูโอพิโคไลด์",
+]
+
+# Active ingredients ที่ไม่เหมาะกับ Oomycetes (เชื้อราแท้เท่านั้น)
+NON_OOMYCETES_ACTIVE_INGREDIENTS = [
+    # Imidazoles - ไม่ออกฤทธิ์ต่อ Oomycetes
+    "prochloraz", "โพรคลอราซ", "imazalil", "อิมาซาลิล",
+    # Triazoles - ไม่ค่อยออกฤทธิ์ต่อ Oomycetes
+    "propiconazole", "difenoconazole", "tebuconazole", "hexaconazole",
+    "โพรพิโคนาโซล", "ไดฟีโนโคนาโซล", "เทบูโคนาโซล", "เฮกซาโคนาโซล",
+    # Benzimidazoles - ไม่ออกฤทธิ์ต่อ Oomycetes
+    "carbendazim", "คาร์เบนดาซิม", "benomyl", "เบโนมิล", "thiabendazole",
+]
+
+
+def is_oomycetes_disease(disease_name: str) -> bool:
+    """ตรวจสอบว่าเป็นโรคที่เกิดจาก Oomycetes หรือไม่"""
+    disease_lower = disease_name.lower()
+    for keyword in OOMYCETES_DISEASES:
+        if keyword.lower() in disease_lower:
+            return True
+    return False
+
+
+def filter_products_for_oomycetes(products: List[Dict], disease_name: str) -> List[Dict]:
+    """
+    กรองสินค้าสำหรับโรค Oomycetes ให้เหลือเฉพาะที่มี active ingredient เหมาะสม
+
+    Args:
+        products: รายการสินค้าทั้งหมด
+        disease_name: ชื่อโรค
+
+    Returns:
+        รายการสินค้าที่เหมาะกับ Oomycetes (ถ้าไม่พบให้ return สินค้าทั้งหมด)
+    """
+    if not is_oomycetes_disease(disease_name):
+        return products
+
+    logger.info(f"🦠 โรค Oomycetes detected: {disease_name}")
+    logger.info(f"   กรองสินค้าที่มี active ingredient เหมาะสม...")
+
+    suitable_products = []
+    unsuitable_products = []
+    neutral_products = []  # สินค้าที่ไม่แน่ใจ
+
+    for product in products:
+        active_ingredient = (product.get("active_ingredient") or "").lower()
+        product_name = product.get("product_name", "")
+        target_pest = (product.get("target_pest") or "").lower()
+
+        # ตรวจสอบว่ามี active ingredient ที่เหมาะกับ Oomycetes หรือไม่
+        is_suitable = False
+        is_unsuitable = False
+
+        for ai in OOMYCETES_ACTIVE_INGREDIENTS:
+            if ai.lower() in active_ingredient:
+                is_suitable = True
+                break
+
+        # ตรวจสอบว่าระบุว่าใช้กับ Phytophthora/รากเน่าโคนเน่าหรือไม่
+        if not is_suitable:
+            for keyword in ["phytophthora", "ไฟทอฟธอรา", "รากเน่า", "โคนเน่า", "pythium"]:
+                if keyword in target_pest:
+                    is_suitable = True
+                    break
+
+        # ตรวจสอบว่าเป็น active ingredient ที่ไม่เหมาะกับ Oomycetes หรือไม่
+        if not is_suitable:
+            for ai in NON_OOMYCETES_ACTIVE_INGREDIENTS:
+                if ai.lower() in active_ingredient:
+                    is_unsuitable = True
+                    break
+
+        if is_suitable:
+            suitable_products.append(product)
+            logger.debug(f"   ✓ เหมาะสม: {product_name} ({active_ingredient})")
+        elif is_unsuitable:
+            unsuitable_products.append(product)
+            logger.debug(f"   ✗ ไม่เหมาะ: {product_name} ({active_ingredient})")
+        else:
+            neutral_products.append(product)
+            logger.debug(f"   ? ไม่แน่ใจ: {product_name} ({active_ingredient})")
+
+    logger.info(f"   → เหมาะสม: {len(suitable_products)}, ไม่เหมาะ: {len(unsuitable_products)}, ไม่แน่ใจ: {len(neutral_products)}")
+
+    # ถ้ามีสินค้าเหมาะสม → ใช้เฉพาะสินค้าเหมาะสม
+    if suitable_products:
+        return suitable_products
+
+    # ถ้าไม่มีสินค้าเหมาะสม → ใช้สินค้าที่ไม่แน่ใจ (ไม่ใช่สินค้าที่ไม่เหมาะ)
+    if neutral_products:
+        logger.warning(f"⚠️ ไม่พบสินค้าที่เหมาะกับ Oomycetes โดยเฉพาะ → ใช้สินค้าที่ไม่แน่ใจ")
+        return neutral_products
+
+    # ถ้าไม่มีเลย → return สินค้าทั้งหมด (fallback)
+    logger.warning(f"⚠️ ไม่พบสินค้าที่เหมาะกับ Oomycetes → ใช้สินค้าทั้งหมด")
+    return products
 
 
 def get_required_category(disease_name: str) -> tuple:
@@ -582,6 +876,65 @@ def reciprocal_rank_fusion(vector_results: List[Dict], keyword_results: List[Dic
         # Fallback: return vector results
         return vector_results
 
+
+async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
+    """
+    ดึงข้อมูลสินค้าจาก Supabase ตามรายชื่อสินค้า
+
+    Args:
+        product_names: รายการชื่อสินค้าที่ต้องการ
+
+    Returns:
+        รายการข้อมูลสินค้า (dict) ที่พบในฐานข้อมูล
+    """
+    if not product_names or not supabase_client:
+        return []
+
+    try:
+        products_found = []
+        seen_ids = set()
+
+        for name in product_names:
+            # ค้นหาแบบ exact match ก่อน
+            try:
+                result = supabase_client.table('products')\
+                    .select('*')\
+                    .eq('product_name', name)\
+                    .execute()
+
+                if result.data:
+                    for p in result.data:
+                        if p['id'] not in seen_ids:
+                            seen_ids.add(p['id'])
+                            products_found.append(p)
+                    continue
+            except Exception:
+                pass
+
+            # ถ้าไม่เจอ exact match ลอง ILIKE
+            try:
+                result = supabase_client.table('products')\
+                    .select('*')\
+                    .ilike('product_name', f'%{name}%')\
+                    .limit(2)\
+                    .execute()
+
+                if result.data:
+                    for p in result.data:
+                        if p['id'] not in seen_ids:
+                            seen_ids.add(p['id'])
+                            products_found.append(p)
+            except Exception as e:
+                logger.debug(f"Error fetching product '{name}': {e}")
+
+        logger.info(f"📦 Fetched {len(products_found)} products by name from DB")
+        return products_found
+
+    except Exception as e:
+        logger.error(f"Error in fetch_products_by_names: {e}")
+        return []
+
+
 async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) -> List[ProductRecommendation]:
     """
     Query products using Hybrid Search (Vector + Keyword/BM25)
@@ -598,8 +951,41 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         disease_name = disease_info.disease_name
 
+        # 🦠 ตรวจสอบว่าเป็นโรคแบคทีเรียหรือไม่
+        # โรคแบคทีเรีย (เช่น Bacterial Leaf Blight) ต้องใช้ยาฆ่าแบคทีเรีย ไม่ใช่ยาฆ่าเชื้อรา
+        if is_bacterial_disease(disease_name):
+            logger.warning(f"🦠 โรคแบคทีเรีย detected: {disease_name}")
+            logger.warning("   ⚠️ ไม่มียาฆ่าแบคทีเรีย (Bactericide) ในฐานข้อมูล")
+            logger.warning("   ⚠️ ไม่แนะนำยาฆ่าเชื้อรา (Fungicide) เพราะไม่เหมาะกับโรคแบคทีเรีย")
+            # Return empty list - ไม่แนะนำยา Fungicide สำหรับโรคแบคทีเรีย
+            return []
+
         # ระบุประเภทสินค้าที่ต้องการ (fungicide/insecticide/herbicide)
+        # ต้องระบุก่อนเพื่อใช้ใน target_pest query
         required_category, required_category_th = get_required_category(disease_name)
+
+        # ✅ Dynamic Query - ค้นหาสินค้าจาก target_pest column ใน DB โดยตรง
+        # แม่นยำกว่า vector search เพราะ match กับข้อมูลจริงใน DB
+        logger.info(f"🔍 Step 1: Query products by target_pest for: {disease_name}")
+        target_pest_products = await query_products_by_target_pest(disease_name, required_category)
+
+        if target_pest_products:
+            logger.info(f"✅ Found {len(target_pest_products)} products from target_pest matching")
+
+            # Filter for Oomycetes diseases if applicable
+            if is_oomycetes_disease(disease_name):
+                target_pest_products = filter_products_for_oomycetes(target_pest_products, disease_name)
+                logger.info(f"   → After Oomycetes filter: {len(target_pest_products)} products")
+
+            if target_pest_products:
+                direct_recommendations = build_recommendations_from_data(target_pest_products[:6])
+                if direct_recommendations:
+                    # Cache the results
+                    cache_key = f"products:{disease_name}"
+                    await set_to_cache("products", cache_key, [r.dict() for r in direct_recommendations])
+                    return direct_recommendations
+
+        logger.info("📡 Step 2: Fallback to Vector Search...")
 
         # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ → ถ้ามี ค้นหาทั้งยาฆ่าแมลงและยารักษาโรค
         pest_type = ""
@@ -675,6 +1061,12 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                     logger.info(f"🏷️ Filtering by category: {required_category_th} ({required_category})")
                     hybrid_results = filter_products_by_category(hybrid_results, required_category)
                     logger.info(f"   → After filter: {len(hybrid_results)} products")
+
+                # 🆕 Filter for Oomycetes diseases (Phytophthora, Pythium, etc.)
+                # ต้องใช้ active ingredient ที่เหมาะสม (Propamocarb, Metalaxyl, Fosetyl, Cymoxanil)
+                if is_oomycetes_disease(disease_name):
+                    hybrid_results = filter_products_for_oomycetes(hybrid_results, disease_name)
+                    logger.info(f"   → After Oomycetes filter: {len(hybrid_results)} products")
 
                 # Apply simple relevance boost first
                 for p in hybrid_results:
