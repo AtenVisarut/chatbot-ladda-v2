@@ -288,6 +288,52 @@ def is_oomycetes_disease(disease_name: str) -> bool:
     return False
 
 
+async def fetch_products_by_pathogen_type(pathogen_type: str, plant_type: str = None) -> List[Dict]:
+    """
+    ดึงสินค้าโดยตรงจาก pathogen_type column
+    ใช้สำหรับ Oomycetes/Fungi ที่ต้องการความแม่นยำสูง
+    """
+    try:
+        if not supabase_client:
+            return []
+
+        logger.info(f"📦 Direct query: pathogen_type='{pathogen_type}'")
+
+        query = supabase_client.table("products").select(
+            "id, product_name, active_ingredient, target_pest, applicable_crops, "
+            "how_to_use, usage_period, usage_rate, link_product, pathogen_type"
+        ).eq("pathogen_type", pathogen_type)
+
+        result = query.execute()
+
+        if not result.data:
+            logger.warning(f"   ไม่พบสินค้า pathogen_type='{pathogen_type}'")
+            return []
+
+        products = result.data
+        logger.info(f"   → พบ {len(products)} สินค้า")
+
+        # Filter by plant type if specified
+        if plant_type:
+            filtered = []
+            plant_lower = plant_type.lower()
+            for p in products:
+                crops = (p.get("applicable_crops") or "").lower()
+                # Generic crops that work for most plants
+                generic_keywords = ["พืชไร่", "ไม้ผล", "พืชผัก", "ทุกชนิด"]
+                if plant_lower in crops or any(kw in crops for kw in generic_keywords):
+                    filtered.append(p)
+            if filtered:
+                products = filtered
+                logger.info(f"   → หลังกรองพืช '{plant_type}': {len(products)} สินค้า")
+
+        return products
+
+    except Exception as e:
+        logger.error(f"Error fetching products by pathogen_type: {e}")
+        return []
+
+
 def filter_products_for_oomycetes(products: List[Dict], disease_name: str) -> List[Dict]:
     """
     กรองสินค้าสำหรับโรค Oomycetes ให้เหลือเฉพาะที่มี pathogen_type = 'oomycetes'
@@ -1880,19 +1926,28 @@ async def retrieve_products_with_matching_score(
             logger.info(f"   → After plant filter: {len(all_results)} products")
 
         # 🆕 Filter by pathogen_type (Oomycetes vs Fungi)
-        if all_results:
-            if is_oomycetes_disease(disease_name):
+        if is_oomycetes_disease(disease_name):
+            # สำหรับ Oomycetes: ใช้ Direct Query เพื่อให้ได้สินค้าครบทุกตัว
+            logger.info(f"🦠 โรค Oomycetes detected - ใช้ Direct Query แทน Hybrid Search filter")
+            oomycetes_products = await fetch_products_by_pathogen_type("oomycetes", plant_type)
+
+            if oomycetes_products:
+                # ใช้ผลจาก direct query แทน (ครบทุกตัว)
+                all_results = oomycetes_products
+                logger.info(f"   → Direct query Oomycetes: {len(all_results)} products")
+            else:
+                # Fallback: ใช้ filter จาก hybrid search results
                 all_results = filter_products_for_oomycetes(all_results, disease_name)
                 logger.info(f"   → After Oomycetes filter: {len(all_results)} products")
-            else:
-                # Check if it's a fungal disease
-                disease_lower = disease_name.lower()
-                fungal_keywords = ["โรคใบ", "ราสนิม", "ราน้ำค้าง", "ราแป้ง", "แอนแทรคโนส",
-                                   "โรคเน่า", "ใบไหม้", "leaf spot", "rust", "blight", "rot"]
-                is_fungal = any(kw in disease_lower for kw in fungal_keywords)
-                if is_fungal:
-                    all_results = filter_products_for_fungi(all_results, disease_name)
-                    logger.info(f"   → After Fungi filter: {len(all_results)} products")
+        elif all_results:
+            # Check if it's a fungal disease
+            disease_lower = disease_name.lower()
+            fungal_keywords = ["โรคใบ", "ราสนิม", "ราน้ำค้าง", "ราแป้ง", "แอนแทรคโนส",
+                               "โรคเน่า", "ใบไหม้", "leaf spot", "rust", "blight", "rot"]
+            is_fungal = any(kw in disease_lower for kw in fungal_keywords)
+            if is_fungal:
+                all_results = filter_products_for_fungi(all_results, disease_name)
+                logger.info(f"   → After Fungi filter: {len(all_results)} products")
 
         # 2. Calculate Matching Score for each product
         scored_products = []
