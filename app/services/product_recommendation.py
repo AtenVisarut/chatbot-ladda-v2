@@ -232,10 +232,16 @@ OOMYCETES_DISEASES = [
     # โรครากเน่าโคนเน่า (Phytophthora)
     "phytophthora", "ไฟทอฟธอรา", "ไฟท็อปธอรา", "รากเน่าโคนเน่า", "รากเน่า", "โคนเน่า",
     "root rot", "stem rot", "crown rot",
+    # โรคผลเน่า (Fruit Rot) - พบบ่อยในทุเรียน เกิดจาก Phytophthora palmivora
+    "fruit rot", "ผลเน่า", "โรคผลเน่า",
+    # โรคใบไหม้ (Late Blight) - Phytophthora infestans (มันฝรั่ง/มะเขือเทศ)
+    "late blight", "ใบไหม้มันฝรั่ง",
     # โรคราน้ำค้าง (Downy Mildew)
     "pythium", "พิเทียม", "ราน้ำค้าง", "downy mildew",
-    # โรคเน่าเละ
+    # โรคเน่าเละ (จาก Oomycetes)
     "เน่าเละ", "damping off", "damping-off",
+    # โรคยางไหล/เปลือกเน่าทุเรียน
+    "ยางไหล", "เปลือกเน่า", "gummosis",
 ]
 
 # Active ingredients ที่เหมาะกับ Oomycetes
