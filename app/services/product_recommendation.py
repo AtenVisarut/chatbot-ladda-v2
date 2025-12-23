@@ -271,6 +271,11 @@ NON_OOMYCETES_ACTIVE_INGREDIENTS = [
     "โพรพิโคนาโซล", "ไดฟีโนโคนาโซล", "เทบูโคนาโซล", "เฮกซาโคนาโซล",
     # Benzimidazoles - ไม่ออกฤทธิ์ต่อ Oomycetes
     "carbendazim", "คาร์เบนดาซิม", "benomyl", "เบโนมิล", "thiabendazole",
+    # Dithiocarbamates - ประสิทธิภาพต่ำกับ Oomycetes (contact fungicide ทั่วไป)
+    "mancozeb", "แมนโคเซบ", "maneb", "แมเนบ", "zineb", "ไซเนบ",
+    "propineb", "โพรพิเนบ", "thiram", "ไทแรม",
+    # Strobilurins - บางตัวไม่ค่อยออกฤทธิ์ต่อ Oomycetes
+    "azoxystrobin", "อะซ็อกซีสโตรบิน",
 ]
 
 
