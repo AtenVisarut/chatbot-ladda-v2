@@ -371,6 +371,7 @@ async def generate_flex_response(
                         "how_to_use": (p.how_to_use or "-")[:200],
                         "usage_rate": (p.usage_rate or "-")[:100],
                         "link_product": (p.link_product or "")[:500] if p.link_product and str(p.link_product).startswith("http") else "",
+                        "image_url": (p.image_url or "") if hasattr(p, 'image_url') else "",
                         "similarity": p.score if hasattr(p, 'score') else 0.8
                     })
 

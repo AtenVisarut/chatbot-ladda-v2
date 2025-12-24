@@ -2059,6 +2059,7 @@ async def retrieve_products_with_matching_score(
                 usage_period=product.get("usage_period", ""),
                 usage_rate=product.get("usage_rate", ""),
                 link_product=product.get("link_product", ""),
+                image_url=product.get("image_url", ""),
                 score=product.get("final_score", 0)
             )
             recommendations.append(rec)
