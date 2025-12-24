@@ -33,7 +33,7 @@ API_TIMEOUT = 60  # seconds - ต้องตอบภายใน 60 วิน�
 API_CONNECT_TIMEOUT = 15
   # seconds - timeout สำหรับ connection
 
-# Initialize OpenRouter client for Gemini 2.5 Pro (disease detection)
+# Initialize OpenRouter client for Gemini 3 Flash (disease detection)
 gemini_client = None
 if OPENROUTER_API_KEY:
     # สร้าง httpx client พร้อม timeout
@@ -50,22 +50,22 @@ if OPENROUTER_API_KEY:
         api_key=OPENROUTER_API_KEY,
         http_client=http_client,
     )
-    logger.info(f"OpenRouter (Gemini 2.5 Pro) initialized with {API_TIMEOUT}s timeout")
+    logger.info(f"OpenRouter (Gemini 3 Flash) initialized with {API_TIMEOUT}s timeout")
 
 
 async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = None) -> DiseaseDetectionResult:
-    """Detect plant disease/pest from an image using Gemini 2.5 Pro via OpenRouter.
+    """Detect plant disease/pest from an image using Gemini 3 Flash via OpenRouter.
 
     The function:
     1. Checks cache (if no extra info).
     2. Builds a detailed prompt with examples.
-    3. Calls Gemini 2.5 Pro (vision) via OpenRouter and expects a JSON response.
+    3. Calls Gemini 3 Flash (vision) via OpenRouter and expects a JSON response.
     4. Parses the response, applies simple post‑processing based on extra_user_info
        to disambiguate common confusions (e.g., leaf spot vs. Anthracnose).
     5. Returns a ``DiseaseDetectionResult`` model.
     """
 
-    logger.info("Starting pest/disease detection with Gemini 2.5 Pro (via OpenRouter)")
+    logger.info("Starting pest/disease detection with Gemini 3 Flash (via OpenRouter)")
 
     # Check if Gemini client is initialized
     if not gemini_client:
@@ -469,7 +469,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
             prompt_text += f"\n\nเพิ่มเติมจากผู้ใช้: {extra_user_info}"
 
         # -----------------------------------------------------------------
-        # Call Gemini 2.5 Pro via OpenRouter (vision model)
+        # Call Gemini 3 Flash via OpenRouter (vision model)
         # -----------------------------------------------------------------
 
         system_instruction = """คุณคือผู้เชี่ยวชาญโรคพืช ตอบเป็น JSON เท่านั้น (ไม่ต้องใส่ ```json)
@@ -482,7 +482,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         try:
             response = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.5-pro-preview",
+                    model="google/gemini-3-flash-preview",  # Upgraded from 2.5 Pro
                     messages=[
                         {
                             "role": "user",
@@ -939,7 +939,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
         try:
             response1 = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-2.5-pro-preview",  # ใช้ 2.5 Pro สำหรับ vision (แม่นยำ)
+                    model="google/gemini-3-flash-preview",  # ใช้ 3 Flash สำหรับ vision (เร็ว + แม่นยำ)
                     messages=[
                         {
                             "role": "user",
