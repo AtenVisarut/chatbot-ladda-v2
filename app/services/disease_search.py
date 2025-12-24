@@ -338,6 +338,90 @@ def build_context_from_diseases(diseases: List[DiseaseMatch]) -> str:
     return "\n".join(context_parts)
 
 
+async def search_diseases_by_text(
+    query: str,
+    top_k: int = 5
+) -> List[DiseaseMatch]:
+    """
+    Search diseases by text query (without image classification).
+    สำหรับคำถามเรื่องพืช/โรคพืชจาก chat
+
+    Args:
+        query: คำถามหรือคำค้นหา เช่น "ข้าวระยะไหนเสี่ยง", "โรคทุเรียน"
+        top_k: จำนวนผลลัพธ์
+
+    Returns:
+        List of DiseaseMatch
+    """
+    if not supabase_client or not openai_client:
+        logger.warning("Supabase or OpenAI client not available")
+        return []
+
+    try:
+        logger.info(f"Searching diseases by text: '{query[:50]}...'")
+
+        # Generate embedding
+        query_embedding = await generate_search_embedding(query)
+        if not query_embedding:
+            logger.warning("Failed to generate embedding, trying keyword search")
+            # Fallback to keyword search
+            result = supabase_client.rpc(
+                'keyword_search_diseases',
+                {
+                    'search_query': query,
+                    'match_count': top_k,
+                    'filter_category': None
+                }
+            ).execute()
+
+            if result.data:
+                return _parse_search_results(result.data, use_hybrid_score=False)
+            return []
+
+        # Try hybrid search first
+        try:
+            result = supabase_client.rpc(
+                'hybrid_search_diseases',
+                {
+                    'query_embedding': query_embedding,
+                    'search_query': query,
+                    'vector_weight': 0.5,
+                    'keyword_weight': 0.5,
+                    'match_threshold': 0.20,  # Lower threshold for text queries
+                    'match_count': top_k,
+                    'filter_category': None
+                }
+            ).execute()
+
+            if result.data:
+                logger.info(f"Found {len(result.data)} diseases via hybrid search")
+                return _parse_search_results(result.data, use_hybrid_score=True)
+        except Exception as e:
+            logger.warning(f"Hybrid search failed: {e}")
+
+        # Fallback to vector search
+        result = supabase_client.rpc(
+            'match_diseases',
+            {
+                'query_embedding': query_embedding,
+                'match_threshold': 0.20,
+                'match_count': top_k,
+                'filter_category': None
+            }
+        ).execute()
+
+        if result.data:
+            logger.info(f"Found {len(result.data)} diseases via vector search")
+            return _parse_search_results(result.data, use_hybrid_score=False)
+
+        logger.warning("No diseases found")
+        return []
+
+    except Exception as e:
+        logger.error(f"Disease text search failed: {e}", exc_info=True)
+        return []
+
+
 async def get_disease_by_key(disease_key: str) -> Optional[DiseaseMatch]:
     """Get a specific disease by its key"""
     if not supabase_client:
