@@ -1297,6 +1297,7 @@ def build_recommendations_from_data(products_data: List[Dict], pest_name: str = 
             usage_period=product.get("usage_period", ""),
             usage_rate=product.get("usage_rate", ""),
             link_product=product.get("link_product", ""),
+            image_url=product.get("image_url", ""),
             score=product.get("similarity", 0.7)
         )
         recommendations.append(rec)

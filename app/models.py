@@ -18,4 +18,5 @@ class ProductRecommendation(BaseModel):
     usage_period: Optional[str] = ""
     usage_rate: Optional[str] = ""
     link_product: Optional[str] = ""
+    image_url: Optional[str] = ""
     score: float = 0.0
