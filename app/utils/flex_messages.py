@@ -1087,6 +1087,9 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
         similarity = product.get('similarity', 0)
         similarity_pct = int(similarity * 100) if similarity else 0
 
+        # ดึง URL รูปภาพสินค้า (ถ้ามี)
+        image_url = product.get('image_url', '')
+
         bubble = {
             "type": "bubble",
             "size": "kilo",
@@ -1246,6 +1249,16 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 "paddingAll": "12px"
             },
         }
+
+        # เพิ่ม hero section สำหรับแสดงรูปภาพสินค้า (ถ้ามี)
+        if image_url and image_url.startswith('https://'):
+            bubble["hero"] = {
+                "type": "image",
+                "url": image_url,
+                "size": "full",
+                "aspectRatio": "1:1",
+                "aspectMode": "cover"
+            }
 
         # Add footer with product link
         product_url = product.get('link_product', '')
