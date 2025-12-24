@@ -1095,6 +1095,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"🖼️ Product: {product.get('product_name', 'N/A')} | image_url: [{image_url[:50] if image_url else 'EMPTY'}]")
+        logger.info(f"   📋 Product keys: {list(product.keys())}")
 
         bubble = {
             "type": "bubble",
