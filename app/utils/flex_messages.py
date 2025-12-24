@@ -1088,7 +1088,13 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
         similarity_pct = int(similarity * 100) if similarity else 0
 
         # ดึง URL รูปภาพสินค้า (ถ้ามี)
-        image_url = product.get('image_url', '')
+        image_url = product.get('image_url', '') or ''
+        image_url = str(image_url).strip()
+
+        # Debug log
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🖼️ Product: {product.get('product_name', 'N/A')} | image_url: [{image_url[:50] if image_url else 'EMPTY'}]")
 
         bubble = {
             "type": "bubble",
