@@ -1263,8 +1263,9 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                 "type": "image",
                 "url": image_url,
                 "size": "full",
-                "aspectRatio": "1:1",
-                "aspectMode": "cover"
+                "aspectRatio": "4:3",
+                "aspectMode": "fit",
+                "backgroundColor": "#FFFFFF"
             }
 
         # Add footer with product link
