@@ -301,7 +301,7 @@ async def fetch_products_by_pathogen_type(pathogen_type: str, plant_type: str = 
 
         query = supabase_client.table("products").select(
             "id, product_name, active_ingredient, target_pest, applicable_crops, "
-            "how_to_use, usage_period, usage_rate, link_product, pathogen_type"
+            "how_to_use, usage_period, usage_rate, link_product, pathogen_type, image_url"
         ).eq("pathogen_type", pathogen_type)
 
         result = query.execute()
