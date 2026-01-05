@@ -276,7 +276,7 @@ async def clear_cache_endpoint(request: Request):
 # Rich Menu Setup Endpoint
 # ============================================================================#
 
-@app.post("/admin/setup-rich-menu")
+@app.api_route("/admin/setup-rich-menu", methods=["GET", "POST"])
 async def setup_rich_menu_endpoint(request: Request, key: str = None):
     """Setup Rich Menu - อัพโหลดรูปและตั้งค่า Rich Menu ใหม่"""
     # Check authentication - session OR secret key

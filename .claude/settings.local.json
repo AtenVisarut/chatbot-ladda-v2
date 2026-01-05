@@ -19,7 +19,8 @@
       "Bash(npx @railway/cli up)",
       "WebFetch(domain:www.icpladda.com)",
       "WebSearch",
-      "WebFetch(domain:chatbot-ladda-production.up.railway.app)"
+      "WebFetch(domain:chatbot-ladda-production.up.railway.app)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
