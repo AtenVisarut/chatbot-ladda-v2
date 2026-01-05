@@ -74,7 +74,7 @@ from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
-from app.services.rich_menu import setup_rich_menu
+from app.services.rich_menu import setup_rich_menu, setup_rich_menu_debug
 from app.services.agro_risk import (
     check_weather,
     analyze_crop_risk,
@@ -341,6 +341,11 @@ async def setup_rich_menu_endpoint(request: Request, key: str = None):
             "message": str(e),
             "traceback": traceback.format_exc()
         }
+
+@app.get("/admin/debug-rich-menu")
+async def debug_rich_menu_endpoint():
+    """Debug Rich Menu - ทดสอบ LINE API และดู config"""
+    return await setup_rich_menu_debug()
 
 # ============================================================================#
 # Dashboard Endpoints

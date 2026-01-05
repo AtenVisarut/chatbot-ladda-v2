@@ -248,6 +248,30 @@ async def delete_default_rich_menu() -> bool:
         return False
 
 
+async def setup_rich_menu_debug() -> dict:
+    """Debug function to test Rich Menu creation step by step"""
+    result = {"steps": [], "config": None, "token_preview": None}
+
+    # Show config
+    result["config"] = RICH_MENU_CONFIG
+    result["token_preview"] = f"{LINE_CHANNEL_ACCESS_TOKEN[:20]}..." if LINE_CHANNEL_ACCESS_TOKEN else "None"
+
+    # Step 1: Try to create rich menu
+    try:
+        url = f"{LINE_API_BASE}/richmenu"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=get_headers(), json=RICH_MENU_CONFIG)
+            result["steps"].append({
+                "step": "create_rich_menu",
+                "status_code": response.status_code,
+                "response": response.text[:500] if response.text else "empty"
+            })
+    except Exception as e:
+        result["steps"].append({"step": "create_rich_menu", "error": str(e)})
+
+    return result
+
+
 async def setup_rich_menu(image_path: str, delete_old: bool = True) -> Optional[str]:
     """
     Setup Rich Menu ครบวงจร:
