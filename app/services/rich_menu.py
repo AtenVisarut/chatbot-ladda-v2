@@ -7,14 +7,14 @@ import logging
 import httpx
 from typing import Optional, Dict, Any
 
-from app.config import LINE_CHANNEL_ACCESS_TOKEN, LIFF_URL
+from app.config import LINE_CHANNEL_ACCESS_TOKEN, LIFF_URL, LIFF_DISEASES_URL
 
 logger = logging.getLogger(__name__)
 
 # LINE API Base URL
 LINE_API_BASE = "https://api.line.me/v2/bot"
 
-# Rich Menu Configuration
+# Rich Menu Configuration (5 ปุ่ม - 3 บน + 2 ล่าง)
 RICH_MENU_CONFIG = {
     "size": {
         "width": 2500,
@@ -26,7 +26,7 @@ RICH_MENU_CONFIG = {
     "areas": [
         {
             # A: ลงทะเบียน (บนซ้าย)
-            "bounds": {"x": 0, "y": 0, "width": 1250, "height": 843},
+            "bounds": {"x": 0, "y": 0, "width": 833, "height": 843},
             "action": {
                 "type": "uri",
                 "label": "ลงทะเบียน",
@@ -34,15 +34,23 @@ RICH_MENU_CONFIG = {
             }
         },
         {
-            # B: วิเคราะห์โรค (บนขวา) - เปิดแกลเลอรี่
-            "bounds": {"x": 1250, "y": 0, "width": 1250, "height": 843},
+            # B: กล้อง (บนกลาง) - เปิดกล้อง
+            "bounds": {"x": 833, "y": 0, "width": 834, "height": 843},
             "action": {
-                "type": "cameraRoll",
-                "label": "วิเคราะห์โรค"
+                "type": "camera",
+                "label": "กล้อง"
             }
         },
         {
-            # C: ดูสภาพอากาศ (ล่างซ้าย) - เปิด Location picker
+            # C: Gallery (บนขวา) - เปิดแกลเลอรี่
+            "bounds": {"x": 1667, "y": 0, "width": 833, "height": 843},
+            "action": {
+                "type": "cameraRoll",
+                "label": "Gallery"
+            }
+        },
+        {
+            # D: ดูสภาพอากาศ (ล่างซ้าย) - เปิด Location picker
             "bounds": {"x": 0, "y": 843, "width": 1250, "height": 843},
             "action": {
                 "type": "location",
@@ -50,12 +58,12 @@ RICH_MENU_CONFIG = {
             }
         },
         {
-            # D: ช่วยเหลือ (ล่างขวา)
+            # E: คู่มือโรคพืช (ล่างขวา) - เปิด LIFF หน้าคู่มือโรคพืช
             "bounds": {"x": 1250, "y": 843, "width": 1250, "height": 843},
             "action": {
-                "type": "message",
-                "label": "ช่วยเหลือ",
-                "text": "ช่วยเหลือ"
+                "type": "uri",
+                "label": "คู่มือโรคพืช",
+                "uri": LIFF_DISEASES_URL
             }
         }
     ]

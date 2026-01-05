@@ -23,6 +23,9 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 LIFF_ID = os.getenv("LIFF_ID", "YOUR_LIFF_ID_HERE")
 LIFF_URL = f"https://liff.line.me/{LIFF_ID}"
 
+# LIFF Disease Guide URL (หน้าคู่มือโรคพืช)
+LIFF_DISEASES_URL = os.getenv("LIFF_DISEASES_URL", "https://chatbot-ladda-production.up.railway.app/liff/diseases")
+
 # Agro-Risk API Configuration
 AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water.vercel.app")
 

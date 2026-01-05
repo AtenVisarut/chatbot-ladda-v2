@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>รายละเอียดโรค - ICP Ladda</title>
+
+    <!-- LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding-bottom: 100px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header-content {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header-title h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .header-title p {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        /* Content */
+        .content {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px 20px;
+        }
+
+        /* Disease Card */
+        .disease-main {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .disease-title {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .disease-title-en {
+            font-size: 1em;
+            color: #666;
+            font-style: italic;
+            margin-bottom: 15px;
+        }
+
+        .disease-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .meta-tag {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .meta-tag.category {
+            background: #fff8dc;
+            color: #8b4513;
+        }
+
+        .meta-tag.pathogen {
+            background: #e6f3ff;
+            color: #0066cc;
+        }
+
+        /* Section */
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 18px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .section-icon {
+            font-size: 1.3em;
+        }
+
+        .section-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* List */
+        .info-list {
+            list-style: none;
+        }
+
+        .info-list li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            color: #444;
+            line-height: 1.5;
+        }
+
+        .info-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #4a7c23;
+            font-weight: bold;
+        }
+
+        /* Key Features */
+        .key-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .feature-tag {
+            padding: 6px 12px;
+            background: #f0f7e6;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: #2d5016;
+            border: 1px solid #c8e6c9;
+        }
+
+        /* Severity */
+        .severity-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .severity-item {
+            text-align: center;
+            padding: 12px;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .severity-item.low { background: #e8f5e9; }
+        .severity-item.medium { background: #fff8e1; }
+        .severity-item.high { background: #ffebee; }
+
+        .severity-label {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .severity-value {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Products Section */
+        .products-section {
+            background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);
+            border: 2px solid #c8e6c9;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .product-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .product-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2d5016;
+            margin-bottom: 8px;
+        }
+
+        .product-info {
+            font-size: 0.9em;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .product-info strong {
+            color: #333;
+        }
+
+        .product-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #4a7c23;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        /* Prevention Section */
+        .prevention-list {
+            counter-reset: step;
+        }
+
+        .prevention-list li {
+            padding-left: 35px;
+        }
+
+        .prevention-list li::before {
+            content: counter(step);
+            counter-increment: step;
+            position: absolute;
+            left: 0;
+            width: 22px;
+            height: 22px;
+            background: #4a7c23;
+            color: white;
+            border-radius: 50%;
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .footer-content {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .footer-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Sarabun', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .footer-btn.primary {
+            background: #4a7c23;
+            color: white;
+        }
+
+        .footer-btn.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #4a7c23;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error */
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .error-state .icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .error-state .retry-btn {
+            margin-top: 15px;
+            padding: 10px 25px;
+            background: #4a7c23;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div class="header-title">
+                <h1 id="headerTitle">รายละเอียดโรค</h1>
+                <p id="headerSubtitle">กำลังโหลด...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loadingSection">
+        <div class="spinner"></div>
+        <p>กำลังโหลดข้อมูลโรค...</p>
+    </div>
+
+    <!-- Content -->
+    <div class="content" id="contentSection" style="display: none;">
+        <!-- Disease Main Info -->
+        <div class="disease-main">
+            <div class="disease-title" id="diseaseName">-</div>
+            <div class="disease-title-en" id="diseaseNameEn">-</div>
+            <div class="disease-meta">
+                <span class="meta-tag category" id="diseaseCategory">-</span>
+                <span class="meta-tag pathogen" id="diseasePathogen">-</span>
+            </div>
+        </div>
+
+        <!-- Symptoms Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-icon">🔍</span>
+                <span class="section-title">อาการที่พบ</span>
+            </div>
+            <ul class="info-list" id="symptomsList">
+                <li>กำลังโหลด...</li>
+            </ul>
+        </div>
+
+        <!-- Key Features Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-icon">⭐</span>
+                <span class="section-title">ลักษณะเด่นในการจำแนก</span>
+            </div>
+            <div class="key-features" id="keyFeatures">
+                <!-- Features will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Severity Section -->
+        <div class="section" id="severitySection" style="display: none;">
+            <div class="section-header">
+                <span class="section-icon">📊</span>
+                <span class="section-title">ระดับความรุนแรง</span>
+            </div>
+            <div class="severity-grid" id="severityGrid">
+                <!-- Severity indicators will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Distinguish Section -->
+        <div class="section" id="distinguishSection" style="display: none;">
+            <div class="section-header">
+                <span class="section-icon">🔄</span>
+                <span class="section-title">วิธีแยกจากโรคที่คล้าย</span>
+            </div>
+            <p id="distinguishText" style="color: #555; line-height: 1.6;">-</p>
+        </div>
+
+        <!-- Recommended Products Section -->
+        <div class="section products-section" id="productsSection" style="display: none;">
+            <div class="section-header">
+                <span class="section-icon">💊</span>
+                <span class="section-title">ยาและผลิตภัณฑ์ที่แนะนำ</span>
+            </div>
+            <div id="productsList">
+                <!-- Products will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Prevention Section -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-icon">🛡️</span>
+                <span class="section-title">การป้องกันและรักษา</span>
+            </div>
+            <ul class="info-list prevention-list" id="preventionList">
+                <li>กำลังโหลด...</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-state" id="errorSection" style="display: none;">
+        <div class="icon">😕</div>
+        <p>ไม่พบข้อมูลโรคที่ต้องการ</p>
+        <button class="retry-btn" onclick="goBack()">กลับไปหน้าหลัก</button>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-content">
+            <button class="footer-btn secondary" onclick="goBack()">← กลับ</button>
+            <button class="footer-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const LIFF_ID = '2008723334-Zz1OoaPy';
+        const API_BASE_URL = 'https://chatbot-ladda-production.up.railway.app';
+
+        // State
+        let diseaseData = null;
+
+        // Get disease key from URL
+        function getDiseaseKey() {
+            const pathParts = window.location.pathname.split('/');
+            return pathParts[pathParts.length - 1];
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initLiff();
+            await loadDiseaseDetail();
+        });
+
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                console.log('LIFF initialized');
+            } catch (error) {
+                console.error('LIFF init error:', error);
+            }
+        }
+
+        async function loadDiseaseDetail() {
+            const diseaseKey = getDiseaseKey();
+
+            if (!diseaseKey || diseaseKey === 'diseases') {
+                showError();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/diseases/${diseaseKey}`);
+                const data = await response.json();
+
+                if (data.success && data.disease) {
+                    diseaseData = data;
+                    renderDiseaseDetail(data.disease, data.recommended_products);
+                } else {
+                    showError();
+                }
+            } catch (error) {
+                console.error('Load disease error:', error);
+                showError();
+            }
+        }
+
+        function renderDiseaseDetail(disease, products) {
+            // Hide loading, show content
+            document.getElementById('loadingSection').style.display = 'none';
+            document.getElementById('contentSection').style.display = 'block';
+
+            // Header
+            document.getElementById('headerTitle').textContent = disease.name_th || 'รายละเอียดโรค';
+            document.getElementById('headerSubtitle').textContent = disease.name_en || '';
+
+            // Main info
+            document.getElementById('diseaseName').textContent = disease.name_th || '-';
+            document.getElementById('diseaseNameEn').textContent = disease.name_en || '';
+            document.getElementById('diseaseCategory').textContent = getCategoryName(disease.category);
+            document.getElementById('diseasePathogen').textContent = disease.pathogen || 'ไม่ระบุเชื้อ';
+
+            // Symptoms
+            const symptoms = disease.symptoms || [];
+            const symptomsList = document.getElementById('symptomsList');
+            if (symptoms.length > 0) {
+                symptomsList.innerHTML = symptoms.map(s => `<li>${s}</li>`).join('');
+            } else {
+                symptomsList.innerHTML = '<li>ไม่มีข้อมูลอาการ</li>';
+            }
+
+            // Key Features
+            const features = disease.key_features || [];
+            const featuresContainer = document.getElementById('keyFeatures');
+            if (features.length > 0) {
+                featuresContainer.innerHTML = features.map(f => `<span class="feature-tag">${f}</span>`).join('');
+            } else {
+                featuresContainer.innerHTML = '<span style="color: #999;">ไม่มีข้อมูล</span>';
+            }
+
+            // Severity
+            const severity = disease.severity_indicators;
+            if (severity && Object.keys(severity).length > 0) {
+                document.getElementById('severitySection').style.display = 'block';
+                const severityGrid = document.getElementById('severityGrid');
+                severityGrid.innerHTML = `
+                    <div class="severity-item low">
+                        <div class="severity-label">เล็กน้อย</div>
+                        <div class="severity-value">${severity.low || '-'}</div>
+                    </div>
+                    <div class="severity-item medium">
+                        <div class="severity-label">ปานกลาง</div>
+                        <div class="severity-value">${severity.medium || '-'}</div>
+                    </div>
+                    <div class="severity-item high">
+                        <div class="severity-label">รุนแรง</div>
+                        <div class="severity-value">${severity.high || '-'}</div>
+                    </div>
+                `;
+            }
+
+            // Distinguish from
+            if (disease.distinguish_from) {
+                document.getElementById('distinguishSection').style.display = 'block';
+                document.getElementById('distinguishText').textContent = disease.distinguish_from;
+            }
+
+            // Products
+            if (products && products.length > 0) {
+                document.getElementById('productsSection').style.display = 'block';
+                const productsList = document.getElementById('productsList');
+                productsList.innerHTML = products.map(p => `
+                    <div class="product-card">
+                        <div class="product-name">${p.product_name}</div>
+                        <div class="product-info">
+                            ${p.usage_rate ? `<strong>อัตราใช้:</strong> ${p.usage_rate}<br>` : ''}
+                            ${p.how_to_use ? `<strong>วิธีใช้:</strong> ${p.how_to_use}` : ''}
+                        </div>
+                        ${p.link_product ? `<a href="${p.link_product}" class="product-link" target="_blank">ดูรายละเอียด →</a>` : ''}
+                    </div>
+                `).join('');
+            }
+
+            // Prevention (using general tips based on category)
+            const preventionTips = getPreventionTips(disease.category);
+            document.getElementById('preventionList').innerHTML = preventionTips.map(tip => `<li>${tip}</li>`).join('');
+        }
+
+        function getCategoryName(category) {
+            const names = {
+                'fungal': '🍄 เชื้อรา',
+                'bacterial': '🦠 แบคทีเรีย',
+                'viral': '🔬 ไวรัส',
+                'insect': '🐛 แมลง',
+                'nutrient': '🌿 ขาดธาตุ'
+            };
+            return names[category] || category;
+        }
+
+        function getPreventionTips(category) {
+            const tips = {
+                'fungal': [
+                    'พ่นยาป้องกันเชื้อราก่อนฤดูฝน',
+                    'หลีกเลี่ยงการรดน้ำในช่วงเย็น',
+                    'ตัดแต่งกิ่งให้โปร่งเพื่อลดความชื้น',
+                    'เก็บทำลายใบที่เป็นโรค',
+                    'หมุนเวียนยาเพื่อป้องกันดื้อยา'
+                ],
+                'bacterial': [
+                    'ใช้เมล็ดพันธุ์ที่ปลอดโรค',
+                    'หลีกเลี่ยงการทำงานเมื่อต้นเปียก',
+                    'ฆ่าเชื้ออุปกรณ์ก่อนใช้งาน',
+                    'กำจัดต้นที่เป็นโรคทันที',
+                    'ใช้ยาทองแดงป้องกัน'
+                ],
+                'viral': [
+                    'กำจัดแมลงพาหะ (เพลี้ย)',
+                    'ใช้พันธุ์ต้านทาน',
+                    'ถอนทำลายต้นที่เป็นโรค',
+                    'ไม่นำเครื่องมือจากแปลงเป็นโรคมาใช้',
+                    'ปลูกพืชกีดขวางรอบแปลง'
+                ],
+                'insect': [
+                    'สำรวจแปลงสม่ำเสมอ',
+                    'ใช้กับดักเพื่อติดตามประชากร',
+                    'พ่นยาเมื่อพบระบาดเริ่มต้น',
+                    'หมุนเวียนยาป้องกันดื้อยา',
+                    'ส่งเสริมศัตรูธรรมชาติ'
+                ],
+                'nutrient': [
+                    'ตรวจวิเคราะห์ดินก่อนปลูก',
+                    'ให้ปุ๋ยตามคำแนะนำ',
+                    'ฉีดพ่นธาตุอาหารเสริมทางใบ',
+                    'ปรับ pH ดินให้เหมาะสม',
+                    'เพิ่มอินทรียวัตถุในดิน'
+                ]
+            };
+            return tips[category] || tips['fungal'];
+        }
+
+        function showError() {
+            document.getElementById('loadingSection').style.display = 'none';
+            document.getElementById('errorSection').style.display = 'block';
+        }
+
+        function goBack() {
+            window.location.href = '/liff/diseases';
+        }
+
+        function shareDisease() {
+            if (!diseaseData || !diseaseData.disease) {
+                alert('ไม่มีข้อมูลสำหรับแชร์');
+                return;
+            }
+
+            const disease = diseaseData.disease;
+            const shareText = `📋 ${disease.name_th} (${disease.name_en})\n\n` +
+                              `🔍 อาการ: ${(disease.symptoms || []).slice(0, 2).join(', ')}\n\n` +
+                              `ดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
+
+            if (liff.isApiAvailable('shareTargetPicker')) {
+                liff.shareTargetPicker([
+                    {
+                        type: 'text',
+                        text: shareText
+                    }
+                ]).then(() => {
+                    console.log('Shared successfully');
+                }).catch((error) => {
+                    console.error('Share error:', error);
+                    fallbackShare(shareText);
+                });
+            } else {
+                fallbackShare(shareText);
+            }
+        }
+
+        function fallbackShare(text) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'ข้อมูลโรคพืช',
+                    text: text
+                });
+            } else {
+                // Copy to clipboard
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('คัดลอกข้อมูลแล้ว สามารถวางแชร์ได้');
+                });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -15,7 +15,10 @@
       "Bash(powershell:*)",
       "Bash(cat:*)",
       "Bash(railway up:*)",
-      "Bash(railway status:*)"
+      "Bash(railway status:*)",
+      "Bash(npx @railway/cli up)",
+      "WebFetch(domain:www.icpladda.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

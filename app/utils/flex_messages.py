@@ -4,6 +4,7 @@ LINE Flex Message Templates
 """
 
 from typing import Dict, List, Optional
+from app.config import LIFF_DISEASES_URL
 
 
 # =============================================================================
@@ -1493,6 +1494,22 @@ def create_help_menu_flex() -> Dict:
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
+                            {"type": "text", "text": "📚", "size": "xl", "flex": 0},
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "คู่มือโรคพืช", "weight": "bold", "size": "sm"},
+                                    {"type": "text", "text": "ข้อมูลโรค อาการ ยาแนะนำ", "size": "xs", "color": "#888888"}
+                                ],
+                                "margin": "md"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
                             {"type": "text", "text": "🌤️", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
@@ -1560,6 +1577,17 @@ def create_help_menu_flex() -> Dict:
                 "layout": "vertical",
                 "spacing": "sm",
                 "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "height": "sm",
+                        "action": {
+                            "type": "uri",
+                            "label": "📚 คู่มือโรคพืช",
+                            "uri": LIFF_DISEASES_URL
+                        },
+                        "color": "#2E7D32"
+                    },
                     {
                         "type": "box",
                         "layout": "horizontal",

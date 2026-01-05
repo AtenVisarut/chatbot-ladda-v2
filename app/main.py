@@ -342,6 +342,161 @@ async def liff_registration_status(user_id: str):
     return {"user_id": user_id, "registered": registered}
 
 # ============================================================================#
+# Disease Guide API (สำหรับ LIFF)
+# ============================================================================#
+
+@app.get("/api/diseases")
+async def get_diseases(category: str = None, plant: str = None, limit: int = 50):
+    """
+    ดึงรายการโรคพืชทั้งหมด หรือ filter ตาม category/plant
+    """
+    try:
+        if not supabase_client:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        query = supabase_client.table('diseases').select('*').eq('is_active', True)
+
+        if category:
+            query = query.eq('category', category)
+
+        if plant:
+            query = query.ilike('applicable_plants', f'%{plant}%')
+
+        result = query.order('name_th').limit(limit).execute()
+
+        return {
+            "success": True,
+            "count": len(result.data) if result.data else 0,
+            "diseases": result.data or []
+        }
+    except Exception as e:
+        logger.error(f"Get diseases error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/diseases/{disease_key}")
+async def get_disease_detail(disease_key: str):
+    """
+    ดึงรายละเอียดโรคตาม disease_key
+    """
+    try:
+        if not supabase_client:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        result = supabase_client.table('diseases').select('*').eq(
+            'disease_key', disease_key
+        ).eq('is_active', True).limit(1).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Disease not found")
+
+        disease = result.data[0]
+
+        # ดึงสินค้าที่เกี่ยวข้อง
+        products = []
+        if disease.get('pathogen'):
+            prod_result = supabase_client.table('products').select(
+                'id, product_name, product_category, target_pest, usage_rate, how_to_use, link_product'
+            ).ilike('target_pest', f'%{disease.get("name_th", "")}%').limit(5).execute()
+
+            if prod_result.data:
+                products = prod_result.data
+
+        return {
+            "success": True,
+            "disease": disease,
+            "recommended_products": products
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get disease detail error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/diseases/category/{category}")
+async def get_diseases_by_category(category: str):
+    """
+    ดึงโรคตามประเภท (fungal, bacterial, viral, insect, nutrient)
+    """
+    try:
+        if not supabase_client:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        result = supabase_client.table('diseases').select('*').eq(
+            'category', category
+        ).eq('is_active', True).order('name_th').execute()
+
+        return {
+            "success": True,
+            "category": category,
+            "count": len(result.data) if result.data else 0,
+            "diseases": result.data or []
+        }
+    except Exception as e:
+        logger.error(f"Get diseases by category error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/products/for-disease/{disease_key}")
+async def get_products_for_disease(disease_key: str):
+    """
+    ดึงสินค้าที่แนะนำสำหรับโรคนี้
+    """
+    try:
+        if not supabase_client:
+            raise HTTPException(status_code=500, detail="Database not available")
+
+        # ดึงข้อมูลโรคก่อน
+        disease_result = supabase_client.table('diseases').select('name_th, pathogen, category').eq(
+            'disease_key', disease_key
+        ).limit(1).execute()
+
+        if not disease_result.data:
+            raise HTTPException(status_code=404, detail="Disease not found")
+
+        disease = disease_result.data[0]
+        disease_name = disease.get('name_th', '')
+
+        # ค้นหาสินค้าที่ตรงกับโรค
+        products = []
+
+        # Search by disease name
+        prod_result = supabase_client.table('products').select('*').ilike(
+            'target_pest', f'%{disease_name}%'
+        ).limit(10).execute()
+
+        if prod_result.data:
+            products = prod_result.data
+
+        return {
+            "success": True,
+            "disease_key": disease_key,
+            "disease_name": disease_name,
+            "count": len(products),
+            "products": products
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get products for disease error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# LIFF Disease Guide Page
+@app.get("/liff/diseases")
+async def liff_diseases_page():
+    """Serve LIFF Disease Guide HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Disease guide page not found")
+
+@app.get("/liff/diseases/{disease_key}")
+async def liff_disease_detail_page(disease_key: str):
+    """Serve LIFF Disease Detail HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "disease-detail.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Disease detail page not found")
+
+# ============================================================================#
 # LINE Webhook
 # ============================================================================#
 

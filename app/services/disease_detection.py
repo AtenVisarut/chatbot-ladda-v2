@@ -482,7 +482,7 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
         try:
             response = await asyncio.wait_for(
                 gemini_client.chat.completions.create(
-                    model="google/gemini-3-flash-preview",  # Upgraded from 2.5 Pro
+                    model="google/gemini-3-flash-preview",  
                     messages=[
                         {
                             "role": "user",
