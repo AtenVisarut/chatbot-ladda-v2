@@ -74,6 +74,7 @@ from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
+from app.services.rich_menu import setup_rich_menu
 from app.services.agro_risk import (
     check_weather,
     analyze_crop_risk,
@@ -270,6 +271,41 @@ async def clear_cache_endpoint(request: Request):
     # In production, add authentication here
     await clear_all_caches()
     return {"status": "success", "message": "All caches cleared"}
+
+# ============================================================================#
+# Rich Menu Setup Endpoint
+# ============================================================================#
+
+@app.post("/admin/setup-rich-menu")
+async def setup_rich_menu_endpoint(request: Request):
+    """Setup Rich Menu - อัพโหลดรูปและตั้งค่า Rich Menu ใหม่"""
+    # Check authentication
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized - Please login first")
+
+    try:
+        # Path to rich menu image
+        image_path = "rich_menu.png"
+
+        # Check if file exists
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail=f"Rich menu image not found: {image_path}")
+
+        # Setup rich menu
+        rich_menu_id = await setup_rich_menu(image_path, delete_old=True)
+
+        if rich_menu_id:
+            return {
+                "status": "success",
+                "message": "Rich Menu setup completed",
+                "rich_menu_id": rich_menu_id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to setup Rich Menu")
+
+    except Exception as e:
+        logger.error(f"Error setting up Rich Menu: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================#
 # Dashboard Endpoints
