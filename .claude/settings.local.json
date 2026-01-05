@@ -18,7 +18,8 @@
       "Bash(railway status:*)",
       "Bash(npx @railway/cli up)",
       "WebFetch(domain:www.icpladda.com)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:chatbot-ladda-production.up.railway.app)"
     ],
     "deny": [],
     "ask": []

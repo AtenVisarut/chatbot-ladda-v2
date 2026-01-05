@@ -277,11 +277,12 @@ async def clear_cache_endpoint(request: Request):
 # ============================================================================#
 
 @app.post("/admin/setup-rich-menu")
-async def setup_rich_menu_endpoint(request: Request):
+async def setup_rich_menu_endpoint(request: Request, key: str = None):
     """Setup Rich Menu - อัพโหลดรูปและตั้งค่า Rich Menu ใหม่"""
-    # Check authentication
-    if not request.session.get("user"):
-        raise HTTPException(status_code=401, detail="Unauthorized - Please login first")
+    # Check authentication - session OR secret key
+    is_authenticated = request.session.get("user") or key == SECRET_KEY
+    if not is_authenticated:
+        raise HTTPException(status_code=401, detail="Unauthorized - Please login or provide valid key")
 
     try:
         # Path to rich menu image
