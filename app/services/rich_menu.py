@@ -109,25 +109,60 @@ async def create_rich_menu() -> Optional[str]:
 async def upload_rich_menu_image(rich_menu_id: str, image_path: str) -> bool:
     """
     อัปโหลดรูปภาพสำหรับ Rich Menu
+    - รองรับ PNG และ JPEG
+    - บีบอัดอัตโนมัติถ้าเกิน 1MB
 
     Args:
         rich_menu_id: ID ของ Rich Menu
         image_path: path ไปยังไฟล์รูปภาพ (PNG หรือ JPEG)
     """
     try:
+        from PIL import Image
+        import io
+
         url = f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content"
 
-        # Read image file
+        # Read and compress image if needed (LINE limit is 1MB)
+        max_size = 1024 * 1024  # 1MB
+
         with open(image_path, "rb") as f:
             image_data = f.read()
 
-        # Determine content type
-        content_type = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+        original_size = len(image_data)
+        logger.info(f"Original image size: {original_size} bytes")
+
+        # If image is too large, compress it
+        if original_size > max_size:
+            logger.info("Image too large, compressing...")
+            img = Image.open(image_path)
+
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+
+            # Compress as JPEG with decreasing quality until under 1MB
+            quality = 85
+            while quality > 20:
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=quality, optimize=True)
+                image_data = buffer.getvalue()
+
+                if len(image_data) <= max_size:
+                    logger.info(f"Compressed to {len(image_data)} bytes (quality={quality})")
+                    break
+                quality -= 10
+
+            content_type = "image/jpeg"
+        else:
+            # Use original format
+            content_type = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
 
         headers = {
             "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
             "Content-Type": content_type
         }
+
+        logger.info(f"Uploading image: {len(image_data)} bytes, type: {content_type}")
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(url, headers=headers, content=image_data)
