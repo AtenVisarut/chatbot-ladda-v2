@@ -343,9 +343,13 @@ async def setup_rich_menu_endpoint(request: Request, key: str = None):
         }
 
 @app.get("/admin/debug-rich-menu")
-async def debug_rich_menu_endpoint():
-    """Debug Rich Menu - ทดสอบ LINE API และดู config"""
-    return await setup_rich_menu_debug()
+async def debug_rich_menu_endpoint(test_upload: bool = False):
+    """Debug Rich Menu - ทดสอบ LINE API และดู config
+
+    Args:
+        test_upload: ถ้า True จะทดสอบ upload รูปและ set default ด้วย
+    """
+    return await setup_rich_menu_debug(test_upload=test_upload)
 
 # ============================================================================#
 # Dashboard Endpoints

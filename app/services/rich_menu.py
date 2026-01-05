@@ -283,13 +283,18 @@ async def delete_default_rich_menu() -> bool:
         return False
 
 
-async def setup_rich_menu_debug() -> dict:
+async def setup_rich_menu_debug(test_upload: bool = False) -> dict:
     """Debug function to test Rich Menu creation step by step"""
+    from PIL import Image
+    import io
+
     result = {"steps": [], "config": None, "token_preview": None}
 
     # Show config
     result["config"] = RICH_MENU_CONFIG
     result["token_preview"] = f"{LINE_CHANNEL_ACCESS_TOKEN[:20]}..." if LINE_CHANNEL_ACCESS_TOKEN else "None"
+
+    rich_menu_id = None
 
     # Step 1: Try to create rich menu
     try:
@@ -301,8 +306,71 @@ async def setup_rich_menu_debug() -> dict:
                 "status_code": response.status_code,
                 "response": response.text[:500] if response.text else "empty"
             })
+            if response.status_code == 200:
+                rich_menu_id = response.json().get("richMenuId")
     except Exception as e:
         result["steps"].append({"step": "create_rich_menu", "error": str(e)})
+
+    # Step 2: Try to upload image (if test_upload=True and rich_menu_id exists)
+    if test_upload and rich_menu_id:
+        image_path = "rich_menu.png"
+        try:
+            import os
+            if os.path.exists(image_path):
+                # Compress image
+                with open(image_path, "rb") as f:
+                    original_data = f.read()
+
+                result["steps"].append({
+                    "step": "read_image",
+                    "original_size": len(original_data)
+                })
+
+                # Compress
+                img = Image.open(image_path)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=75, optimize=True)
+                image_data = buffer.getvalue()
+
+                result["steps"].append({
+                    "step": "compress_image",
+                    "compressed_size": len(image_data),
+                    "format": "JPEG",
+                    "quality": 75
+                })
+
+                # Upload
+                upload_url = f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content"
+                headers = {
+                    "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                    "Content-Type": "image/jpeg"
+                }
+
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(upload_url, headers=headers, content=image_data)
+                    result["steps"].append({
+                        "step": "upload_image",
+                        "status_code": response.status_code,
+                        "response": response.text[:500] if response.text else "empty"
+                    })
+
+                    # Step 3: Set as default if upload succeeded
+                    if response.status_code == 200:
+                        default_url = f"{LINE_API_BASE}/user/all/richmenu/{rich_menu_id}"
+                        response = await client.post(default_url, headers=get_headers())
+                        result["steps"].append({
+                            "step": "set_default",
+                            "status_code": response.status_code,
+                            "response": response.text[:200] if response.text else "empty"
+                        })
+                        result["rich_menu_id"] = rich_menu_id
+            else:
+                result["steps"].append({"step": "read_image", "error": "File not found"})
+        except Exception as e:
+            result["steps"].append({"step": "upload_image", "error": str(e)})
 
     return result
 
