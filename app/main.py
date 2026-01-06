@@ -193,10 +193,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount LIFF static files
-liff_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff")
-if os.path.exists(liff_path):
-    app.mount("/liff", StaticFiles(directory=liff_path, html=True), name="liff")
+# NOTE: Static mount removed - using explicit routes instead (line 576+)
+# Static mount was intercepting requests before routes could handle them
+# liff_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff")
+# if os.path.exists(liff_path):
+#     app.mount("/liff", StaticFiles(directory=liff_path, html=True), name="liff")
 
 # ============================================================================#
 # Authentication
