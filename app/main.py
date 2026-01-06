@@ -568,6 +568,47 @@ async def liff_diseases_page():
         return FileResponse(liff_html_path)
     raise HTTPException(status_code=404, detail="Disease guide page not found")
 
+# LIFF Disease Pages by Plant Type
+@app.get("/liff/diseases-rice")
+async def liff_diseases_rice_page():
+    """Serve LIFF Rice Diseases HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-rice.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Rice diseases page not found")
+
+@app.get("/liff/diseases-durian")
+async def liff_diseases_durian_page():
+    """Serve LIFF Durian Diseases HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-durian.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Durian diseases page not found")
+
+@app.get("/liff/diseases-corn")
+async def liff_diseases_corn_page():
+    """Serve LIFF Corn Diseases HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-corn.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Corn diseases page not found")
+
+@app.get("/liff/diseases-cassava")
+async def liff_diseases_cassava_page():
+    """Serve LIFF Cassava Diseases HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-cassava.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Cassava diseases page not found")
+
+@app.get("/liff/diseases-sugarcane")
+async def liff_diseases_sugarcane_page():
+    """Serve LIFF Sugarcane Diseases HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-sugarcane.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Sugarcane diseases page not found")
+
 @app.get("/liff/diseases/{disease_key}")
 async def liff_disease_detail_page(disease_key: str):
     """Serve LIFF Disease Detail HTML"""
