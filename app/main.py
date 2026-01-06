@@ -806,9 +806,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 disease_name_lower = detection_result.disease_name.lower()
 
                                 # Skip if confidence is 0 or very low (< 10%)
-                                if detection_result.confidence is not None and detection_result.confidence < 0.1:
-                                    should_recommend = False
-                                    logger.info(f"⏭️ Skipping product recommendation - confidence too low: {detection_result.confidence}")
+                                # Note: confidence comes as integer percent (0-100), not decimal
+                                try:
+                                    conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
+                                    if conf_value is not None and conf_value < 10:
+                                        should_recommend = False
+                                        logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
+                                except (ValueError, TypeError):
+                                    pass  # If conversion fails, continue with recommendation
 
                                 for kw in skip_keywords:
                                     if kw.lower() in disease_name_lower:
@@ -900,9 +905,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 disease_name_lower = detection_result.disease_name.lower()
 
                                 # Skip if confidence is 0 or very low (< 10%)
-                                if detection_result.confidence is not None and detection_result.confidence < 0.1:
-                                    should_recommend = False
-                                    logger.info(f"⏭️ Skipping product recommendation - confidence too low: {detection_result.confidence}")
+                                # Note: confidence comes as integer percent (0-100), not decimal
+                                try:
+                                    conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
+                                    if conf_value is not None and conf_value < 10:
+                                        should_recommend = False
+                                        logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
+                                except (ValueError, TypeError):
+                                    pass  # If conversion fails, continue with recommendation
 
                                 for kw in skip_keywords:
                                     if kw.lower() in disease_name_lower:
