@@ -313,7 +313,7 @@ async def setup_rich_menu_debug(test_upload: bool = False) -> dict:
 
     # Step 2: Try to upload image (if test_upload=True and rich_menu_id exists)
     if test_upload and rich_menu_id:
-        image_path = "rich_menu_5.png"
+        image_path = "rich_menu.png"
         try:
             import os
             if os.path.exists(image_path):

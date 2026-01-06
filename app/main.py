@@ -284,7 +284,7 @@ async def setup_rich_menu_endpoint(request: Request, key: str = None):
 
     try:
         # Path to rich menu image
-        image_path = "rich_menu_5.png"
+        image_path = "rich_menu.png"
         cwd = os.getcwd()
         full_path = os.path.join(cwd, image_path)
 
