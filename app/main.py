@@ -253,12 +253,25 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    # Check if liff files exist for debugging
+    liff_diseases_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases.html")
+    liff_dir = os.path.join(os.path.dirname(__file__), "..", "liff")
+    liff_files = []
+    if os.path.exists(liff_dir):
+        liff_files = [f for f in os.listdir(liff_dir) if f.endswith('.html')]
+
     return {
         "status": "healthy",
+        "version": "2.6.0-diseases",  # Version to track deployment
         "cache_stats": await get_cache_stats(),
         "services": {
             "openai": bool(openai_client),
             "supabase": bool(supabase_client)
+        },
+        "debug": {
+            "liff_diseases_exists": os.path.exists(liff_diseases_path),
+            "liff_dir_exists": os.path.exists(liff_dir),
+            "liff_files": liff_files
         }
     }
 
