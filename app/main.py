@@ -778,23 +778,31 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 detection_result = await smart_detect_disease(image_bytes)
 
                                 # Check if we should recommend products
-                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency
+                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency, Technical Error
                                 skip_keywords = [
                                     "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
                                     "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
                                     "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
                                     "Deficiency", "deficiency",
                                     "ใบเหลือง", "ใบซีด", "ใบด่าง",
-                                    "สุขภาพดี", "healthy", "Healthy"
+                                    "สุขภาพดี", "healthy", "Healthy",
+                                    "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
+                                    "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
                                 ]
                                 should_recommend = True
                                 disease_name_lower = detection_result.disease_name.lower()
+
+                                # Skip if confidence is 0 or very low (< 10%)
+                                if detection_result.confidence is not None and detection_result.confidence < 0.1:
+                                    should_recommend = False
+                                    logger.info(f"⏭️ Skipping product recommendation - confidence too low: {detection_result.confidence}")
+
                                 for kw in skip_keywords:
                                     if kw.lower() in disease_name_lower:
                                         should_recommend = False
                                         logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
                                         break
-                                
+
                                 # Extract pest_type from raw_analysis
                                 pest_type = "ศัตรูพืช"
                                 if detection_result.raw_analysis:
@@ -864,16 +872,25 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                                 detection_result = await smart_detect_disease(image_bytes, extra_user_info=text)
 
                                 # Check if we should recommend products
+                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency, Technical Error
                                 skip_keywords = [
                                     "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
                                     "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
                                     "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
                                     "Deficiency", "deficiency",
                                     "ใบเหลือง", "ใบซีด", "ใบด่าง",
-                                    "สุขภาพดี", "healthy", "Healthy"
+                                    "สุขภาพดี", "healthy", "Healthy",
+                                    "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
+                                    "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
                                 ]
                                 should_recommend = True
                                 disease_name_lower = detection_result.disease_name.lower()
+
+                                # Skip if confidence is 0 or very low (< 10%)
+                                if detection_result.confidence is not None and detection_result.confidence < 0.1:
+                                    should_recommend = False
+                                    logger.info(f"⏭️ Skipping product recommendation - confidence too low: {detection_result.confidence}")
+
                                 for kw in skip_keywords:
                                     if kw.lower() in disease_name_lower:
                                         should_recommend = False
