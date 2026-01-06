@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>โรคข้าว - ICP Ladda</title>
+
+    <!-- LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header-content {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-info {
+            flex: 1;
+        }
+
+        .header h1 {
+            font-size: 1.3em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header p {
+            font-size: 0.85em;
+            opacity: 0.9;
+        }
+
+        /* Category Tabs */
+        .category-tabs {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            display: flex;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 66px;
+            z-index: 99;
+        }
+
+        .category-tab {
+            flex: 1;
+            padding: 12px 8px;
+            border: none;
+            background: white;
+            font-size: 0.9em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Sarabun', sans-serif;
+            border-bottom: 3px solid transparent;
+        }
+
+        .category-tab:hover {
+            background: #f9f9f9;
+        }
+
+        .category-tab.active {
+            color: #4a7c23;
+            border-bottom-color: #4a7c23;
+            background: #f8fff8;
+        }
+
+        .category-tab.fungal.active { color: #8B4513; border-bottom-color: #8B4513; }
+        .category-tab.bacterial.active { color: #DC143C; border-bottom-color: #DC143C; }
+        .category-tab.viral.active { color: #9932CC; border-bottom-color: #9932CC; }
+
+        /* Content */
+        .content {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px 20px 100px;
+        }
+
+        /* Category Section */
+        .category-section {
+            display: none;
+        }
+
+        .category-section.active {
+            display: block;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .section-icon {
+            font-size: 1.5em;
+        }
+
+        .section-title {
+            font-size: 1.15em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .section-count {
+            margin-left: auto;
+            font-size: 0.85em;
+            color: #888;
+            background: #f0f0f0;
+            padding: 3px 10px;
+            border-radius: 10px;
+        }
+
+        /* Disease Cards */
+        .disease-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .disease-card {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid #4a7c23;
+        }
+
+        .disease-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        }
+
+        .disease-card.fungal { border-left-color: #8B4513; }
+        .disease-card.bacterial { border-left-color: #DC143C; }
+        .disease-card.viral { border-left-color: #9932CC; }
+
+        .disease-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .disease-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .disease-name-en {
+            font-size: 0.85em;
+            color: #666;
+            font-style: italic;
+        }
+
+        .disease-symptoms {
+            font-size: 0.9em;
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .disease-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            font-size: 0.75em;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .tag.pathogen {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        /* Disease Detail Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 500px;
+            margin: 20px 0;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-header h2 {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .modal-header p {
+            font-size: 0.9em;
+            color: #666;
+            font-style: italic;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .detail-section {
+            margin-bottom: 20px;
+        }
+
+        .detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: #2d5016;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .detail-content {
+            font-size: 0.95em;
+            color: #444;
+            line-height: 1.6;
+        }
+
+        .detail-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .detail-list li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .detail-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #4a7c23;
+            font-weight: bold;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Sarabun', sans-serif;
+        }
+
+        .modal-btn.close {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .modal-btn.primary {
+            background: #4a7c23;
+            color: white;
+        }
+
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .footer-content {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .footer-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Sarabun', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .footer-btn.primary {
+            background: #4a7c23;
+            color: white;
+        }
+
+        .footer-btn.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div class="header-info">
+                <h1><span>🌾</span> โรคข้าว</h1>
+                <p>Rice Diseases</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="category-tabs">
+        <button class="category-tab fungal active" onclick="showCategory('fungal')">เชื้อรา</button>
+        <button class="category-tab bacterial" onclick="showCategory('bacterial')">แบคทีเรีย</button>
+        <button class="category-tab viral" onclick="showCategory('viral')">ไวรัส</button>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <!-- Fungal Diseases -->
+        <div class="category-section active" id="fungal-section">
+            <div class="section-header">
+                <span class="section-icon">🍄</span>
+                <span class="section-title">โรคจากเชื้อรา</span>
+                <span class="section-count">6 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card fungal" onclick="showDetail('blast')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคไหม้</div>
+                            <div class="disease-name-en">Rice Blast</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบมีแผลรูปตา สีเทาตรงกลาง ขอบสีน้ำตาล อาจลุกลามทำให้ต้นตาย</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Pyricularia oryzae</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('brown_spot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบจุดสีน้ำตาล</div>
+                            <div class="disease-name-en">Brown Spot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">จุดกลมสีน้ำตาลบนใบ ตรงกลางสีเทาขาว มีวงสีเหลืองล้อมรอบ</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Bipolaris oryzae</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('sheath_blight')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคกาบใบแห้ง</div>
+                            <div class="disease-name-en">Sheath Blight</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">กาบใบเป็นแผลรูปไข่สีเขียวเทา ขอบน้ำตาล ลุกลามขึ้นด้านบน</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Rhizoctonia solani</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('dirty_panicle')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรครวงดำ</div>
+                            <div class="disease-name-en">Dirty Panicle</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">รวงข้าวเปลี่ยนเป็นสีดำ เมล็ดลีบ น้ำหนักลด</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Curvularia spp.</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('narrow_brown_spot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบขีดสีน้ำตาล</div>
+                            <div class="disease-name-en">Narrow Brown Spot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">แผลเป็นขีดยาวสีน้ำตาลแดง ขนานกับเส้นใบ</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Cercospora oryzae</span>
+                        <span class="tag">เล็กน้อย</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('false_smut')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคเมล็ดด่าง</div>
+                            <div class="disease-name-en">False Smut</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">เมล็ดบางเมล็ดบวมโต มีสปอร์สีเขียวเหลืองปกคลุม</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Ustilaginoidea virens</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bacterial Diseases -->
+        <div class="category-section" id="bacterial-section">
+            <div class="section-header">
+                <span class="section-icon">🦠</span>
+                <span class="section-title">โรคจากแบคทีเรีย</span>
+                <span class="section-count">3 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card bacterial" onclick="showDetail('blight')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคขอบใบแห้ง</div>
+                            <div class="disease-name-en">Bacterial Leaf Blight</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบไหม้จากปลายใบหรือขอบใบ ขอบแผลหยักคล้ายคลื่น มียางเหนียวสีเหลือง</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Xanthomonas oryzae</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card bacterial" onclick="showDetail('leaf_streak')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบขีดโปร่งแสง</div>
+                            <div class="disease-name-en">Bacterial Leaf Streak</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">แผลเป็นขีดยาวสีน้ำตาลระหว่างเส้นใบ มองเห็นโปร่งแสงได้</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">X. oryzae pv. oryzicola</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card bacterial" onclick="showDetail('foot_rot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคเน่าคอรวง</div>
+                            <div class="disease-name-en">Bacterial Foot Rot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">คอรวงเน่าดำ รวงหัก เมล็ดลีบ กลิ่นเหม็น</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Burkholderia glumae</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Viral Diseases -->
+        <div class="category-section" id="viral-section">
+            <div class="section-header">
+                <span class="section-icon">🔬</span>
+                <span class="section-title">โรคจากไวรัส (พาหะแมลง)</span>
+                <span class="section-count">3 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card viral" onclick="showDetail('tungro')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบสีส้ม (ทังโร)</div>
+                            <div class="disease-name-en">Rice Tungro</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบเปลี่ยนเป็นสีเหลืองส้ม ต้นแคระแกร็น ไม่ออกรวง</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">RTBV + RTSV</span>
+                        <span class="tag">เพลี้ยจักจั่น</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card viral" onclick="showDetail('grassy_stunt')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบหงิก</div>
+                            <div class="disease-name-en">Rice Grassy Stunt</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ต้นเตี้ยแคระ แตกกอมาก ใบสีเขียวเข้มแคบ ไม่ออกรวง</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">RGSV</span>
+                        <span class="tag">เพลี้ยกระโดดสีน้ำตาล</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card viral" onclick="showDetail('ragged_stunt')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบหงิกเหลือง</div>
+                            <div class="disease-name-en">Rice Ragged Stunt</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบบิดเป็นเกลียว ขอบใบหยักขาด ต้นเตี้ย ใบสีเหลืองซีด</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">RRSV</span>
+                        <span class="tag">เพลี้ยกระโดดสีน้ำตาล</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disease Detail Modal -->
+    <div class="modal" id="diseaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">-</h2>
+                <p id="modalTitleEn">-</p>
+            </div>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <div class="detail-title">🔬 สาเหตุ</div>
+                    <div class="detail-content" id="modalPathogen">-</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🔍 อาการ</div>
+                    <ul class="detail-list" id="modalSymptoms">
+                        <li>-</li>
+                    </ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🛡️ การป้องกันและรักษา</div>
+                    <ul class="detail-list" id="modalTreatment">
+                        <li>-</li>
+                    </ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
+                    <div class="detail-content" id="modalProducts">-</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn close" onclick="closeModal()">ปิด</button>
+                <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-content">
+            <button class="footer-btn secondary" onclick="goBack()">← กลับ</button>
+            <button class="footer-btn primary" onclick="openCamera()">วิเคราะห์จากรูป</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const LIFF_ID = '2008723334-Zz1OoaPy';
+
+        // Disease Data
+        const diseaseData = {
+            // Fungal
+            blast: {
+                name: "โรคไหม้",
+                nameEn: "Rice Blast",
+                pathogen: "เชื้อรา Pyricularia oryzae (Magnaporthe oryzae)",
+                symptoms: [
+                    "ใบมีแผลรูปตา (รูปกระสวย) สีเทาตรงกลาง ขอบสีน้ำตาล",
+                    "แผลอาจรวมกันเป็นแถบใหญ่ ทำให้ใบแห้งตาย",
+                    "อาจเกิดที่คอรวง ทำให้รวงหัก (โรคไหม้คอรวง)",
+                    "ระบาดในสภาพอากาศเย็นชื้น"
+                ],
+                treatment: [
+                    "ใช้พันธุ์ต้านทาน",
+                    "ไม่ใส่ปุ๋ยไนโตรเจนมากเกินไป",
+                    "พ่นยากลุ่ม Tricyclazole, Isoprothiolane",
+                    "กำจัดวัชพืชที่เป็นแหล่งเชื้อ"
+                ],
+                products: "ทริปเปิ้ลเอท 75WP (Tricyclazole), ฟูจิวัน 40EC (Isoprothiolane)"
+            },
+            brown_spot: {
+                name: "โรคใบจุดสีน้ำตาล",
+                nameEn: "Brown Spot",
+                pathogen: "เชื้อรา Bipolaris oryzae (Cochliobolus miyabeanus)",
+                symptoms: [
+                    "จุดกลมรีสีน้ำตาลบนใบ ขนาด 1-5 มม.",
+                    "ตรงกลางแผลสีเทาขาว มีวงสีเหลืองล้อมรอบ",
+                    "มักพบในนาที่ขาดธาตุอาหาร",
+                    "เมล็ดอาจมีจุดสีน้ำตาลด้วย"
+                ],
+                treatment: [
+                    "ปรับปรุงดินด้วยปุ๋ยอินทรีย์",
+                    "ใส่ปุ๋ยโพแทสเซียมเพิ่ม",
+                    "พ่นยากลุ่ม Mancozeb, Propiconazole",
+                    "ใช้เมล็ดพันธุ์ที่ปลอดโรค"
+                ],
+                products: "แมนโคเซ็บ 80WP, โปรปิโคนาโซล 25EC"
+            },
+            sheath_blight: {
+                name: "โรคกาบใบแห้ง",
+                nameEn: "Sheath Blight",
+                pathogen: "เชื้อรา Rhizoctonia solani",
+                symptoms: [
+                    "กาบใบเป็นแผลรูปไข่สีเขียวเทา ขอบน้ำตาล",
+                    "แผลลุกลามขึ้นด้านบนถึงใบ",
+                    "มักเกิดช่วงข้าวตั้งท้องถึงออกรวง",
+                    "ความชื้นสูงและปลูกหนาแน่นเสี่ยงระบาด"
+                ],
+                treatment: [
+                    "ลดความหนาแน่นของต้นข้าว",
+                    "ระบายน้ำไม่ให้ขังนาน",
+                    "พ่นยากลุ่ม Validamycin, Hexaconazole",
+                    "ทำลายซากพืชหลังเก็บเกี่ยว"
+                ],
+                products: "วาลิดาซิน 3L (Validamycin), เฮกซาโคนาโซล 5SC"
+            },
+            dirty_panicle: {
+                name: "โรครวงดำ",
+                nameEn: "Dirty Panicle",
+                pathogen: "เชื้อรา Curvularia spp., Alternaria spp.",
+                symptoms: [
+                    "รวงข้าวเปลี่ยนเป็นสีดำหรือสีเทาดำ",
+                    "เมล็ดลีบ น้ำหนักลด คุณภาพต่ำ",
+                    "มักเกิดในช่วงฝนชุก",
+                    "พบมากในนาหว่าน"
+                ],
+                treatment: [
+                    "เก็บเกี่ยวทันทีเมื่อข้าวสุก",
+                    "ลดการใส่ปุ๋ยไนโตรเจนมากเกินไป",
+                    "พ่นยาป้องกันช่วงออกรวง",
+                    "ตากเมล็ดให้แห้งสนิทก่อนเก็บ"
+                ],
+                products: "โปรปิโคนาโซล 25EC, คาร์เบนดาซิม 50WP"
+            },
+            narrow_brown_spot: {
+                name: "โรคใบขีดสีน้ำตาล",
+                nameEn: "Narrow Brown Leaf Spot",
+                pathogen: "เชื้อรา Cercospora oryzae",
+                symptoms: [
+                    "แผลเป็นขีดยาวแคบสีน้ำตาลแดง",
+                    "ขนานไปกับเส้นใบ ยาว 2-10 มม.",
+                    "ความรุนแรงต่ำ มักไม่กระทบผลผลิตมาก",
+                    "พบในนาที่ขาดโพแทสเซียม"
+                ],
+                treatment: [
+                    "ใส่ปุ๋ยโพแทสเซียมเพิ่ม",
+                    "ปรับสภาพดิน",
+                    "ไม่จำเป็นต้องพ่นยาถ้าไม่รุนแรง"
+                ],
+                products: "ปุ๋ยโพแทสเซียม (0-0-60)"
+            },
+            false_smut: {
+                name: "โรคเมล็ดด่าง",
+                nameEn: "False Smut",
+                pathogen: "เชื้อรา Ustilaginoidea virens",
+                symptoms: [
+                    "เมล็ดบางเมล็ดบวมโตผิดปกติ",
+                    "มีสปอร์สีเขียวเหลืองถึงเขียวดำปกคลุม",
+                    "มักพบ 1-5 เมล็ดต่อรวง",
+                    "สปอร์มีพิษ ไม่ควรให้สัตว์กิน"
+                ],
+                treatment: [
+                    "ใช้เมล็ดพันธุ์ปลอดโรค",
+                    "พ่นยาป้องกันช่วงออกดอก",
+                    "ไม่ใส่ปุ๋ยไนโตรเจนมากเกินไป"
+                ],
+                products: "โปรปิโคนาโซล 25EC, คอปเปอร์ไฮดรอกไซด์"
+            },
+            // Bacterial
+            blight: {
+                name: "โรคขอบใบแห้ง",
+                nameEn: "Bacterial Leaf Blight (BLB)",
+                pathogen: "แบคทีเรีย Xanthomonas oryzae pv. oryzae",
+                symptoms: [
+                    "ใบไหม้จากปลายใบหรือขอบใบเข้ามา",
+                    "ขอบแผลหยักคล้ายคลื่น",
+                    "ใบเหลืองและแห้ง",
+                    "มียางเหนียวสีเหลืองในตอนเช้า"
+                ],
+                treatment: [
+                    "ใช้พันธุ์ต้านทาน",
+                    "ลดปุ๋ยไนโตรเจน",
+                    "ระบายน้ำเมื่อพบโรค",
+                    "พ่นยากลุ่มทองแดง"
+                ],
+                products: "คอปเปอร์ไฮดรอกไซด์ 77WP, สเตรปโตมัยซิน"
+            },
+            leaf_streak: {
+                name: "โรคใบขีดโปร่งแสง",
+                nameEn: "Bacterial Leaf Streak",
+                pathogen: "แบคทีเรีย Xanthomonas oryzae pv. oryzicola",
+                symptoms: [
+                    "แผลเป็นขีดยาวสีน้ำตาลระหว่างเส้นใบ",
+                    "ขีดยาว 1-10 ซม.",
+                    "มองเห็นโปร่งแสงเมื่อยกดูกับแสง",
+                    "มียางสีเหลืองออกมาตอนเช้า"
+                ],
+                treatment: [
+                    "ใช้เมล็ดพันธุ์สะอาด",
+                    "ลดความหนาแน่นของต้น",
+                    "พ่นยากลุ่มทองแดงป้องกัน"
+                ],
+                products: "คอปเปอร์ออกซีคลอไรด์ 85WP"
+            },
+            foot_rot: {
+                name: "โรคเน่าคอรวง",
+                nameEn: "Bacterial Panicle Blight",
+                pathogen: "แบคทีเรีย Burkholderia glumae",
+                symptoms: [
+                    "คอรวงเน่าดำ รวงหักพับ",
+                    "เมล็ดลีบ ไม่สมบูรณ์",
+                    "มีกลิ่นเหม็น",
+                    "ระบาดในสภาพอากาศร้อนชื้น"
+                ],
+                treatment: [
+                    "ใช้เมล็ดพันธุ์ปลอดเชื้อ",
+                    "แช่เมล็ดในน้ำอุ่น 60°C นาน 10 นาที",
+                    "หลีกเลี่ยงใส่ปุ๋ยไนโตรเจนมากช่วงออกรวง"
+                ],
+                products: "สเตรปโตมัยซิน, ออกซีเตตราไซคลิน"
+            },
+            // Viral
+            tungro: {
+                name: "โรคใบสีส้ม (ทังโร)",
+                nameEn: "Rice Tungro Disease",
+                pathogen: "Rice Tungro Bacilliform Virus (RTBV) + Rice Tungro Spherical Virus (RTSV)",
+                symptoms: [
+                    "ใบเปลี่ยนเป็นสีเหลืองส้มจากปลายใบ",
+                    "ต้นแคระแกร็น เตี้ยกว่าปกติ",
+                    "แตกกอน้อย ไม่ออกรวงหรือรวงลีบ",
+                    "แมลงพาหะ: เพลี้ยจักจั่นสีเขียว"
+                ],
+                treatment: [
+                    "ใช้พันธุ์ต้านทาน",
+                    "กำจัดเพลี้ยจักจั่นพาหะ",
+                    "ถอนทำลายต้นที่เป็นโรค",
+                    "ปลูกพร้อมกันในชุมชน"
+                ],
+                products: "อิมิดาโคลพริด 70WG (กำจัดเพลี้ย), ไทอะมีทอกแซม"
+            },
+            grassy_stunt: {
+                name: "โรคใบหงิก",
+                nameEn: "Rice Grassy Stunt",
+                pathogen: "Rice Grassy Stunt Virus (RGSV)",
+                symptoms: [
+                    "ต้นเตี้ยแคระ สูงไม่เกิน 30 ซม.",
+                    "แตกกอมากผิดปกติ (มากกว่า 100 หน่อ)",
+                    "ใบสีเขียวเข้ม แคบและแข็ง",
+                    "ไม่ออกรวง - แมลงพาหะ: เพลี้ยกระโดดสีน้ำตาล"
+                ],
+                treatment: [
+                    "ใช้พันธุ์ต้านทาน",
+                    "กำจัดเพลี้ยกระโดดสีน้ำตาล",
+                    "ถอนทำลายต้นที่เป็นโรคทันที",
+                    "ไม่ปลูกข้าวต่อเนื่องตลอดปี"
+                ],
+                products: "บูโพรเฟซิน (กำจัดเพลี้ย), ไดโนทีฟูแรน"
+            },
+            ragged_stunt: {
+                name: "โรคใบหงิกเหลือง",
+                nameEn: "Rice Ragged Stunt",
+                pathogen: "Rice Ragged Stunt Virus (RRSV)",
+                symptoms: [
+                    "ใบบิดเป็นเกลียว ขอบใบหยักขาด",
+                    "ต้นเตี้ยแคระ ใบสีเหลืองซีด",
+                    "กาบใบบวมพอง",
+                    "แมลงพาหะ: เพลี้ยกระโดดสีน้ำตาล"
+                ],
+                treatment: [
+                    "ใช้พันธุ์ต้านทาน",
+                    "กำจัดเพลี้ยกระโดดสีน้ำตาล",
+                    "ถอนทำลายต้นที่เป็นโรค",
+                    "ปลูกข้าวให้ห่างจากแหล่งระบาด"
+                ],
+                products: "ไดโนทีฟูแรน, ไซเปอร์เมทริน (กำจัดเพลี้ย)"
+            }
+        };
+
+        let currentDisease = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initLiff();
+        });
+
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                console.log('LIFF initialized');
+            } catch (error) {
+                console.error('LIFF init error:', error);
+            }
+        }
+
+        function showCategory(category) {
+            // Update tabs
+            document.querySelectorAll('.category-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`.category-tab.${category}`).classList.add('active');
+
+            // Update sections
+            document.querySelectorAll('.category-section').forEach(section => section.classList.remove('active'));
+            document.getElementById(`${category}-section`).classList.add('active');
+        }
+
+        function showDetail(diseaseKey) {
+            const disease = diseaseData[diseaseKey];
+            if (!disease) return;
+
+            currentDisease = disease;
+
+            document.getElementById('modalTitle').textContent = disease.name;
+            document.getElementById('modalTitleEn').textContent = disease.nameEn;
+            document.getElementById('modalPathogen').textContent = disease.pathogen;
+            document.getElementById('modalSymptoms').innerHTML = disease.symptoms.map(s => `<li>${s}</li>`).join('');
+            document.getElementById('modalTreatment').innerHTML = disease.treatment.map(t => `<li>${t}</li>`).join('');
+            document.getElementById('modalProducts').textContent = disease.products;
+
+            document.getElementById('diseaseModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('diseaseModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function shareDisease() {
+            if (!currentDisease) return;
+
+            const shareText = `🌾 ${currentDisease.name} (${currentDisease.nameEn})\n\n` +
+                              `🔬 สาเหตุ: ${currentDisease.pathogen}\n\n` +
+                              `🔍 อาการ:\n${currentDisease.symptoms.slice(0,2).map(s => '• ' + s).join('\n')}\n\n` +
+                              `ดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
+
+            if (liff.isApiAvailable('shareTargetPicker')) {
+                liff.shareTargetPicker([{
+                    type: 'text',
+                    text: shareText
+                }]).catch(err => fallbackShare(shareText));
+            } else {
+                fallbackShare(shareText);
+            }
+        }
+
+        function fallbackShare(text) {
+            if (navigator.share) {
+                navigator.share({ title: 'ข้อมูลโรคข้าว', text: text });
+            } else {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('คัดลอกข้อมูลแล้ว');
+                });
+            }
+        }
+
+        function goBack() {
+            window.location.href = '/liff/diseases';
+        }
+
+        function openCamera() {
+            if (liff.isInClient()) {
+                liff.closeWindow();
+            } else {
+                alert('กรุณาเปิดผ่าน LINE app');
+            }
+        }
+
+        // Close modal on background click
+        document.getElementById('diseaseModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>โรคอ้อย - ICP Ladda</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Sarabun', sans-serif; background: #f5f5f5; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #2e7d32 0%, #66bb6a 100%); color: white; padding: 15px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .header-content { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 15px; }
+        .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .header-info { flex: 1; }
+        .header h1 { font-size: 1.3em; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .header p { font-size: 0.85em; opacity: 0.9; }
+        .category-tabs { max-width: 600px; margin: 0 auto; background: white; display: flex; border-bottom: 1px solid #eee; position: sticky; top: 66px; z-index: 99; }
+        .category-tab { flex: 1; padding: 12px 8px; border: none; background: white; font-size: 0.9em; font-weight: 500; cursor: pointer; transition: all 0.3s ease; font-family: 'Sarabun', sans-serif; border-bottom: 3px solid transparent; }
+        .category-tab:hover { background: #f9f9f9; }
+        .category-tab.active { border-bottom-color: #2e7d32; background: #f1f8e9; }
+        .category-tab.fungal.active { color: #8B4513; border-bottom-color: #8B4513; }
+        .category-tab.bacterial.active { color: #DC143C; border-bottom-color: #DC143C; }
+        .category-tab.viral.active { color: #9932CC; border-bottom-color: #9932CC; }
+        .content { max-width: 600px; margin: 0 auto; padding: 15px 20px 100px; }
+        .category-section { display: none; }
+        .category-section.active { display: block; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+        .section-icon { font-size: 1.5em; }
+        .section-title { font-size: 1.15em; font-weight: 600; color: #333; }
+        .section-count { margin-left: auto; font-size: 0.85em; color: #888; background: #f0f0f0; padding: 3px 10px; border-radius: 10px; }
+        .disease-list { display: flex; flex-direction: column; gap: 12px; }
+        .disease-card { background: white; border-radius: 15px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.3s ease; border-left: 4px solid #2e7d32; }
+        .disease-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+        .disease-card.fungal { border-left-color: #8B4513; }
+        .disease-card.bacterial { border-left-color: #DC143C; }
+        .disease-card.viral { border-left-color: #9932CC; }
+        .disease-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .disease-name { font-size: 1.1em; font-weight: 600; color: #333; }
+        .disease-name-en { font-size: 0.85em; color: #666; font-style: italic; }
+        .disease-symptoms { font-size: 0.9em; color: #555; line-height: 1.5; margin-bottom: 10px; }
+        .disease-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tag { font-size: 0.75em; padding: 4px 10px; border-radius: 12px; background: #e8f5e9; color: #2e7d32; }
+        .tag.pathogen { background: #e3f2fd; color: #1565c0; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px; overflow-y: auto; }
+        .modal.active { display: flex; align-items: flex-start; justify-content: center; }
+        .modal-content { background: white; border-radius: 20px; width: 100%; max-width: 500px; margin: 20px 0; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-header { padding: 20px; border-bottom: 1px solid #eee; }
+        .modal-header h2 { font-size: 1.3em; color: #333; margin-bottom: 5px; }
+        .modal-header p { font-size: 0.9em; color: #666; font-style: italic; }
+        .modal-body { padding: 20px; }
+        .detail-section { margin-bottom: 20px; }
+        .detail-section:last-child { margin-bottom: 0; }
+        .detail-title { font-size: 1em; font-weight: 600; color: #2e7d32; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .detail-content { font-size: 0.95em; color: #444; line-height: 1.6; }
+        .detail-list { list-style: none; padding-left: 0; }
+        .detail-list li { padding: 6px 0; padding-left: 20px; position: relative; }
+        .detail-list li::before { content: "•"; position: absolute; left: 0; color: #2e7d32; font-weight: bold; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .modal-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 0.95em; font-weight: 600; cursor: pointer; font-family: 'Sarabun', sans-serif; }
+        .modal-btn.close { background: #f0f0f0; color: #333; }
+        .modal-btn.primary { background: #2e7d32; color: white; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+        .footer-content { max-width: 600px; margin: 0 auto; display: flex; gap: 10px; }
+        .footer-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 0.95em; font-weight: 600; cursor: pointer; font-family: 'Sarabun', sans-serif; transition: all 0.3s ease; }
+        .footer-btn.primary { background: #2e7d32; color: white; }
+        .footer-btn.secondary { background: #f0f0f0; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div class="header-info">
+                <h1><span>🎋</span> โรคอ้อย</h1>
+                <p>Sugarcane Diseases</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="category-tabs">
+        <button class="category-tab fungal active" onclick="showCategory('fungal')">เชื้อรา</button>
+        <button class="category-tab bacterial" onclick="showCategory('bacterial')">แบคทีเรีย</button>
+        <button class="category-tab viral" onclick="showCategory('viral')">ไวรัส</button>
+    </div>
+
+    <div class="content">
+        <!-- Fungal -->
+        <div class="category-section active" id="fungal-section">
+            <div class="section-header">
+                <span class="section-icon">🍄</span>
+                <span class="section-title">โรคจากเชื้อรา</span>
+                <span class="section-count">4 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card fungal" onclick="showDetail('red_rot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคลำต้นเน่าแดง</div>
+                            <div class="disease-name-en">Red Rot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">เนื้อในลำต้นเป็นสีแดง มีจุดขาวสลับ ใบเหี่ยวแห้ง</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Colletotrichum falcatum</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('smut')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคเหี่ยวเน่าดำ (แส้ดำ)</div>
+                            <div class="disease-name-en">Sugarcane Smut</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ยอดยืดยาวคล้ายแส้สีดำ มีสปอร์สีดำปกคลุม</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Sporisorium scitamineum</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('rust')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคราสนิม</div>
+                            <div class="disease-name-en">Sugarcane Rust</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">จุดนูนสีน้ำตาลส้มคล้ายสนิมบนใบ กระจายทั่วใบ</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Puccinia melanocephala</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('pokkah_boeng')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคยอดบิด</div>
+                            <div class="disease-name-en">Pokkah Boeng</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบอ่อนบิดเบี้ยว มีแผลสีแดง ยอดเน่า</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Fusarium moniliforme</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bacterial -->
+        <div class="category-section" id="bacterial-section">
+            <div class="section-header">
+                <span class="section-icon">🦠</span>
+                <span class="section-title">โรคจากแบคทีเรีย</span>
+                <span class="section-count">2 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card bacterial" onclick="showDetail('ratoon_stunting')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคตอแคระ</div>
+                            <div class="disease-name-en">Ratoon Stunting Disease</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ต้นแคระเตี้ย ลำเล็ก ข้อสั้น ผลผลิตลดลงทุกรุ่น</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Leifsonia xyli</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card bacterial" onclick="showDetail('leaf_scald')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบขาวลาย</div>
+                            <div class="disease-name-en">Leaf Scald</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบมีแถบขาวยาวตามแนวเส้นใบ ขอบแถบแดง ต้นเหี่ยวตาย</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Xanthomonas albilineans</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Viral -->
+        <div class="category-section" id="viral-section">
+            <div class="section-header">
+                <span class="section-icon">🔬</span>
+                <span class="section-title">โรคจากไวรัส</span>
+                <span class="section-count">2 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card viral" onclick="showDetail('mosaic')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบด่าง</div>
+                            <div class="disease-name-en">Sugarcane Mosaic</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบมีลายด่างเขียวเหลือง ต้นแคระ น้ำตาลลด</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">SCMV</span>
+                        <span class="tag">เพลี้ยอ่อน</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card viral" onclick="showDetail('yellow_leaf')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบเหลือง</div>
+                            <div class="disease-name-en">Yellow Leaf Syndrome</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบเปลี่ยนเป็นสีเหลืองจากเส้นกลางใบ ต้นโทรม</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">SCYLV</span>
+                        <span class="tag">เพลี้ยอ่อน</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="diseaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">-</h2>
+                <p id="modalTitleEn">-</p>
+            </div>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <div class="detail-title">🔬 สาเหตุ</div>
+                    <div class="detail-content" id="modalPathogen">-</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🔍 อาการ</div>
+                    <ul class="detail-list" id="modalSymptoms"><li>-</li></ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🛡️ การป้องกันและรักษา</div>
+                    <ul class="detail-list" id="modalTreatment"><li>-</li></ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
+                    <div class="detail-content" id="modalProducts">-</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn close" onclick="closeModal()">ปิด</button>
+                <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-content">
+            <button class="footer-btn secondary" onclick="goBack()">← กลับ</button>
+            <button class="footer-btn primary" onclick="openCamera()">วิเคราะห์จากรูป</button>
+        </div>
+    </div>
+
+    <script>
+        const LIFF_ID = '2008723334-Zz1OoaPy';
+        const diseaseData = {
+            red_rot: {
+                name: "โรคลำต้นเน่าแดง", nameEn: "Red Rot",
+                pathogen: "เชื้อรา Colletotrichum falcatum",
+                symptoms: ["ผ่าลำต้นเห็นเนื้อในสีแดง มีจุดขาวสลับ", "ใบเหี่ยวแห้งจากยอด", "ลำต้นเหี่ยวยุบ น้ำหนักลด", "มีกลิ่นเปรี้ยวคล้ายไวน์"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "ใช้ท่อนพันธุ์สะอาดปลอดโรค", "แช่ท่อนพันธุ์ในน้ำร้อน 50°C นาน 2 ชม.", "ไม่ปลูกอ้อยซ้ำที่เดิมนานหลายปี"],
+                products: "คาร์เบนดาซิม 50WP (แช่ท่อนพันธุ์)"
+            },
+            smut: {
+                name: "โรคเหี่ยวเน่าดำ (แส้ดำ)", nameEn: "Sugarcane Smut",
+                pathogen: "เชื้อรา Sporisorium scitamineum",
+                symptoms: ["ยอดยืดยาวคล้ายแส้สีดำ ยาว 30-100 ซม.", "มีสปอร์สีดำปกคลุมแส้", "ต้นแตกกอมาก ลำเล็ก", "ไม่มีน้ำตาล"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "ถอนต้นที่เป็นโรคเผาทำลายทันที", "แช่ท่อนพันธุ์ในน้ำร้อน 52°C นาน 30 นาที", "พ่นยากำจัดเชื้อรา"],
+                products: "โปรปิโคนาโซล 25EC, คาร์เบนดาซิม 50WP"
+            },
+            rust: {
+                name: "โรคราสนิม", nameEn: "Sugarcane Rust",
+                pathogen: "เชื้อรา Puccinia melanocephala (Brown Rust), P. kuehnii (Orange Rust)",
+                symptoms: ["จุดนูนสีน้ำตาลส้มคล้ายสนิมบนใบ", "สปอร์กระจายเมื่อสัมผัส", "ใบแห้งเร็วถ้าระบาดหนัก", "ลดพื้นที่สังเคราะห์แสง"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "พ่นยากลุ่ม Triazole เมื่อเริ่มพบโรค", "ไม่ปลูกพันธุ์อ่อนแอในพื้นที่ระบาด"],
+                products: "โปรปิโคนาโซล 25EC, อะซอกซีสโตรบิน"
+            },
+            pokkah_boeng: {
+                name: "โรคยอดบิด", nameEn: "Pokkah Boeng",
+                pathogen: "เชื้อรา Fusarium moniliforme (Fusarium verticillioides)",
+                symptoms: ["ใบอ่อนบิดเบี้ยว ผิดรูป", "มีแผลสีแดงที่โคนใบ", "ยอดเน่า ต้นตายได้", "ระบาดในช่วงร้อนชื้น"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "ตัดส่วนที่เป็นโรคเผาทำลาย", "ใส่ปุ๋ยสมดุล ไม่มากเกินไป"],
+                products: "คาร์เบนดาซิม 50WP, แมนโคเซ็บ 80WP"
+            },
+            ratoon_stunting: {
+                name: "โรคตอแคระ", nameEn: "Ratoon Stunting Disease (RSD)",
+                pathogen: "แบคทีเรีย Leifsonia xyli subsp. xyli",
+                symptoms: ["ต้นแคระเตี้ยกว่าปกติ 10-30%", "ลำเล็ก ข้อสั้น", "ผลผลิตลดลงทุกรุ่นตอ", "อาการไม่ชัด ต้องตรวจในห้องแล็บ"],
+                treatment: ["ใช้ท่อนพันธุ์จากแปลงพันธุ์ปลอดโรค", "แช่ท่อนพันธุ์ในน้ำร้อน 50°C นาน 2 ชม.", "ฆ่าเชื้อมีดตัดก่อนใช้", "ไม่ไว้ตอหลายรุ่น"],
+                products: "ไม่มียารักษา - ใช้การจัดการ"
+            },
+            leaf_scald: {
+                name: "โรคใบขาวลาย", nameEn: "Leaf Scald",
+                pathogen: "แบคทีเรีย Xanthomonas albilineans",
+                symptoms: ["ใบมีแถบขาวยาวตามแนวเส้นใบ", "ขอบแถบสีแดงหรือน้ำตาล", "ยอดเหี่ยวแห้งตาย", "ต้นตายทั้งกอ"],
+                treatment: ["ใช้ท่อนพันธุ์ปลอดโรค", "แช่ท่อนพันธุ์ในน้ำร้อน 50°C นาน 3 ชม.", "ถอนทำลายต้นที่เป็นโรค", "ฆ่าเชื้อมีดตัด"],
+                products: "ไม่มียารักษา - ใช้การจัดการ"
+            },
+            mosaic: {
+                name: "โรคใบด่าง", nameEn: "Sugarcane Mosaic Virus (SCMV)",
+                pathogen: "Sugarcane Mosaic Virus (SCMV) - พาหะ: เพลี้ยอ่อน",
+                symptoms: ["ใบมีลายด่างเขียวเหลืองสลับกัน", "ต้นแคระ ลำเล็ก", "น้ำตาลในลำต้นลดลง", "แมลงพาหะ: เพลี้ยอ่อน"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "กำจัดเพลี้ยอ่อนพาหะ", "ใช้ท่อนพันธุ์จากแปลงปลอดโรค", "กำจัดวัชพืชที่เป็นแหล่งเชื้อ"],
+                products: "อิมิดาโคลพริด 70WG (กำจัดเพลี้ย)"
+            },
+            yellow_leaf: {
+                name: "โรคใบเหลือง", nameEn: "Yellow Leaf Syndrome (YLS)",
+                pathogen: "Sugarcane Yellow Leaf Virus (SCYLV) - พาหะ: เพลี้ยอ่อน",
+                symptoms: ["ใบเปลี่ยนเป็นสีเหลืองจากเส้นกลางใบ", "ใบแห้งจากปลายและขอบ", "ต้นโทรม ผลผลิตลด", "น้ำตาลในลำลดลง 10-30%"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "กำจัดเพลี้ยอ่อนพาหะ", "ใช้ท่อนพันธุ์จากการเพาะเลี้ยงเนื้อเยื่อ", "ถอนทำลายต้นที่เป็นโรค"],
+                products: "ไทอะมีทอกแซม, อิมิดาโคลพริด (กำจัดเพลี้ย)"
+            }
+        };
+        let currentDisease = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try { await liff.init({ liffId: LIFF_ID }); } catch (e) { console.error(e); }
+        });
+
+        function showCategory(category) {
+            document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.category-tab.${category}`).classList.add('active');
+            document.querySelectorAll('.category-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(`${category}-section`).classList.add('active');
+        }
+
+        function showDetail(key) {
+            const d = diseaseData[key]; if (!d) return;
+            currentDisease = d;
+            document.getElementById('modalTitle').textContent = d.name;
+            document.getElementById('modalTitleEn').textContent = d.nameEn;
+            document.getElementById('modalPathogen').textContent = d.pathogen;
+            document.getElementById('modalSymptoms').innerHTML = d.symptoms.map(s => `<li>${s}</li>`).join('');
+            document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
+            document.getElementById('modalProducts').textContent = d.products;
+            document.getElementById('diseaseModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function goBack() { window.location.href = '/liff/diseases'; }
+        function openCamera() { if (liff.isInClient()) liff.closeWindow(); else alert('กรุณาเปิดผ่าน LINE app'); }
+        function shareDisease() {
+            if (!currentDisease) return;
+            const text = `🎋 ${currentDisease.name} (${currentDisease.nameEn})\n🔬 ${currentDisease.pathogen}\n\nดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
+            if (liff.isApiAvailable('shareTargetPicker')) liff.shareTargetPicker([{type:'text',text}]).catch(()=>fallbackShare(text));
+            else fallbackShare(text);
+        }
+        function fallbackShare(t) { if(navigator.share) navigator.share({title:'โรคอ้อย',text:t}); else navigator.clipboard.writeText(t).then(()=>alert('คัดลอกแล้ว')); }
+        document.getElementById('diseaseModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+    </script>
+</body>
+</html>

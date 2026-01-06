@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>คู่มือโรคพืช - ICP Ladda</title>
+    <title>คลังความรู้โรคพืช - ICP Ladda</title>
 
     <!-- LIFF SDK -->
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -20,7 +20,7 @@
 
         body {
             font-family: 'Sarabun', sans-serif;
-            background: #f5f5f5;
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
             min-height: 100vh;
         }
 
@@ -28,275 +28,162 @@
         .header {
             background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);
             color: white;
-            padding: 20px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        }
-
-        .header-content {
-            max-width: 600px;
-            margin: 0 auto;
+            padding: 25px 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
         .header h1 {
-            font-size: 1.4em;
+            font-size: 1.6em;
             font-weight: 700;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            margin-bottom: 8px;
         }
 
         .header p {
-            font-size: 0.9em;
+            font-size: 0.95em;
             opacity: 0.9;
-        }
-
-        /* Search Box */
-        .search-container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 15px 20px;
-            background: white;
-            border-bottom: 1px solid #eee;
-        }
-
-        .search-box {
-            display: flex;
-            gap: 10px;
-        }
-
-        .search-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 25px;
-            font-size: 1em;
-            font-family: 'Sarabun', sans-serif;
-            transition: all 0.3s ease;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #4a7c23;
-            box-shadow: 0 0 0 3px rgba(74, 124, 35, 0.1);
-        }
-
-        .search-btn {
-            padding: 12px 20px;
-            background: #4a7c23;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .search-btn:hover {
-            background: #3d6a1e;
-        }
-
-        /* Filter Tabs */
-        .filter-tabs {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 10px 20px;
-            background: white;
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            border-bottom: 1px solid #eee;
-        }
-
-        .filter-tab {
-            padding: 8px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 20px;
-            background: white;
-            font-size: 0.9em;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s ease;
-        }
-
-        .filter-tab:hover {
-            border-color: #4a7c23;
-            background: #f0f7e6;
-        }
-
-        .filter-tab.active {
-            border-color: #4a7c23;
-            background: #4a7c23;
-            color: white;
-        }
-
-        /* Plant Filter */
-        .plant-filter {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 10px 20px;
-            background: #fafafa;
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-        }
-
-        .plant-btn {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 15px;
-            background: white;
-            font-size: 0.85em;
-            cursor: pointer;
-            white-space: nowrap;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-
-        .plant-btn:hover {
-            background: #f0f7e6;
-            transform: translateY(-1px);
-        }
-
-        .plant-btn.active {
-            background: #4a7c23;
-            color: white;
         }
 
         /* Content */
         .content {
             max-width: 600px;
             margin: 0 auto;
-            padding: 15px 20px 100px;
+            padding: 20px;
+            padding-bottom: 100px;
         }
 
         /* Section Title */
         .section-title {
-            font-size: 1.1em;
+            font-size: 1.15em;
             font-weight: 600;
-            color: #333;
-            margin: 15px 0 10px;
+            color: #2d5016;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        /* Disease Cards */
-        .disease-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+        /* Plant Grid */
+        .plant-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
         }
 
-        .disease-card {
+        .plant-card {
             background: white;
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-radius: 20px;
+            padding: 25px 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             cursor: pointer;
             transition: all 0.3s ease;
-            border-left: 4px solid #4a7c23;
+            text-decoration: none;
+            color: inherit;
+            border: 2px solid transparent;
         }
 
-        .disease-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        .plant-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-color: #4a7c23;
         }
 
-        .disease-card.fungal { border-left-color: #8B4513; }
-        .disease-card.bacterial { border-left-color: #DC143C; }
-        .disease-card.viral { border-left-color: #9932CC; }
-        .disease-card.insect { border-left-color: #FF8C00; }
-        .disease-card.nutrient { border-left-color: #228B22; }
-
-        .disease-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 8px;
+        .plant-card:active {
+            transform: scale(0.98);
         }
 
-        .disease-name {
-            font-size: 1.1em;
+        .plant-icon {
+            font-size: 3.5em;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .plant-name {
+            font-size: 1.2em;
             font-weight: 600;
             color: #333;
+            margin-bottom: 5px;
         }
 
-        .disease-name-en {
+        .plant-name-en {
             font-size: 0.85em;
-            color: #666;
-            font-style: italic;
+            color: #888;
         }
 
-        .disease-category {
-            font-size: 0.75em;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: #f0f0f0;
-            color: #666;
-        }
-
-        .disease-category.fungal { background: #FFF8DC; color: #8B4513; }
-        .disease-category.bacterial { background: #FFE4E1; color: #DC143C; }
-        .disease-category.viral { background: #E6E6FA; color: #9932CC; }
-        .disease-category.insect { background: #FFF5EE; color: #FF8C00; }
-        .disease-category.nutrient { background: #F0FFF0; color: #228B22; }
-
-        .disease-symptoms {
-            font-size: 0.9em;
-            color: #555;
-            line-height: 1.5;
-            margin-bottom: 8px;
-        }
-
-        .disease-plants {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
-        .plant-tag {
-            font-size: 0.75em;
-            padding: 3px 8px;
-            border-radius: 10px;
+        .disease-count {
+            margin-top: 10px;
+            font-size: 0.85em;
+            color: #4a7c23;
             background: #e8f5e9;
-            color: #2e7d32;
+            padding: 5px 12px;
+            border-radius: 15px;
+            display: inline-block;
         }
 
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
+        /* Rice card special - full width */
+        .plant-card.rice {
+            grid-column: span 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px 25px;
         }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid #e0e0e0;
-            border-top-color: #4a7c23;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
-
-        .empty-state .icon {
+        .plant-card.rice .plant-icon {
             font-size: 3em;
-            margin-bottom: 15px;
+            margin-bottom: 0;
+        }
+
+        .plant-card.rice .plant-info {
+            text-align: left;
+        }
+
+        /* Info Section */
+        .info-section {
+            margin-top: 25px;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .info-section h3 {
+            font-size: 1.05em;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .category-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .category-tag {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .category-tag.fungal {
+            background: #FFF8DC;
+            color: #8B4513;
+        }
+
+        .category-tag.bacterial {
+            background: #FFE4E1;
+            color: #DC143C;
+        }
+
+        .category-tag.viral {
+            background: #E6E6FA;
+            color: #9932CC;
         }
 
         /* Footer */
@@ -341,73 +228,83 @@
 
         /* Responsive */
         @media (max-width: 360px) {
-            .header h1 { font-size: 1.2em; }
-            .disease-card { padding: 12px; }
+            .plant-grid {
+                gap: 12px;
+            }
+            .plant-card {
+                padding: 20px 12px;
+            }
+            .plant-icon {
+                font-size: 2.8em;
+            }
         }
     </style>
 </head>
 <body>
     <!-- Header -->
     <div class="header">
-        <div class="header-content">
-            <h1><span>📚</span> คู่มือโรคพืชและศัตรูพืช</h1>
-            <p>ค้นหาข้อมูลโรค อาการ และวิธีรักษา</p>
-        </div>
-    </div>
-
-    <!-- Search Box -->
-    <div class="search-container">
-        <div class="search-box">
-            <input type="text" class="search-input" id="searchInput" placeholder="ค้นหาชื่อโรค เช่น ไหม้ ราสนิม เพลี้ย...">
-            <button class="search-btn" onclick="searchDiseases()">ค้นหา</button>
-        </div>
-    </div>
-
-    <!-- Filter Tabs -->
-    <div class="filter-tabs" id="filterTabs">
-        <button class="filter-tab active" data-category="all">ทั้งหมด</button>
-        <button class="filter-tab" data-category="fungal">🍄 เชื้อรา</button>
-        <button class="filter-tab" data-category="bacterial">🦠 แบคทีเรีย</button>
-        <button class="filter-tab" data-category="viral">🔬 ไวรัส</button>
-        <button class="filter-tab" data-category="insect">🐛 แมลง</button>
-        <button class="filter-tab" data-category="nutrient">🌿 ขาดธาตุ</button>
-    </div>
-
-    <!-- Plant Filter -->
-    <div class="plant-filter" id="plantFilter">
-        <button class="plant-btn active" data-plant="all">ทุกพืช</button>
-        <button class="plant-btn" data-plant="ข้าว">🌾 ข้าว</button>
-        <button class="plant-btn" data-plant="ข้าวโพด">🌽 ข้าวโพด</button>
-        <button class="plant-btn" data-plant="ทุเรียน">🍈 ทุเรียน</button>
-        <button class="plant-btn" data-plant="มะม่วง">🥭 มะม่วง</button>
-        <button class="plant-btn" data-plant="อ้อย">🎋 อ้อย</button>
-        <button class="plant-btn" data-plant="ยางพารา">🌳 ยางพารา</button>
-        <button class="plant-btn" data-plant="มันสำปะหลัง">🥔 มันสำปะหลัง</button>
+        <h1>คลังความรู้โรคพืช</h1>
+        <p>เลือกชนิดพืชเพื่อดูข้อมูลโรคและวิธีรักษา</p>
     </div>
 
     <!-- Content -->
     <div class="content">
-        <!-- Loading -->
-        <div class="loading" id="loadingSection">
-            <div class="spinner"></div>
-            <p>กำลังโหลดข้อมูล...</p>
+        <div class="section-title">
+            <span>เลือกชนิดพืช</span>
         </div>
 
-        <!-- Disease List -->
-        <div id="diseaseList" style="display: none;">
-            <div class="section-title" id="sectionTitle">
-                <span>🔥</span> โรคที่พบบ่อย
-            </div>
-            <div class="disease-list" id="diseaseCards">
-                <!-- Disease cards will be inserted here -->
-            </div>
+        <div class="plant-grid">
+            <!-- Rice - Full width -->
+            <a href="/liff/diseases-rice" class="plant-card rice">
+                <span class="plant-icon">🌾</span>
+                <div class="plant-info">
+                    <div class="plant-name">ข้าว</div>
+                    <div class="plant-name-en">Rice</div>
+                    <span class="disease-count">12 โรค</span>
+                </div>
+            </a>
+
+            <!-- Durian -->
+            <a href="/liff/diseases-durian" class="plant-card">
+                <span class="plant-icon">🥭</span>
+                <div class="plant-name">ทุเรียน</div>
+                <div class="plant-name-en">Durian</div>
+                <span class="disease-count">8 โรค</span>
+            </a>
+
+            <!-- Corn -->
+            <a href="/liff/diseases-corn" class="plant-card">
+                <span class="plant-icon">🌽</span>
+                <div class="plant-name">ข้าวโพด</div>
+                <div class="plant-name-en">Corn</div>
+                <span class="disease-count">9 โรค</span>
+            </a>
+
+            <!-- Cassava -->
+            <a href="/liff/diseases-cassava" class="plant-card">
+                <span class="plant-icon">🥔</span>
+                <div class="plant-name">มันสำปะหลัง</div>
+                <div class="plant-name-en">Cassava</div>
+                <span class="disease-count">7 โรค</span>
+            </a>
+
+            <!-- Sugarcane -->
+            <a href="/liff/diseases-sugarcane" class="plant-card">
+                <span class="plant-icon">🎋</span>
+                <div class="plant-name">อ้อย</div>
+                <div class="plant-name-en">Sugarcane</div>
+                <span class="disease-count">8 โรค</span>
+            </a>
         </div>
 
-        <!-- Empty State -->
-        <div class="empty-state" id="emptyState" style="display: none;">
-            <div class="icon">🔍</div>
-            <p>ไม่พบข้อมูลโรคที่ค้นหา</p>
-            <p>ลองค้นหาด้วยคำอื่น หรือเลือกหมวดหมู่</p>
+        <!-- Info Section -->
+        <div class="info-section">
+            <h3>หมวดหมู่โรคพืช</h3>
+            <div class="category-list">
+                <span class="category-tag fungal">เชื้อรา (Fungal)</span>
+                <span class="category-tag bacterial">แบคทีเรีย (Bacterial)</span>
+                <span class="category-tag viral">ไวรัส (Viral)</span>
+            </div>
         </div>
     </div>
 
@@ -415,25 +312,17 @@
     <div class="footer">
         <div class="footer-content">
             <button class="footer-btn secondary" onclick="closeLiff()">ปิด</button>
-            <button class="footer-btn primary" onclick="openCamera()">📷 วิเคราะห์จากรูป</button>
+            <button class="footer-btn primary" onclick="openCamera()">วิเคราะห์จากรูป</button>
         </div>
     </div>
 
     <script>
         // Configuration
         const LIFF_ID = '2008723334-Zz1OoaPy';
-        const API_BASE_URL = 'https://chatbot-ladda-production.up.railway.app';
-
-        // State
-        let allDiseases = [];
-        let currentCategory = 'all';
-        let currentPlant = 'all';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await initLiff();
-            await loadDiseases();
-            setupEventListeners();
         });
 
         async function initLiff() {
@@ -445,190 +334,9 @@
             }
         }
 
-        async function loadDiseases() {
-            showLoading(true);
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/diseases?limit=100`);
-                const data = await response.json();
-
-                if (data.success && data.diseases) {
-                    allDiseases = data.diseases;
-                    renderDiseases(allDiseases);
-                } else {
-                    showEmpty();
-                }
-            } catch (error) {
-                console.error('Load diseases error:', error);
-                showEmpty();
-            }
-            showLoading(false);
-        }
-
-        function setupEventListeners() {
-            // Category filter
-            document.querySelectorAll('.filter-tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-                    tab.classList.add('active');
-                    currentCategory = tab.dataset.category;
-                    filterAndRender();
-                });
-            });
-
-            // Plant filter
-            document.querySelectorAll('.plant-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.plant-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentPlant = btn.dataset.plant;
-                    filterAndRender();
-                });
-            });
-
-            // Search on enter
-            document.getElementById('searchInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') searchDiseases();
-            });
-        }
-
-        function filterAndRender() {
-            let filtered = allDiseases;
-
-            // Filter by category
-            if (currentCategory !== 'all') {
-                filtered = filtered.filter(d => d.category === currentCategory);
-            }
-
-            // Filter by plant
-            if (currentPlant !== 'all') {
-                filtered = filtered.filter(d => {
-                    const plants = d.applicable_plants || '';
-                    return plants.toLowerCase().includes(currentPlant.toLowerCase());
-                });
-            }
-
-            updateSectionTitle();
-            renderDiseases(filtered);
-        }
-
-        function searchDiseases() {
-            const query = document.getElementById('searchInput').value.trim().toLowerCase();
-
-            if (!query) {
-                renderDiseases(allDiseases);
-                return;
-            }
-
-            const filtered = allDiseases.filter(d => {
-                const nameTh = (d.name_th || '').toLowerCase();
-                const nameEn = (d.name_en || '').toLowerCase();
-                const symptoms = (d.symptoms || []).join(' ').toLowerCase();
-                const pathogen = (d.pathogen || '').toLowerCase();
-
-                return nameTh.includes(query) ||
-                       nameEn.includes(query) ||
-                       symptoms.includes(query) ||
-                       pathogen.includes(query);
-            });
-
-            document.getElementById('sectionTitle').innerHTML = `<span>🔍</span> ผลการค้นหา "${query}"`;
-            renderDiseases(filtered);
-        }
-
-        function updateSectionTitle() {
-            const categoryNames = {
-                'all': 'ทั้งหมด',
-                'fungal': 'เชื้อรา',
-                'bacterial': 'แบคทีเรีย',
-                'viral': 'ไวรัส',
-                'insect': 'แมลงศัตรูพืช',
-                'nutrient': 'ขาดธาตุอาหาร'
-            };
-
-            let title = categoryNames[currentCategory] || 'ทั้งหมด';
-            if (currentPlant !== 'all') {
-                title += ` - ${currentPlant}`;
-            }
-
-            document.getElementById('sectionTitle').innerHTML = `<span>📋</span> ${title}`;
-        }
-
-        function renderDiseases(diseases) {
-            const container = document.getElementById('diseaseCards');
-            const listSection = document.getElementById('diseaseList');
-            const emptyState = document.getElementById('emptyState');
-
-            if (!diseases || diseases.length === 0) {
-                listSection.style.display = 'none';
-                emptyState.style.display = 'block';
-                return;
-            }
-
-            listSection.style.display = 'block';
-            emptyState.style.display = 'none';
-
-            container.innerHTML = diseases.map(disease => {
-                const symptoms = (disease.symptoms || []).slice(0, 2).join(', ');
-                const category = disease.category || 'other';
-                const categoryName = getCategoryName(category);
-
-                return `
-                    <div class="disease-card ${category}" onclick="openDiseaseDetail('${disease.disease_key}')">
-                        <div class="disease-header">
-                            <div>
-                                <div class="disease-name">${disease.name_th || 'ไม่ระบุชื่อ'}</div>
-                                <div class="disease-name-en">${disease.name_en || ''}</div>
-                            </div>
-                            <span class="disease-category ${category}">${categoryName}</span>
-                        </div>
-                        <div class="disease-symptoms">
-                            ${symptoms || 'ไม่มีข้อมูลอาการ'}
-                        </div>
-                        ${renderPlantTags(disease.applicable_plants)}
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function getCategoryName(category) {
-            const names = {
-                'fungal': '🍄 เชื้อรา',
-                'bacterial': '🦠 แบคทีเรีย',
-                'viral': '🔬 ไวรัส',
-                'insect': '🐛 แมลง',
-                'nutrient': '🌿 ขาดธาตุ'
-            };
-            return names[category] || category;
-        }
-
-        function renderPlantTags(plants) {
-            if (!plants) return '';
-
-            const plantList = plants.split(',').slice(0, 3).map(p => p.trim());
-            return `
-                <div class="disease-plants">
-                    ${plantList.map(p => `<span class="plant-tag">${p}</span>`).join('')}
-                </div>
-            `;
-        }
-
-        function openDiseaseDetail(diseaseKey) {
-            window.location.href = `/liff/diseases/${diseaseKey}`;
-        }
-
-        function showLoading(show) {
-            document.getElementById('loadingSection').style.display = show ? 'block' : 'none';
-        }
-
-        function showEmpty() {
-            document.getElementById('diseaseList').style.display = 'none';
-            document.getElementById('emptyState').style.display = 'block';
-        }
-
         function openCamera() {
             if (liff.isInClient()) {
                 liff.closeWindow();
-                // User will use camera roll from rich menu
             } else {
                 alert('กรุณาเปิดผ่าน LINE app เพื่อใช้งานกล้อง');
             }

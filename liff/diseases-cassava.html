@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>โรคมันสำปะหลัง - ICP Ladda</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Sarabun', sans-serif; background: #f5f5f5; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #6b4423 0%, #8b6914 100%); color: white; padding: 15px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .header-content { max-width: 600px; margin: 0 auto; display: flex; align-items: center; gap: 15px; }
+        .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .header-info { flex: 1; }
+        .header h1 { font-size: 1.3em; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .header p { font-size: 0.85em; opacity: 0.9; }
+        .category-tabs { max-width: 600px; margin: 0 auto; background: white; display: flex; border-bottom: 1px solid #eee; position: sticky; top: 66px; z-index: 99; }
+        .category-tab { flex: 1; padding: 12px 8px; border: none; background: white; font-size: 0.9em; font-weight: 500; cursor: pointer; transition: all 0.3s ease; font-family: 'Sarabun', sans-serif; border-bottom: 3px solid transparent; }
+        .category-tab:hover { background: #f9f9f9; }
+        .category-tab.active { border-bottom-color: #8b6914; background: #fffcf5; }
+        .category-tab.fungal.active { color: #8B4513; border-bottom-color: #8B4513; }
+        .category-tab.bacterial.active { color: #DC143C; border-bottom-color: #DC143C; }
+        .category-tab.viral.active { color: #9932CC; border-bottom-color: #9932CC; }
+        .content { max-width: 600px; margin: 0 auto; padding: 15px 20px 100px; }
+        .category-section { display: none; }
+        .category-section.active { display: block; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+        .section-icon { font-size: 1.5em; }
+        .section-title { font-size: 1.15em; font-weight: 600; color: #333; }
+        .section-count { margin-left: auto; font-size: 0.85em; color: #888; background: #f0f0f0; padding: 3px 10px; border-radius: 10px; }
+        .disease-list { display: flex; flex-direction: column; gap: 12px; }
+        .disease-card { background: white; border-radius: 15px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.3s ease; border-left: 4px solid #8b6914; }
+        .disease-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+        .disease-card.fungal { border-left-color: #8B4513; }
+        .disease-card.bacterial { border-left-color: #DC143C; }
+        .disease-card.viral { border-left-color: #9932CC; }
+        .disease-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .disease-name { font-size: 1.1em; font-weight: 600; color: #333; }
+        .disease-name-en { font-size: 0.85em; color: #666; font-style: italic; }
+        .disease-symptoms { font-size: 0.9em; color: #555; line-height: 1.5; margin-bottom: 10px; }
+        .disease-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tag { font-size: 0.75em; padding: 4px 10px; border-radius: 12px; background: #f5f0e5; color: #6b4423; }
+        .tag.pathogen { background: #e3f2fd; color: #1565c0; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px; overflow-y: auto; }
+        .modal.active { display: flex; align-items: flex-start; justify-content: center; }
+        .modal-content { background: white; border-radius: 20px; width: 100%; max-width: 500px; margin: 20px 0; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-header { padding: 20px; border-bottom: 1px solid #eee; }
+        .modal-header h2 { font-size: 1.3em; color: #333; margin-bottom: 5px; }
+        .modal-header p { font-size: 0.9em; color: #666; font-style: italic; }
+        .modal-body { padding: 20px; }
+        .detail-section { margin-bottom: 20px; }
+        .detail-section:last-child { margin-bottom: 0; }
+        .detail-title { font-size: 1em; font-weight: 600; color: #6b4423; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .detail-content { font-size: 0.95em; color: #444; line-height: 1.6; }
+        .detail-list { list-style: none; padding-left: 0; }
+        .detail-list li { padding: 6px 0; padding-left: 20px; position: relative; }
+        .detail-list li::before { content: "•"; position: absolute; left: 0; color: #8b6914; font-weight: bold; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .modal-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 0.95em; font-weight: 600; cursor: pointer; font-family: 'Sarabun', sans-serif; }
+        .modal-btn.close { background: #f0f0f0; color: #333; }
+        .modal-btn.primary { background: #8b6914; color: white; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+        .footer-content { max-width: 600px; margin: 0 auto; display: flex; gap: 10px; }
+        .footer-btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 0.95em; font-weight: 600; cursor: pointer; font-family: 'Sarabun', sans-serif; transition: all 0.3s ease; }
+        .footer-btn.primary { background: #8b6914; color: white; }
+        .footer-btn.secondary { background: #f0f0f0; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <button class="back-btn" onclick="goBack()">←</button>
+            <div class="header-info">
+                <h1><span>🥔</span> โรคมันสำปะหลัง</h1>
+                <p>Cassava Diseases</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="category-tabs">
+        <button class="category-tab fungal active" onclick="showCategory('fungal')">เชื้อรา</button>
+        <button class="category-tab bacterial" onclick="showCategory('bacterial')">แบคทีเรีย</button>
+        <button class="category-tab viral" onclick="showCategory('viral')">ไวรัส</button>
+    </div>
+
+    <div class="content">
+        <!-- Fungal -->
+        <div class="category-section active" id="fungal-section">
+            <div class="section-header">
+                <span class="section-icon">🍄</span>
+                <span class="section-title">โรคจากเชื้อรา</span>
+                <span class="section-count">4 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card fungal" onclick="showDetail('anthracnose')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคแอนแทรคโนส</div>
+                            <div class="disease-name-en">Cassava Anthracnose</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ยอดเหี่ยว ใบไหม้ ลำต้นเป็นแผลยุบ มียางไหล</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Colletotrichum gloeosporioides</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('leaf_spot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบจุดสีน้ำตาล</div>
+                            <div class="disease-name-en">Brown Leaf Spot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">จุดกลมสีน้ำตาลบนใบ ขอบสีเหลือง ใบร่วงก่อนกำหนด</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Cercosporidium henningsii</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('white_leaf_spot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบจุดสีขาว</div>
+                            <div class="disease-name-en">White Leaf Spot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">จุดกลมเล็กสีขาวบนใบ ขอบสีน้ำตาล</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Phaeoramularia manihotis</span>
+                        <span class="tag">เล็กน้อย</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('root_rot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคหัวเน่า</div>
+                            <div class="disease-name-en">Cassava Root Rot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">หัวเน่าสีน้ำตาลดำ เนื้อเละมีกลิ่นเหม็น ต้นเหี่ยว</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Phytophthora spp.</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bacterial -->
+        <div class="category-section" id="bacterial-section">
+            <div class="section-header">
+                <span class="section-icon">🦠</span>
+                <span class="section-title">โรคจากแบคทีเรีย</span>
+                <span class="section-count">1 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card bacterial" onclick="showDetail('bacterial_blight')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบไหม้</div>
+                            <div class="disease-name-en">Cassava Bacterial Blight</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบไหม้จากขอบ มียางไหลจากก้านใบ ยอดเหี่ยวตาย</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Xanthomonas axonopodis</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Viral -->
+        <div class="category-section" id="viral-section">
+            <div class="section-header">
+                <span class="section-icon">🔬</span>
+                <span class="section-title">โรคจากไวรัส</span>
+                <span class="section-count">2 โรค</span>
+            </div>
+            <div class="disease-list">
+                <div class="disease-card viral" onclick="showDetail('mosaic')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคใบด่าง</div>
+                            <div class="disease-name-en">Cassava Mosaic Disease</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ใบด่างเหลืองเขียว บิดเบี้ยว ต้นแคระ หัวเล็ก</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">CMV</span>
+                        <span class="tag">แมลงหวี่ขาว</span>
+                        <span class="tag">รุนแรงมาก</span>
+                    </div>
+                </div>
+
+                <div class="disease-card viral" onclick="showDetail('witches_broom')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคพุ่มแจ้</div>
+                            <div class="disease-name-en">Cassava Witches' Broom</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">ยอดแตกพุ่มผิดปกติ ใบเล็กลง ต้นแคระ หัวเล็ก</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Phytoplasma</span>
+                        <span class="tag">เพลี้ยจักจั่น</span>
+                        <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="diseaseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">-</h2>
+                <p id="modalTitleEn">-</p>
+            </div>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <div class="detail-title">🔬 สาเหตุ</div>
+                    <div class="detail-content" id="modalPathogen">-</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🔍 อาการ</div>
+                    <ul class="detail-list" id="modalSymptoms"><li>-</li></ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">🛡️ การป้องกันและรักษา</div>
+                    <ul class="detail-list" id="modalTreatment"><li>-</li></ul>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
+                    <div class="detail-content" id="modalProducts">-</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn close" onclick="closeModal()">ปิด</button>
+                <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-content">
+            <button class="footer-btn secondary" onclick="goBack()">← กลับ</button>
+            <button class="footer-btn primary" onclick="openCamera()">วิเคราะห์จากรูป</button>
+        </div>
+    </div>
+
+    <script>
+        const LIFF_ID = '2008723334-Zz1OoaPy';
+        const diseaseData = {
+            anthracnose: {
+                name: "โรคแอนแทรคโนส", nameEn: "Cassava Anthracnose",
+                pathogen: "เชื้อรา Colletotrichum gloeosporioides",
+                symptoms: ["ยอดเหี่ยวแห้งตาย", "ใบไหม้จากขอบ", "ลำต้นเป็นแผลยุบสีน้ำตาล", "มียางสีน้ำตาลไหลจากแผล", "ระบาดในช่วงฝนชุก"],
+                treatment: ["ใช้ท่อนพันธุ์สะอาดปลอดโรค", "ตัดส่วนที่เป็นโรคเผาทำลาย", "พ่นยาป้องกันในช่วงฝน", "ไม่ปลูกแน่นเกินไป"],
+                products: "แมนโคเซ็บ 80WP, คาร์เบนดาซิม 50WP, โปรปิโคนาโซล 25EC"
+            },
+            leaf_spot: {
+                name: "โรคใบจุดสีน้ำตาล", nameEn: "Brown Leaf Spot",
+                pathogen: "เชื้อรา Cercosporidium henningsii",
+                symptoms: ["จุดกลมสีน้ำตาลบนใบ ขนาด 3-12 มม.", "ขอบแผลมีวงสีเหลือง", "ใบเหลืองร่วงก่อนกำหนด", "ลดพื้นที่สังเคราะห์แสง"],
+                treatment: ["ใช้พันธุ์ต้านทาน", "เก็บใบที่เป็นโรคเผาทำลาย", "พ่นยากลุ่มทองแดง", "ปรับปรุงดินให้ระบายน้ำดี"],
+                products: "คอปเปอร์ออกซีคลอไรด์ 85WP, แมนโคเซ็บ 80WP"
+            },
+            white_leaf_spot: {
+                name: "โรคใบจุดสีขาว", nameEn: "White Leaf Spot",
+                pathogen: "เชื้อรา Phaeoramularia manihotis",
+                symptoms: ["จุดกลมเล็กสีขาวบนใบ ขนาด 1-5 มม.", "ขอบแผลสีน้ำตาลอ่อน", "พบมากในใบแก่", "ความรุนแรงต่ำ"],
+                treatment: ["ไม่จำเป็นต้องพ่นยาถ้าไม่รุนแรง", "เก็บใบที่เป็นโรคทิ้ง", "ปลูกพันธุ์ต้านทาน"],
+                products: "แมนโคเซ็บ 80WP (ถ้าจำเป็น)"
+            },
+            root_rot: {
+                name: "โรคหัวเน่า", nameEn: "Cassava Root Rot",
+                pathogen: "เชื้อรา Phytophthora spp., Fusarium spp.",
+                symptoms: ["หัวเน่าสีน้ำตาลดำจากภายใน", "เนื้อเละมีกลิ่นเหม็น", "ต้นเหี่ยวโทรม ใบเหลืองร่วง", "มักเกิดในดินที่น้ำขัง"],
+                treatment: ["ปลูกในดินระบายน้ำดี", "ยกร่องปลูก", "ใช้ท่อนพันธุ์สะอาด", "หลีกเลี่ยงการให้น้ำมากเกินไป"],
+                products: "เมทาแลกซิล 25WP, คอปเปอร์ไฮดรอกไซด์ 77WP"
+            },
+            bacterial_blight: {
+                name: "โรคใบไหม้", nameEn: "Cassava Bacterial Blight (CBB)",
+                pathogen: "แบคทีเรีย Xanthomonas axonopodis pv. manihotis",
+                symptoms: ["ใบไหม้จากขอบใบ มีลักษณะฉ่ำน้ำ", "มียางสีครีมไหลจากก้านใบและลำต้น", "ยอดเหี่ยวตาย", "ลำต้นแห้งตายทั้งต้น"],
+                treatment: ["ใช้ท่อนพันธุ์จากแหล่งปลอดโรค", "แช่ท่อนพันธุ์ในน้ำร้อน 49°C นาน 49 นาที", "ถอนทำลายต้นที่เป็นโรค", "ไม่นำเครื่องมือจากแปลงโรคมาใช้"],
+                products: "คอปเปอร์ไฮดรอกไซด์ 77WP (ป้องกัน), สเตรปโตมัยซิน"
+            },
+            mosaic: {
+                name: "โรคใบด่าง", nameEn: "Cassava Mosaic Disease (CMD)",
+                pathogen: "Sri Lankan Cassava Mosaic Virus (SLCMV) - พาหะ: แมลงหวี่ขาว",
+                symptoms: ["ใบด่างเหลืองเขียวไม่สม่ำเสมอ", "ใบบิดเบี้ยว หยิกงอ", "ต้นแคระแกร็น เตี้ยกว่าปกติ", "หัวเล็ก แป้งต่ำ ผลผลิตลดลงมาก"],
+                treatment: ["ใช้ท่อนพันธุ์ปลอดโรค", "กำจัดแมลงหวี่ขาวพาหะ", "ถอนทำลายต้นที่เป็นโรคทันที", "ใช้พันธุ์ต้านทาน เช่น ระยอง 72"],
+                products: "อิมิดาโคลพริด 70WG (กำจัดแมลงหวี่ขาว), ไทอะมีทอกแซม"
+            },
+            witches_broom: {
+                name: "โรคพุ่มแจ้", nameEn: "Cassava Witches' Broom",
+                pathogen: "Phytoplasma - พาหะ: เพลี้ยจักจั่น",
+                symptoms: ["ยอดแตกพุ่มผิดปกติ คล้ายไม้กวาด", "ใบเล็กลง ข้อสั้น", "ต้นแคระแกร็น", "หัวเล็กมาก หรือไม่ลงหัว"],
+                treatment: ["ถอนทำลายต้นที่เป็นโรคทันที", "กำจัดเพลี้ยจักจั่นพาหะ", "ใช้ท่อนพันธุ์จากแหล่งปลอดโรค", "ไม่ปลูกซ้ำที่เดิม"],
+                products: "ไซเปอร์เมทริน, คาร์บาริล (กำจัดเพลี้ย)"
+            }
+        };
+        let currentDisease = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try { await liff.init({ liffId: LIFF_ID }); } catch (e) { console.error(e); }
+        });
+
+        function showCategory(category) {
+            document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.category-tab.${category}`).classList.add('active');
+            document.querySelectorAll('.category-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(`${category}-section`).classList.add('active');
+        }
+
+        function showDetail(key) {
+            const d = diseaseData[key]; if (!d) return;
+            currentDisease = d;
+            document.getElementById('modalTitle').textContent = d.name;
+            document.getElementById('modalTitleEn').textContent = d.nameEn;
+            document.getElementById('modalPathogen').textContent = d.pathogen;
+            document.getElementById('modalSymptoms').innerHTML = d.symptoms.map(s => `<li>${s}</li>`).join('');
+            document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
+            document.getElementById('modalProducts').textContent = d.products;
+            document.getElementById('diseaseModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
+        function goBack() { window.location.href = '/liff/diseases'; }
+        function openCamera() { if (liff.isInClient()) liff.closeWindow(); else alert('กรุณาเปิดผ่าน LINE app'); }
+        function shareDisease() {
+            if (!currentDisease) return;
+            const text = `🥔 ${currentDisease.name} (${currentDisease.nameEn})\n🔬 ${currentDisease.pathogen}\n\nดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
+            if (liff.isApiAvailable('shareTargetPicker')) liff.shareTargetPicker([{type:'text',text}]).catch(()=>fallbackShare(text));
+            else fallbackShare(text);
+        }
+        function fallbackShare(t) { if(navigator.share) navigator.share({title:'โรคมันสำปะหลัง',text:t}); else navigator.clipboard.writeText(t).then(()=>alert('คัดลอกแล้ว')); }
+        document.getElementById('diseaseModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+    </script>
+</body>
+</html>
