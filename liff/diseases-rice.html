@@ -626,6 +626,11 @@
                 <p id="modalTitleEn">-</p>
             </div>
             <div class="modal-body">
+                <!-- Disease Image -->
+                <div class="disease-image-container" id="modalImageContainer" style="display: none; margin-bottom: 16px;">
+                    <img id="modalImage" src="" alt="รูปภาพโรค"
+                         style="width: 100%; height: 200px; object-fit: cover; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                </div>
                 <div class="detail-section">
                     <div class="detail-title">🔬 สาเหตุ</div>
                     <div class="detail-content" id="modalPathogen">-</div>
@@ -672,6 +677,7 @@
             blast: {
                 name: "โรคไหม้",
                 nameEn: "Rice Blast",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Rice Blast.jpg",
                 pathogen: "เชื้อรา Pyricularia oryzae (Magnaporthe oryzae)",
                 symptoms: [
                     "ใบมีแผลรูปตา (รูปกระสวย) สีเทาตรงกลาง ขอบสีน้ำตาล",
@@ -690,6 +696,7 @@
             brown_spot: {
                 name: "โรคใบจุดสีน้ำตาล",
                 nameEn: "Brown Spot",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Brown%20Spot.jpg",
                 pathogen: "เชื้อรา Bipolaris oryzae (Cochliobolus miyabeanus)",
                 symptoms: [
                     "จุดกลมรีสีน้ำตาลบนใบ ขนาด 1-5 มม.",
@@ -708,6 +715,7 @@
             sheath_blight: {
                 name: "โรคกาบใบแห้ง",
                 nameEn: "Sheath Blight",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Sheath%20Blight.jpg",
                 pathogen: "เชื้อรา Rhizoctonia solani",
                 symptoms: [
                     "กาบใบเป็นแผลรูปไข่สีเขียวเทา ขอบน้ำตาล",
@@ -726,6 +734,7 @@
             dirty_panicle: {
                 name: "โรครวงดำ",
                 nameEn: "Dirty Panicle",
+                image:"",
                 pathogen: "เชื้อรา Curvularia spp., Alternaria spp.",
                 symptoms: [
                     "รวงข้าวเปลี่ยนเป็นสีดำหรือสีเทาดำ",
@@ -743,7 +752,8 @@
             },
             narrow_brown_spot: {
                 name: "โรคใบขีดสีน้ำตาล",
-                nameEn: "Narrow Brown Leaf Spot",
+                nameEn: "Narrow Brown Spot",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Narrow%20Brown%20Spot.jpg",
                 pathogen: "เชื้อรา Cercospora oryzae",
                 symptoms: [
                     "แผลเป็นขีดยาวแคบสีน้ำตาลแดง",
@@ -761,6 +771,7 @@
             false_smut: {
                 name: "โรคเมล็ดด่าง",
                 nameEn: "False Smut",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/False%20Smut.jpg",
                 pathogen: "เชื้อรา Ustilaginoidea virens",
                 symptoms: [
                     "เมล็ดบางเมล็ดบวมโตผิดปกติ",
@@ -778,7 +789,8 @@
             // Bacterial
             blight: {
                 name: "โรคขอบใบแห้ง",
-                nameEn: "Bacterial Leaf Blight (BLB)",
+                nameEn: "Bacterial Leaf Blight",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Barterial_Leaf_Blight.jpg",
                 pathogen: "แบคทีเรีย Xanthomonas oryzae pv. oryzae",
                 symptoms: [
                     "ใบไหม้จากปลายใบหรือขอบใบเข้ามา",
@@ -797,6 +809,7 @@
             leaf_streak: {
                 name: "โรคใบขีดโปร่งแสง",
                 nameEn: "Bacterial Leaf Streak",
+                image:"https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Bacterial%20Leaf%20Streak.jpg",
                 pathogen: "แบคทีเรีย Xanthomonas oryzae pv. oryzicola",
                 symptoms: [
                     "แผลเป็นขีดยาวสีน้ำตาลระหว่างเส้นใบ",
@@ -814,6 +827,7 @@
             foot_rot: {
                 name: "โรคเน่าคอรวง",
                 nameEn: "Bacterial Panicle Blight",
+                image: "",
                 pathogen: "แบคทีเรีย Burkholderia glumae",
                 symptoms: [
                     "คอรวงเน่าดำ รวงหักพับ",
@@ -831,7 +845,8 @@
             // Viral
             tungro: {
                 name: "โรคใบสีส้ม (ทังโร)",
-                nameEn: "Rice Tungro Disease",
+                nameEn: "Rice Tungro",
+                image: "",
                 pathogen: "Rice Tungro Bacilliform Virus (RTBV) + Rice Tungro Spherical Virus (RTSV)",
                 symptoms: [
                     "ใบเปลี่ยนเป็นสีเหลืองส้มจากปลายใบ",
@@ -850,6 +865,7 @@
             grassy_stunt: {
                 name: "โรคใบหงิก",
                 nameEn: "Rice Grassy Stunt",
+                image: "",
                 pathogen: "Rice Grassy Stunt Virus (RGSV)",
                 symptoms: [
                     "ต้นเตี้ยแคระ สูงไม่เกิน 30 ซม.",
@@ -868,6 +884,7 @@
             ragged_stunt: {
                 name: "โรคใบหงิกเหลือง",
                 nameEn: "Rice Ragged Stunt",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/rice/Rice%20Ragged%20stunt.jpg",
                 pathogen: "Rice Ragged Stunt Virus (RRSV)",
                 symptoms: [
                     "ใบบิดเป็นเกลียว ขอบใบหยักขาด",
@@ -916,6 +933,17 @@
             if (!disease) return;
 
             currentDisease = disease;
+
+            // แสดงรูปภาพถ้ามี
+            const imageContainer = document.getElementById('modalImageContainer');
+            const imageElement = document.getElementById('modalImage');
+            if (disease.image && disease.image.trim() !== '') {
+                imageElement.src = disease.image;
+                imageElement.alt = disease.name;
+                imageContainer.style.display = 'block';
+            } else {
+                imageContainer.style.display = 'none';
+            }
 
             document.getElementById('modalTitle').textContent = disease.name;
             document.getElementById('modalTitleEn').textContent = disease.nameEn;
