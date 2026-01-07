@@ -631,6 +631,17 @@ async def liff_disease_detail_page(disease_key: str):
         return FileResponse(liff_html_path)
     raise HTTPException(status_code=404, detail="Disease detail page not found")
 
+@app.get("/liff/assets/{filename}")
+async def liff_assets(filename: str):
+    """Serve LIFF static assets (images, icons)"""
+    allowed_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')
+    if not filename.lower().endswith(allowed_extensions):
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    file_path = os.path.join(os.path.dirname(__file__), "..", "liff", filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(status_code=404, detail="Asset not found")
+
 # ============================================================================#
 # LINE Webhook
 # ============================================================================#
