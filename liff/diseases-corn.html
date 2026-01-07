@@ -147,30 +147,30 @@
                     </div>
                 </div>
 
-                <div class="disease-card fungal" onclick="showDetail('southern_blight')">
+                <div class="disease-card fungal" onclick="showDetail('northern_blight')">
                     <div class="disease-header">
                         <div>
                             <div class="disease-name">โรคใบไหม้แผลเล็ก</div>
-                            <div class="disease-name-en">Southern Corn Leaf Blight</div>
+                            <div class="disease-name-en">Northern Corn Leaf Blight</div>
                         </div>
                     </div>
                     <div class="disease-symptoms">แผลเล็กรูปไข่สีน้ำตาลอ่อน ขอบสีเข้มกว่า กระจายทั่วใบ</div>
                     <div class="disease-tags">
-                        <span class="tag pathogen">Bipolaris maydis</span>
+                        <span class="tag pathogen">Exserohilum turcicum</span>
                         <span class="tag">ปานกลาง</span>
                     </div>
                 </div>
 
-                <div class="disease-card fungal" onclick="showDetail('northern_blight')">
+                <div class="disease-card fungal" onclick="showDetail('southern_blight')">
                     <div class="disease-header">
                         <div>
                             <div class="disease-name">โรคใบไหม้แผลใหญ่</div>
-                            <div class="disease-name-en">Northern Corn Leaf Blight</div>
+                            <div class="disease-name-en">Southern Corn Leaf Blight</div>
                         </div>
                     </div>
                     <div class="disease-symptoms">แผลรูปเรือยาวสีเทาบนใบ ขยายตามแนวเส้นใบ ใบแห้ง</div>
                     <div class="disease-tags">
-                        <span class="tag pathogen">Exserohilum turcicum</span>
+                        <span class="tag pathogen">Bipolaris maydis</span>
                         <span class="tag">รุนแรง</span>
                     </div>
                 </div>
@@ -189,11 +189,11 @@
                     </div>
                 </div>
 
-                <div class="disease-card fungal" onclick="showDetail('brown_leaf_spot')">
+                <div class="disease-card fungal" onclick="showDetail('brown_spot')">
                     <div class="disease-header">
                         <div>
                             <div class="disease-name">โรคใบจุดสีน้ำตาล</div>
-                            <div class="disease-name-en">Brown Leaf Spot</div>
+                            <div class="disease-name-en">Physoderma Brown Spot</div>
                         </div>
                     </div>
                     <div class="disease-symptoms">จุดกลมสีน้ำตาลเข้มขนาดเล็กบนใบและกาบใบ พบมากในสภาพอากาศชื้น</div>
@@ -308,19 +308,19 @@
                 treatment: ["ใช้พันธุ์ต้านทาน", "พ่นยากลุ่ม Triazole เมื่อพบโรค", "ปลูกให้พ้นช่วงฝนชุก"],
                 products: "โปรปิโคนาโซล 25EC, อะซอกซีสโตรบิน"
             },
-            southern_blight: {
-                name: "โรคใบไหม้แผลเล็ก", nameEn: "Southern Corn Leaf Blight",
+            northern_blight: {
+                name: "โรคใบไหม้แผลเล็ก", nameEn: "Northern Corn Leaf Blight",
                 image: "",
-                pathogen: "เชื้อรา Bipolaris maydis",
-                symptoms: ["แผลเล็กรูปไข่ยาว 0.5-2 ซม.", "สีน้ำตาลอ่อน ขอบสีเข้มกว่า", "กระจายทั่วใบ", "ระบาดในสภาพอากาศร้อนชื้น"],
+                pathogen: "เชื้อรา Exserohilum turcicum",
+                symptoms: ["แผลเล็กรูปไข่ยาว 0.5-2 ซม.", "สีน้ำตาลอ่อน ขอบสีเข้มกว่า", "กระจายทั่วใบ", "ระบาดในสภาพอากาศเย็นชื้น"],
                 treatment: ["ใช้พันธุ์ต้านทาน", "ไม่ปลูกข้าวโพดซ้ำที่เดิม", "พ่นยากลุ่ม Mancozeb"],
                 products: "แมนโคเซ็บ 80WP, คลอโรทาโลนิล 75WP"
             },
-            northern_blight: {
-                name: "โรคใบไหม้แผลใหญ่", nameEn: "Northern Corn Leaf Blight",
+            southern_blight: {
+                name: "โรคใบไหม้แผลใหญ่", nameEn: "Southern Corn Leaf Blight",
                 image: "",
-                pathogen: "เชื้อรา Exserohilum turcicum",
-                symptoms: ["แผลรูปเรือยาว 3-15 ซม. สีเทาเขียว", "ขยายตามแนวเส้นใบ", "ใบแห้งจากล่างขึ้นบน", "ระบาดในสภาพอากาศเย็นชื้น"],
+                pathogen: "เชื้อรา Bipolaris maydis",
+                symptoms: ["แผลรูปเรือยาว 3-15 ซม. สีเทาเขียว", "ขยายตามแนวเส้นใบ", "ใบแห้งจากล่างขึ้นบน", "ระบาดในสภาพอากาศร้อนชื้น"],
                 treatment: ["ใช้พันธุ์ต้านทาน", "พ่นยาป้องกันเมื่อเริ่มพบโรค", "หมุนเวียนพืช ไม่ปลูกซ้ำที่เดิม", "ทำลายซากพืชหลังเก็บเกี่ยว"],
                 products: "แมนโคเซ็บ 80WP, โปรปิโคนาโซล 25EC, อะซอกซีสโตรบิน"
             },
@@ -332,8 +332,8 @@
                 treatment: ["ใช้พันธุ์ต้านทาน", "หมุนเวียนพืช", "ไถกลบซากพืช", "พ่นยาป้องกัน"],
                 products: "อะซอกซีสโตรบิน, โปรปิโคนาโซล 25EC"
             },
-            brown_leaf_spot: {
-                name: "โรคใบจุดสีน้ำตาล", nameEn: "Brown Leaf Spot / Physoderma Brown Spot",
+            brown_spot: {
+                name: "โรคใบจุดสีน้ำตาล", nameEn: "Physoderma Brown Spot",
                 image: "",
                 pathogen: "เชื้อรา Physoderma maydis",
                 symptoms: ["จุดกลมสีน้ำตาลเข้มขนาดเล็ก 1-3 มม.", "พบบนใบและกาบใบ", "จุดเรียงตัวเป็นแถวขนานเส้นใบ", "พบมากบริเวณข้อและกาบใบ", "ระบาดในสภาพอากาศอบอุ่นชื้น มีน้ำขังในยอด"],
