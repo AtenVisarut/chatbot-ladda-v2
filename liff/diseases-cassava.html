@@ -122,20 +122,6 @@
                     </div>
                 </div>
 
-                <div class="disease-card fungal" onclick="showDetail('white_leaf_spot')">
-                    <div class="disease-header">
-                        <div>
-                            <div class="disease-name">โรคใบจุดสีขาว</div>
-                            <div class="disease-name-en">White Leaf Spot</div>
-                        </div>
-                    </div>
-                    <div class="disease-symptoms">จุดกลมเล็กสีขาวบนใบ ขอบสีน้ำตาล</div>
-                    <div class="disease-tags">
-                        <span class="tag pathogen">Phaeoramularia manihotis</span>
-                        <span class="tag">เล็กน้อย</span>
-                    </div>
-                </div>
-
                 <div class="disease-card fungal" onclick="showDetail('root_rot')">
                     <div class="disease-header">
                         <div>
@@ -265,7 +251,7 @@
         const diseaseData = {
             anthracnose: {
                 name: "โรคแอนแทรคโนส", nameEn: "Cassava Anthracnose",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Cassava%20Anthracnose.jpg",
                 pathogen: "เชื้อรา Colletotrichum gloeosporioides",
                 symptoms: ["ยอดเหี่ยวแห้งตาย", "ใบไหม้จากขอบ", "ลำต้นเป็นแผลยุบสีน้ำตาล", "มียางสีน้ำตาลไหลจากแผล", "ระบาดในช่วงฝนชุก"],
                 treatment: ["ใช้ท่อนพันธุ์สะอาดปลอดโรค", "ตัดส่วนที่เป็นโรคเผาทำลาย", "พ่นยาป้องกันในช่วงฝน", "ไม่ปลูกแน่นเกินไป"],
@@ -273,23 +259,16 @@
             },
             leaf_spot: {
                 name: "โรคใบจุดสีน้ำตาล", nameEn: "Brown Leaf Spot",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Brown%20Leaf%20Spot.jpg",
                 pathogen: "เชื้อรา Cercosporidium henningsii",
                 symptoms: ["จุดกลมสีน้ำตาลบนใบ ขนาด 3-12 มม.", "ขอบแผลมีวงสีเหลือง", "ใบเหลืองร่วงก่อนกำหนด", "ลดพื้นที่สังเคราะห์แสง"],
                 treatment: ["ใช้พันธุ์ต้านทาน", "เก็บใบที่เป็นโรคเผาทำลาย", "พ่นยากลุ่มทองแดง", "ปรับปรุงดินให้ระบายน้ำดี"],
                 products: "คอปเปอร์ออกซีคลอไรด์ 85WP, แมนโคเซ็บ 80WP"
             },
-            white_leaf_spot: {
-                name: "โรคใบจุดสีขาว", nameEn: "White Leaf Spot",
-                image: "",
-                pathogen: "เชื้อรา Phaeoramularia manihotis",
-                symptoms: ["จุดกลมเล็กสีขาวบนใบ ขนาด 1-5 มม.", "ขอบแผลสีน้ำตาลอ่อน", "พบมากในใบแก่", "ความรุนแรงต่ำ"],
-                treatment: ["ไม่จำเป็นต้องพ่นยาถ้าไม่รุนแรง", "เก็บใบที่เป็นโรคทิ้ง", "ปลูกพันธุ์ต้านทาน"],
-                products: "แมนโคเซ็บ 80WP (ถ้าจำเป็น)"
-            },
+            
             root_rot: {
                 name: "โรคหัวเน่า", nameEn: "Cassava Root Rot",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Cassava%20Root%20Rot.jpg",
                 pathogen: "เชื้อรา Phytophthora spp., Fusarium spp.",
                 symptoms: ["หัวเน่าสีน้ำตาลดำจากภายใน", "เนื้อเละมีกลิ่นเหม็น", "ต้นเหี่ยวโทรม ใบเหลืองร่วง", "มักเกิดในดินที่น้ำขัง"],
                 treatment: ["ปลูกในดินระบายน้ำดี", "ยกร่องปลูก", "ใช้ท่อนพันธุ์สะอาด", "หลีกเลี่ยงการให้น้ำมากเกินไป"],
@@ -297,7 +276,7 @@
             },
             bacterial_blight: {
                 name: "โรคใบไหม้", nameEn: "Cassava Bacterial Blight (CBB)",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Cassava%20Bacterial%20Blight%20(CBB).png",
                 pathogen: "แบคทีเรีย Xanthomonas axonopodis pv. manihotis",
                 symptoms: ["ใบไหม้จากขอบใบ มีลักษณะฉ่ำน้ำ", "มียางสีครีมไหลจากก้านใบและลำต้น", "ยอดเหี่ยวตาย", "ลำต้นแห้งตายทั้งต้น"],
                 treatment: ["ใช้ท่อนพันธุ์จากแหล่งปลอดโรค", "แช่ท่อนพันธุ์ในน้ำร้อน 49°C นาน 49 นาที", "ถอนทำลายต้นที่เป็นโรค", "ไม่นำเครื่องมือจากแปลงโรคมาใช้"],
@@ -305,7 +284,7 @@
             },
             mosaic: {
                 name: "โรคใบด่าง", nameEn: "Cassava Mosaic Disease (CMD)",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Cassava%20Mosaic%20Disease%20(CMD).jpg",
                 pathogen: "Sri Lankan Cassava Mosaic Virus (SLCMV) - พาหะ: แมลงหวี่ขาว",
                 symptoms: ["ใบด่างเหลืองเขียวไม่สม่ำเสมอ", "ใบบิดเบี้ยว หยิกงอ", "ต้นแคระแกร็น เตี้ยกว่าปกติ", "หัวเล็ก แป้งต่ำ ผลผลิตลดลงมาก"],
                 treatment: ["ใช้ท่อนพันธุ์ปลอดโรค", "กำจัดแมลงหวี่ขาวพาหะ", "ถอนทำลายต้นที่เป็นโรคทันที", "ใช้พันธุ์ต้านทาน เช่น ระยอง 72"],
@@ -313,7 +292,7 @@
             },
             witches_broom: {
                 name: "โรคพุ่มแจ้", nameEn: "Cassava Witches' Broom",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/cassava/Cassava%20Witches.jpg",
                 pathogen: "Phytoplasma - พาหะ: เพลี้ยจักจั่น",
                 symptoms: ["ยอดแตกพุ่มผิดปกติ คล้ายไม้กวาด", "ใบเล็กลง ข้อสั้น", "ต้นแคระแกร็น", "หัวเล็กมาก หรือไม่ลงหัว"],
                 treatment: ["ถอนทำลายต้นที่เป็นโรคทันที", "กำจัดเพลี้ยจักจั่นพาหะ", "ใช้ท่อนพันธุ์จากแหล่งปลอดโรค", "ไม่ปลูกซ้ำที่เดิม"],

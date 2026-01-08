@@ -23,7 +23,6 @@
         .category-tab.bacterial.active { color: #DC143C; border-bottom-color: #DC143C; }
         .category-tab.viral.active { color: #9932CC; border-bottom-color: #9932CC; }
         .category-tab.pest.active { color: #FF6B00; border-bottom-color: #FF6B00; }
-        .category-tab.algal.active { color: #2E8B57; border-bottom-color: #2E8B57; }
         .content { max-width: 600px; margin: 0 auto; padding: 15px 20px 100px; }
         .category-section { display: none; }
         .category-section.active { display: block; }
@@ -38,7 +37,6 @@
         .disease-card.bacterial { border-left-color: #DC143C; }
         .disease-card.viral { border-left-color: #9932CC; }
         .disease-card.pest { border-left-color: #FF6B00; }
-        .disease-card.algal { border-left-color: #2E8B57; }
         .disease-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
         .disease-name { font-size: 1.1em; font-weight: 600; color: #333; }
         .disease-name-en { font-size: 0.85em; color: #666; font-style: italic; }
@@ -85,8 +83,8 @@
 
     <div class="category-tabs">
         <button class="category-tab fungal active" onclick="showCategory('fungal')">เชื้อรา</button>
+        <button class="category-tab bacterial" onclick="showCategory('bacterial')">แบคทีเรีย</button>
         <button class="category-tab viral" onclick="showCategory('viral')">ไวรัส</button>
-        <button class="category-tab algal" onclick="showCategory('algal')">สาหร่าย</button>
         <button class="category-tab pest" onclick="showCategory('pest')">แมลง</button>
     </div>
 
@@ -96,7 +94,7 @@
             <div class="section-header">
                 <span class="section-icon">🍄</span>
                 <span class="section-title">โรคจากเชื้อรา</span>
-                <span class="section-count">4 โรค</span>
+                <span class="section-count">5 โรค</span>
             </div>
             <div class="disease-list">
                 <div class="disease-card fungal" onclick="showDetail('phytophthora')">
@@ -124,6 +122,20 @@
                     <div class="disease-tags">
                         <span class="tag pathogen">Colletotrichum gloeosporioides</span>
                         <span class="tag">รุนแรง</span>
+                    </div>
+                </div>
+
+                <div class="disease-card fungal" onclick="showDetail('algal_spot')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคราสาหร่าย</div>
+                            <div class="disease-name-en">Algal Leaf Spot</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">จุดกลมนูนสีเขียวเทาบนใบ ผิวหยาบคล้ายกำมะหยี่</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Cephaleuros virescens</span>
+                        <span class="tag">เล็กน้อย</span>
                     </div>
                 </div>
 
@@ -157,6 +169,31 @@
             </div>
         </div>
 
+        <!-- Bacterial -->
+        <div class="category-section" id="bacterial-section">
+            <div class="section-header">
+                <span class="section-icon">🦠</span>
+                <span class="section-title">โรคจากแบคทีเรีย</span>
+                <span class="section-count">1 โรค</span>
+            </div>
+
+
+                <div class="disease-card bacterial" onclick="showDetail('canker')">
+                    <div class="disease-header">
+                        <div>
+                            <div class="disease-name">โรคแคงเคอร์</div>
+                            <div class="disease-name-en">Bacterial Canker</div>
+                        </div>
+                    </div>
+                    <div class="disease-symptoms">แผลนูนบนกิ่ง มียางไหล เปลือกแตก</div>
+                    <div class="disease-tags">
+                        <span class="tag pathogen">Xanthomonas spp.</span>
+                        <span class="tag">ปานกลาง</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Viral -->
         <div class="category-section" id="viral-section">
             <div class="section-header">
@@ -177,30 +214,6 @@
                         <span class="tag pathogen">Durian Mosaic Virus</span>
                         <span class="tag">เพลี้ยอ่อน</span>
                         <span class="tag">รุนแรง</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Algal (สาหร่าย) -->
-        <div class="category-section" id="algal-section">
-            <div class="section-header">
-                <span class="section-icon">🌿</span>
-                <span class="section-title">โรคจากสาหร่าย</span>
-                <span class="section-count">1 โรค</span>
-            </div>
-            <div class="disease-list">
-                <div class="disease-card algal" onclick="showDetail('algal_spot')">
-                    <div class="disease-header">
-                        <div>
-                            <div class="disease-name">โรคจุดสาหร่าย</div>
-                            <div class="disease-name-en">Algal Leaf Spot</div>
-                        </div>
-                    </div>
-                    <div class="disease-symptoms">จุดกลมนูนสีเขียวเทาบนใบ ผิวหยาบคล้ายกำมะหยี่</div>
-                    <div class="disease-tags">
-                        <span class="tag pathogen">Cephaleuros virescens</span>
-                        <span class="tag">เล็กน้อย</span>
                     </div>
                 </div>
             </div>
@@ -327,7 +340,7 @@
             },
             mosaic: {
                 name: "โรคใบด่าง", nameEn: "Mosaic Virus",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/durian/Mosaic%20Virus.jpg",
                 pathogen: "Durian Mosaic Virus (DMV) - พาหะ: เพลี้ยอ่อน",
                 symptoms: ["ใบมีลายด่างเขียวอ่อนสลับเขียวเข้ม", "ใบบิดเบี้ยว ผิวใบไม่เรียบ", "ต้นแคระแกร็น โตช้า", "ผลผลิตลดลง"],
                 treatment: ["ถอนทำลายต้นที่เป็นโรค", "กำจัดเพลี้ยอ่อนพาหะ", "ใช้กิ่งพันธุ์จากต้นแม่ที่ปลอดโรค", "ปลูกพืชกีดขวางรอบแปลง"],
