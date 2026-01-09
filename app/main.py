@@ -637,7 +637,7 @@ async def liff_assets(filename: str):
     allowed_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')
     if not filename.lower().endswith(allowed_extensions):
         raise HTTPException(status_code=400, detail="Invalid file type")
-    file_path = os.path.join(os.path.dirname(__file__), "..", "liff", filename)
+    file_path = os.path.join(os.path.dirname(__file__), "..", "liff", "assets", filename)
     if os.path.exists(file_path):
         return FileResponse(file_path)
     raise HTTPException(status_code=404, detail="Asset not found")
