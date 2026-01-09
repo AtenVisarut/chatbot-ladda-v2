@@ -573,6 +573,15 @@ async def get_products_for_disease(disease_key: str):
         logger.error(f"Get products for disease error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# LIFF Registration Page (หน้าลงทะเบียน)
+@app.get("/liff")
+async def liff_registration_page():
+    """Serve LIFF Registration HTML"""
+    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "index.html")
+    if os.path.exists(liff_html_path):
+        return FileResponse(liff_html_path)
+    raise HTTPException(status_code=404, detail="Registration page not found")
+
 # LIFF Disease Guide Page
 @app.get("/liff/diseases")
 async def liff_diseases_page():
