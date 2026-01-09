@@ -14,6 +14,7 @@
         .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .header-info { flex: 1; }
         .header h1 { font-size: 1.3em; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .header-icon { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; }
         .header p { font-size: 0.85em; opacity: 0.9; }
         .category-tabs { max-width: 600px; margin: 0 auto; background: white; display: flex; border-bottom: 1px solid #eee; position: sticky; top: 66px; z-index: 99; }
         .category-tab { flex: 1; padding: 12px 8px; border: none; background: white; font-size: 0.9em; font-weight: 500; cursor: pointer; transition: all 0.3s ease; font-family: 'Sarabun', sans-serif; border-bottom: 3px solid transparent; }
@@ -75,7 +76,7 @@
         <div class="header-content">
             <button class="back-btn" onclick="goBack()">←</button>
             <div class="header-info">
-                <h1><span>🥭</span> โรคทุเรียน</h1>
+                <h1><img src="assets/durian_icon.png" alt="ทุเรียน" class="header-icon"> โรคทุเรียน</h1>
                 <p>Durian Diseases</p>
             </div>
         </div>
