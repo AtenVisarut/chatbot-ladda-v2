@@ -2498,7 +2498,7 @@ def create_liff_welcome_flex(liff_url: str) -> Dict:
                     },
                     {
                         "type": "text",
-                        "text": "📝 กรุณาลงทะเบียนเพื่อเริ่มใช้งาน",
+                        "text": "⚠️ กรุณาลงทะเบียนให้เสร็จสมบูรณ์",
                         "size": "sm",
                         "color": "#E74C3C",
                         "margin": "lg",
@@ -2512,17 +2512,6 @@ def create_liff_welcome_flex(liff_url: str) -> Dict:
                 "layout": "vertical",
                 "spacing": "sm",
                 "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "height": "md",
-                        "action": {
-                            "type": "uri",
-                            "label": "📝 ลงทะเบียน",
-                            "uri": liff_url
-                        },
-                        "color": "#4a7c23"
-                    },
                     {
                         "type": "button",
                         "style": "secondary",
