@@ -274,50 +274,17 @@
                 <div class="detail-section">
                     <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
                     <div class="detail-content" id="modalProducts">-</div>
-                    <button id="modalProductLink" onclick="showProductImage()"
-                       style="display: none; margin-top: 10px; color: #8b7355; font-weight: 600;
-                              background: #f5f0e8; padding: 10px 18px; border-radius: 10px; border: none;
-                              cursor: pointer; font-family: 'Sarabun', sans-serif; font-size: 0.95em;">
+                    <a href="#" id="modalProductLink" target="_blank"
+                       style="display: none; margin-top: 10px; color: #8b7355; font-weight: 600; text-decoration: none;
+                              background: #f5f0e8; padding: 8px 15px; border-radius: 8px;
+                              display: inline-flex; align-items: center; gap: 6px;">
                         📷 ดูรูปสินค้า
-                    </button>
+                    </a>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn close" onclick="closeModal()">ปิด</button>
                 <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Product Image Modal -->
-    <div class="modal" id="productModal">
-        <div class="modal-content" style="padding: 0; overflow: hidden; max-width: 500px;">
-            <div style="position: relative; background: #f5f5f5;">
-                <button onclick="closeProductModal()"
-                    style="position: absolute; top: 10px; right: 10px; z-index: 10;
-                           background: rgba(0,0,0,0.5); color: white; border: none;
-                           width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em;
-                           cursor: pointer;">✕</button>
-                <!-- Navigation buttons -->
-                <button id="prevBtn" onclick="prevImage()"
-                    style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
-                           background: rgba(0,0,0,0.5); color: white; border: none;
-                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
-                           cursor: pointer; display: none;">‹</button>
-                <button id="nextBtn" onclick="nextImage()"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
-                           background: rgba(0,0,0,0.5); color: white; border: none;
-                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
-                           cursor: pointer; display: none;">›</button>
-                <img id="productImage" src="" alt="รูปสินค้า"
-                     style="width: 100%; max-height: 75vh; object-fit: contain; display: block;">
-                <!-- Image counter -->
-                <div id="imageCounter"
-                     style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-                            background: rgba(0,0,0,0.6); color: white; padding: 5px 15px;
-                            border-radius: 15px; font-size: 0.9em; display: none;">
-                    1 / 1
-                </div>
             </div>
         </div>
     </div>
@@ -355,7 +322,7 @@
                 pathogen: "สาหร่าย Cephaleuros virescens",
                 symptoms: ["จุดกลมนูนสีเขียวเทาบนใบ", "ผิวหยาบคล้ายกำมะหยี่", "พบมากในสภาพร่มชื้น", "ไม่ค่อยส่งผลรุนแรง"],
                 treatment: ["ตัดแต่งกิ่งให้โปร่ง รับแสง", "พ่นยากลุ่มทองแดง", "ปรับสภาพแวดล้อมให้ไม่ชื้นเกินไป"],
-                products: "ไซม๊อกซิเมท, Cymoxanil + Mancozeb 8% + 64% WP",
+                products: "โค-ราซ PROCHLORAZ 45% W/V EW(ผสมน้ำฉีดพ่นบริเวณ ดอกและผลอ่อน), ไซม๊อกซิเมท, Cymoxanil + Mancozeb 8% + 64% WP",
                 productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=HrwUdfbppatoHYhhTQAb3Q&oh=00_AfrvgrM1l6tC5U5SV3YKw4fK_NzGyNnGccl91cZJJLe8uQ&oe=6966A4D2"
             },
             pink_disease: {
@@ -373,8 +340,8 @@
                 pathogen: "เชื้อรา Phytophthora spp., Lasiodiplodia spp.",
                 symptoms: ["ผลเน่าสีน้ำตาลดำ เริ่มจากขั้วหรือปลาย", "เนื้อเน่าเละ มีกลิ่นเหม็น", "มักเกิดหลังฝนตกหนัก", "แพร่กระจายเร็วในสภาพชื้น"],
                 treatment: ["เก็บผลเน่าทิ้งเผาทำลาย", "พ่นยาป้องกันช่วงผลอ่อน", "ไม่ให้น้ำขังใต้ต้น", "ห่อผลด้วยถุงกระดาษ"],
-                products: "เมทาแลกซิล 25WP, แมนโคเซ็บ 80WP",
-                productImage: ""
+                products: "ไซม๊อกซิเมท(ป้องกันใบและลำต้น) , คาริสมา (ป้องกันโคนต้นก่อนลุกลาม)  ",
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/594194977_1260221996130590_3219186708295422281_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFAAxi3GpuOpxiNKTuZohuXnOAuxbsw1zCc4C7FuzDXMEH1USoPc8nYoDo_gzb-HWGcsizdZyVo6yj-NC_aMzuj&_nc_ohc=hZFHEPb4Z4gQ7kNvwHyB4CI&_nc_oc=AdmLcx_1EFyNiVKn6xVJqr_bOmIl1P1DQTPwyvqqgnjZFsIO-H2zNqRZ0zNOZSvjcoY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=ovpepC-4t1n2AOPSkvqfyg&oh=00_Afri3V1KXcuSbmrHs7g7TdIjqxDsBqzWLHMN3tzarpSE8w&oe=69669559"
             },
              Durian_Leaf_Blight: {
                 name: "โรคใบติด หรือ โรคใบไหม้",nameEn: "Durian Leaf Blight",
@@ -387,7 +354,7 @@
             },
             branch_dieback: {
                 name: "โรคกิ่งแห้งทุเรียน", nameEn: "Branch Dieback",
-                image: "",
+                image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/durian/Branch%20Dieback.png",
                 pathogen: "เชื้อรา Fusarium solani",
                 symptoms: ["กิ่งแห้งตายจากปลายกิ่ง", "เปลือกกิ่งแห้งกรอบ เปลี่ยนสี", "ใบเหี่ยวเหลืองและร่วง", "อาจลุกลามไปยังกิ่งอื่นและลำต้น"],
                 treatment: ["ตัดกิ่งที่เป็นโรคออก ตัดให้เลยแผล 15-20 ซม.", "ทายาป้องกันเชื้อราที่รอยตัด", "พ่นสารป้องกันกำจัดเชื้อราอย่างสม่ำเสมอ", "ตัดแต่งทรงพุ่มให้โปร่ง ระบายอากาศดี"],
@@ -397,11 +364,11 @@
             mosaic: {
                 name: "โรคใบด่าง", nameEn: "Mosaic Virus",
                 image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/durian/Mosaic%20Virus.jpg",
-                pathogen: "Durian Mosaic Virus (DMV) - พาหะ: เพลี้ยอ่อน",
+                pathogen: "Durian Mosaic Virus (DMV) - พาหะ: เพลี้ยอ่อน, เพลี้ยแป้ง, เพลี้ยไฟ",
                 symptoms: ["ใบมีลายด่างเขียวอ่อนสลับเขียวเข้ม", "ใบบิดเบี้ยว ผิวใบไม่เรียบ", "ต้นแคระแกร็น โตช้า", "ผลผลิตลดลง"],
                 treatment: ["ถอนทำลายต้นที่เป็นโรค", "กำจัดเพลี้ยอ่อนพาหะ", "ใช้กิ่งพันธุ์จากต้นแม่ที่ปลอดโรค", "ปลูกพืชกีดขวางรอบแปลง"],
-                products: "อิมิดาโคลพริด 70WG (กำจัดเพลี้ย)",
-                productImage: ""
+                products: "อิมิดาโกลด์ 70 (กำจัดเพลี้ย)",
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t1.6435-9/69165558_2389830731084827_5698185402830028800_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeG_9qwWXStVuJy1T912zN3Jr1cpFUw_ceKvVykVTD9x4p7IRQawBw0EsKR_vuxeNKeBTrqFM2AssbE0EU-iu6Gn&_nc_ohc=Hpq6cmWCCQUQ7kNvwG0wgg1&_nc_oc=AdmHhLl5-sWy2lcnk3ZezhNunAB-xTcG4hLD-GSKAXQhB4sXPQo5f8dhmsPbep494vw&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=2QHUkXDWCoMhLRayGYrBRw&oh=00_AfqbGOD0Pc9phEsh9jacGWl9pYeQvsgnix9M-bNhAP1Niw&oe=69882426"
             },
             fruit_borer: {
                 name: "หนอนเจาะผลทุเรียน", nameEn: "Durian Fruit Borer",
@@ -409,8 +376,8 @@
                 pathogen: "หนอนผีเสื้อ Conogethes punctiferalis (Durian Fruit Borer Moth)",
                 symptoms: ["ผลถูกเจาะเป็นรูขนาดเล็ก", "มีมูลหนอนสีน้ำตาลบนผิวผลหรือตามรอยเจาะ", "เนื้อผลเสียหาย เน่าเสีย", "ผลร่วงก่อนกำหนด คุณภาพลดลง", "พบหนอนสีขาวอมชมพูในผล"],
                 treatment: ["สำรวจสวนสม่ำเสมอ เก็บผลที่ถูกทำลายไปเผา", "ห่อผลด้วยถุงกระดาษหรือถุงพลาสติกเจาะรู", "พ่นสารกำจัดแมลงช่วงติดผลอ่อน", "ใช้กับดักแสงไฟดักจับผีเสื้อตัวเต็มวัย", "ตัดแต่งกิ่งให้โปร่ง ลดที่หลบซ่อน"],
-                products: "คลอร์ไพริฟอส 40EC, ไซเปอร์เมทริน 10EC, ฟลูเบนไดอะไมด์ 20WG, อีมาเมกติน เบนโซเอต 1.92EC",
-                productImage: ""
+                products: "ไฮซีส (EMAMECTIN BENZOATE 2.0% W/V ME),",
+                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t1.6435-9/72273208_2468208306580402_8813792603909652480_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeEn_w5rv6S7TYhB6fAxxanDyWpFrWuqcpLJakWta6pykrq9wUdREaJVQ5n-gxl5bXGC3hzryLqAqRxTmWjCYgpg&_nc_ohc=UJT5jXvT20UQ7kNvwFQ7Xhy&_nc_oc=Adlc4yo729vL07-de-ZLN9iwJm84S2KyeAeJIWJdyTtpe79OfhkTlg7Cd6ezCqTanrs&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=iRbU0nXcguvcBVxY4Isj1Q&oh=00_AfpcUP5E0qjY8I7rxxt_ksL1o7iJacZ9mUBVewIDLSzPPw&oe=69882DAB"
             }
         };
         let currentDisease = null;
@@ -448,82 +415,22 @@
             document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
             document.getElementById('modalProducts').textContent = d.products;
 
-            // แสดงปุ่มดูรูปสินค้าถ้ามี (รองรับทั้ง string และ array)
+            // แสดง link ดูรูปสินค้าถ้ามี
             const productLink = document.getElementById('modalProductLink');
-            let hasProductImage = false;
-            if (d.productImage) {
-                if (Array.isArray(d.productImage) && d.productImage.length > 0) {
-                    productLink.dataset.imageUrls = JSON.stringify(d.productImage);
-                    hasProductImage = true;
-                } else if (typeof d.productImage === 'string' && d.productImage.trim() !== '') {
-                    productLink.dataset.imageUrls = JSON.stringify([d.productImage]);
-                    hasProductImage = true;
-                }
+            if (d.productImage && d.productImage.trim() !== '') {
+                productLink.href = d.productImage;
+                productLink.style.display = 'inline-flex';
+            } else {
+                productLink.style.display = 'none';
             }
-            productLink.style.display = hasProductImage ? 'inline-block' : 'none';
 
             document.getElementById('diseaseModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
-        // Gallery state
-        let productImages = [];
-        let currentImageIndex = 0;
-
-        function showProductImage() {
-            const productLink = document.getElementById('modalProductLink');
-            const imageUrlsJson = productLink.dataset.imageUrls;
-            if (imageUrlsJson) {
-                productImages = JSON.parse(imageUrlsJson);
-                currentImageIndex = 0;
-                updateProductImage();
-                document.getElementById('productModal').classList.add('active');
-            }
-        }
-
-        function updateProductImage() {
-            document.getElementById('productImage').src = productImages[currentImageIndex];
-
-            // Show/hide navigation buttons
-            const prevBtn = document.getElementById('prevBtn');
-            const nextBtn = document.getElementById('nextBtn');
-            const counter = document.getElementById('imageCounter');
-
-            if (productImages.length > 1) {
-                prevBtn.style.display = currentImageIndex > 0 ? 'block' : 'none';
-                nextBtn.style.display = currentImageIndex < productImages.length - 1 ? 'block' : 'none';
-                counter.style.display = 'block';
-                counter.textContent = `${currentImageIndex + 1} / ${productImages.length}`;
-            } else {
-                prevBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-                counter.style.display = 'none';
-            }
-        }
-
-        function prevImage() {
-            if (currentImageIndex > 0) {
-                currentImageIndex--;
-                updateProductImage();
-            }
-        }
-
-        function nextImage() {
-            if (currentImageIndex < productImages.length - 1) {
-                currentImageIndex++;
-                updateProductImage();
-            }
-        }
-
-        function closeProductModal() {
-            document.getElementById('productModal').classList.remove('active');
-            document.getElementById('productImage').src = '';
-            productImages = [];
-            currentImageIndex = 0;
-        }
-
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
         function goBack() { window.location.href = '/liff/diseases'; }
+        function openCamera() { if (liff.isInClient()) liff.closeWindow(); else alert('กรุณาเปิดผ่าน LINE app'); }
         function shareDisease() {
             if (!currentDisease) return;
             const text = `🥭 ${currentDisease.name} (${currentDisease.nameEn})\n🔬 ${currentDisease.pathogen}\n\nดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
@@ -532,7 +439,6 @@
         }
         function fallbackShare(t) { if(navigator.share) navigator.share({title:'โรคทุเรียน',text:t}); else navigator.clipboard.writeText(t).then(()=>alert('คัดลอกแล้ว')); }
         document.getElementById('diseaseModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
-        document.getElementById('productModal').addEventListener('click', function(e) { if (e.target === this) closeProductModal(); });
     </script>
 </body>
 </html>
