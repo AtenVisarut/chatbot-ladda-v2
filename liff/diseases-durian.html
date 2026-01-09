@@ -274,17 +274,32 @@
                 <div class="detail-section">
                     <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
                     <div class="detail-content" id="modalProducts">-</div>
-                    <a href="#" id="modalProductLink" target="_blank"
-                       style="display: none; margin-top: 10px; color: #8b7355; font-weight: 600; text-decoration: none;
-                              background: #f5f0e8; padding: 8px 15px; border-radius: 8px;
-                              display: inline-flex; align-items: center; gap: 6px;">
+                    <button id="modalProductLink" onclick="showProductImage()"
+                       style="display: none; margin-top: 10px; color: #8b7355; font-weight: 600;
+                              background: #f5f0e8; padding: 10px 18px; border-radius: 10px; border: none;
+                              cursor: pointer; font-family: 'Sarabun', sans-serif; font-size: 0.95em;">
                         📷 ดูรูปสินค้า
-                    </a>
+                    </button>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn close" onclick="closeModal()">ปิด</button>
                 <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Image Modal -->
+    <div class="modal" id="productModal">
+        <div class="modal-content" style="padding: 0; overflow: hidden;">
+            <div style="position: relative;">
+                <button onclick="closeProductModal()"
+                    style="position: absolute; top: 10px; right: 10px; z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em;
+                           cursor: pointer;">✕</button>
+                <img id="productImage" src="" alt="รูปสินค้า"
+                     style="width: 100%; max-height: 80vh; object-fit: contain; display: block;">
             </div>
         </div>
     </div>
@@ -304,8 +319,8 @@
                 pathogen: "เชื้อรา Phytophthora palmivora",
                 symptoms: ["รากและโคนต้นเน่าดำ เปลือกลอก", "มีน้ำเยิ้มสีน้ำตาลแดงไหลออกจากรอยแผล", "ใบเหลืองร่วง ต้นโทรม", "อาจตายทั้งต้นถ้าไม่รักษา"],
                 treatment: ["ขุดร่องระบายน้ำไม่ให้น้ำขัง", "ทายาป้องกันเชื้อราที่โคนต้น", "ตัดแต่งรากเน่าและทาปูนแดงผสมยากำจัดเชื้อรา", "พ่นยา Metalaxyl หรือ Fosetyl-al"],
-                products: "เมทาแลกซิล 25WP, ฟอสเอทิล-อลูมิเนียม 80WP",
-                productImage: ""
+                products: "คาริสมา (ราดโคน ) , โทมาฮอค(พ่นทางใบ), ไซม๊อกซิเมท(พ่นทางใบ),",
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=mECVTESzdgQ7P5i_wpybtg&oh=00_Afr1j99EU0DSNiNHjnBWQ8oE7K05Ocu3ZKbY0rDxw-n1wA&oe=6966A4D2"
             },
             anthracnose: {
                 name: "โรคแอนแทรคโนส", nameEn: "Anthracnose",
@@ -313,17 +328,17 @@
                 pathogen: "เชื้อรา Colletotrichum gloeosporioides",
                 symptoms: ["จุดสีน้ำตาลดำบนใบ ขอบแผลชัด", "ผลเป็นจุดดำยุบตัว ขยายใหญ่ขึ้น", "มีสปอร์สีชมพูในสภาพอากาศชื้น", "ดอกร่วง ผลอ่อนร่วง"],
                 treatment: ["ตัดแต่งกิ่งให้โปร่ง", "พ่นยาป้องกันก่อนออกดอกและติดผล", "เก็บทำลายส่วนที่เป็นโรค", "พ่นยากลุ่ม Mancozeb, Carbendazim"],
-                products: "โค-ราซ, PROCHLORAZ 45% W/V EW ,สูตร EW ปลอดภัยต่อดอก เด่นในการควบคุมโรค แอนแทรคโนส",
-                productImage: ""
+                products: "โค-ราซ, PROCHLORAZ 45% W/V EW ,สูตร EW ปลอดภัยต่อดอก เด่นในการควบคุมโรค แอนแทรคโนส, อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
+                productImage: "https://www.icpladda.com/wp-content/uploads/2019/09/Leaflet_%E0%B9%82%E0%B8%84%E0%B8%A3%E0%B8%B2%E0%B8%8B_%E0%B8%A1%E0%B8%B0%E0%B8%A1%E0%B9%88%E0%B8%A7%E0%B8%87-01.jpg"
             },
             algal_spot: {
-                name: "โรคจุดสาหร่าย", nameEn: "Algal Leaf Spot",
+                name: "โรคจุดสาหร่าย,ใบจุดสนิม", nameEn: "Algal Leaf Spot",
                 image: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/durian/Algal%20Leaf%20Spot.jpg",
                 pathogen: "สาหร่าย Cephaleuros virescens",
                 symptoms: ["จุดกลมนูนสีเขียวเทาบนใบ", "ผิวหยาบคล้ายกำมะหยี่", "พบมากในสภาพร่มชื้น", "ไม่ค่อยส่งผลรุนแรง"],
                 treatment: ["ตัดแต่งกิ่งให้โปร่ง รับแสง", "พ่นยากลุ่มทองแดง", "ปรับสภาพแวดล้อมให้ไม่ชื้นเกินไป"],
-                products: "คอปเปอร์ออกซีคลอไรด์ 85WP",
-                productImage: ""
+                products: "ไซม๊อกซิเมท, Cymoxanil + Mancozeb 8% + 64% WP",
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=HrwUdfbppatoHYhhTQAb3Q&oh=00_AfrvgrM1l6tC5U5SV3YKw4fK_NzGyNnGccl91cZJJLe8uQ&oe=6966A4D2"
             },
             pink_disease: {
                 name: "โรคราสีชมพู", nameEn: "Pink Disease",
@@ -349,8 +364,8 @@
                 pathogen: "เชื้อรา Rhizoctonia solani",
                 symptoms: [ "ใบเกิดแผลสีน้ำตาลไหม้","แผลขยายเร็ว ใบแห้งแต่ไม่ร่วง", "ใบติดกันเป็นกระจุก โดยเฉพาะช่วงอากาศชื้น" ],
                 treatment: [ "ตัดใบที่เป็นโรคและทำลาย", "ตัดแต่งทรงพุ่มให้โปร่ง ลดความชื้น", "พ่นสารป้องกันเชื้อราและสลับกลุ่มยา" ],
-                products: "คาร์เบนดาซิม, โพรพิเนบ, แมนโคเซบ",
-                productImage: ""
+                products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/489845148_1070322481787210_5177090310035499039_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFP6iw8_0dzNPlM9Oq4wVOcJC5PLcodT0IkLk8tyh1PQqB0F4ywcpmGQua31GA-b1pbZHDZ7UqYTnOGeHOgx2oH&_nc_ohc=mKFzAumvWfUQ7kNvwHshfCM&_nc_oc=AdlyagRyawmGZoNH4hBwmCmhlvxF9b1uMDnjWpeC5x7fEDAxRYqZcfB9noxoT4N2eYE&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=fgy3-MTWJ1utqt2lNM02SQ&oh=00_AfrE4IcO9Qr5Eb2TyKv5KgoDP_1d4y-538F6JPN-qrkNKg&oe=6966A622"
             },
             branch_dieback: {
                 name: "โรคกิ่งแห้งทุเรียน", nameEn: "Branch Dieback",
@@ -359,7 +374,7 @@
                 symptoms: ["กิ่งแห้งตายจากปลายกิ่ง", "เปลือกกิ่งแห้งกรอบ เปลี่ยนสี", "ใบเหี่ยวเหลืองและร่วง", "อาจลุกลามไปยังกิ่งอื่นและลำต้น"],
                 treatment: ["ตัดกิ่งที่เป็นโรคออก ตัดให้เลยแผล 15-20 ซม.", "ทายาป้องกันเชื้อราที่รอยตัด", "พ่นสารป้องกันกำจัดเชื้อราอย่างสม่ำเสมอ", "ตัดแต่งทรงพุ่มให้โปร่ง ระบายอากาศดี"],
                 products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
-                productImage: ""
+                productImage: "https://scontent.fbkk5-4.fna.fbcdn.net/v/t39.30808-6/600238721_1270682218417901_6924044580674219428_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeE8i1pcgdn999gnRmHrpnG4lxb5PgvaOo6XFvk-C9o6jlyGIEsZ-68ixReDEXBDggr-6E10D2KJHEnoZMx53j2L&_nc_ohc=s7m5vZRgDLwQ7kNvwHG0KvU&_nc_oc=AdlAUfSFNRbc7EeOvKZtFEJAsVMYcwTc3LWhZmUGVKEvjU352arP8t9mpid2dmcABKE&_nc_zt=23&_nc_ht=scontent.fbkk5-4.fna&_nc_gid=Sp1NpgKU25VgIOuJeDplPg&oh=00_AfqeFCTz7Y6jEoHjxx9KXBpNtIWGnAtPT15eOj_3NT0-Xg&oe=69667C50"
             },
             mosaic: {
                 name: "โรคใบด่าง", nameEn: "Mosaic Virus",
@@ -415,11 +430,11 @@
             document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
             document.getElementById('modalProducts').textContent = d.products;
 
-            // แสดง link ดูรูปสินค้าถ้ามี
+            // แสดงปุ่มดูรูปสินค้าถ้ามี
             const productLink = document.getElementById('modalProductLink');
             if (d.productImage && d.productImage.trim() !== '') {
-                productLink.href = d.productImage;
-                productLink.style.display = 'inline-flex';
+                productLink.dataset.imageUrl = d.productImage;
+                productLink.style.display = 'inline-block';
             } else {
                 productLink.style.display = 'none';
             }
@@ -428,9 +443,22 @@
             document.body.style.overflow = 'hidden';
         }
 
+        function showProductImage() {
+            const productLink = document.getElementById('modalProductLink');
+            const imageUrl = productLink.dataset.imageUrl;
+            if (imageUrl) {
+                document.getElementById('productImage').src = imageUrl;
+                document.getElementById('productModal').classList.add('active');
+            }
+        }
+
+        function closeProductModal() {
+            document.getElementById('productModal').classList.remove('active');
+            document.getElementById('productImage').src = '';
+        }
+
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
         function goBack() { window.location.href = '/liff/diseases'; }
-        function openCamera() { if (liff.isInClient()) liff.closeWindow(); else alert('กรุณาเปิดผ่าน LINE app'); }
         function shareDisease() {
             if (!currentDisease) return;
             const text = `🥭 ${currentDisease.name} (${currentDisease.nameEn})\n🔬 ${currentDisease.pathogen}\n\nดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
@@ -439,6 +467,7 @@
         }
         function fallbackShare(t) { if(navigator.share) navigator.share({title:'โรคทุเรียน',text:t}); else navigator.clipboard.writeText(t).then(()=>alert('คัดลอกแล้ว')); }
         document.getElementById('diseaseModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        document.getElementById('productModal').addEventListener('click', function(e) { if (e.target === this) closeProductModal(); });
     </script>
 </body>
 </html>
