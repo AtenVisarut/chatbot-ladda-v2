@@ -243,11 +243,48 @@
                 <div class="detail-section">
                     <div class="detail-title">💊 ผลิตภัณฑ์แนะนำ</div>
                     <div class="detail-content" id="modalProducts">-</div>
+                    <button id="modalProductLink" onclick="showProductImage()"
+                       style="display: none; margin-top: 10px; color: #558b2f; font-weight: 600;
+                              background: #f1f8e9; padding: 10px 18px; border-radius: 10px; border: none;
+                              cursor: pointer; font-family: 'Sarabun', sans-serif; font-size: 0.95em;">
+                        📷 ดูรูปสินค้า
+                    </button>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn close" onclick="closeModal()">ปิด</button>
                 <button class="modal-btn primary" onclick="shareDisease()">แชร์ข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Image Modal -->
+    <div class="modal" id="productModal">
+        <div class="modal-content" style="padding: 0; overflow: hidden; max-width: 500px;">
+            <div style="position: relative; background: #f5f5f5;">
+                <button onclick="closeProductModal()"
+                    style="position: absolute; top: 10px; right: 10px; z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em;
+                           cursor: pointer;">✕</button>
+                <button id="prevBtn" onclick="prevImage()"
+                    style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
+                           cursor: pointer; display: none;">‹</button>
+                <button id="nextBtn" onclick="nextImage()"
+                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
+                           cursor: pointer; display: none;">›</button>
+                <img id="productImage" src="" alt="รูปสินค้า"
+                     style="width: 100%; max-height: 75vh; object-fit: contain; display: block;">
+                <div id="imageCounter"
+                     style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+                            background: rgba(0,0,0,0.6); color: white; padding: 5px 15px;
+                            border-radius: 15px; font-size: 0.9em; display: none;">
+                    1 / 1
+                </div>
             </div>
         </div>
     </div>
@@ -344,13 +381,68 @@
             document.getElementById('modalSymptoms').innerHTML = d.symptoms.map(s => `<li>${s}</li>`).join('');
             document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
             document.getElementById('modalProducts').textContent = d.products;
+
+            // แสดงปุ่มดูรูปสินค้าถ้ามี
+            const productLink = document.getElementById('modalProductLink');
+            let hasProductImage = false;
+            if (d.productImage) {
+                if (Array.isArray(d.productImage) && d.productImage.length > 0) {
+                    productLink.dataset.imageUrls = JSON.stringify(d.productImage);
+                    hasProductImage = true;
+                } else if (typeof d.productImage === 'string' && d.productImage.trim() !== '') {
+                    productLink.dataset.imageUrls = JSON.stringify([d.productImage]);
+                    hasProductImage = true;
+                }
+            }
+            productLink.style.display = hasProductImage ? 'inline-block' : 'none';
+
             document.getElementById('diseaseModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
+        let productImages = [];
+        let currentImageIndex = 0;
+
+        function showProductImage() {
+            const productLink = document.getElementById('modalProductLink');
+            const imageUrlsJson = productLink.dataset.imageUrls;
+            if (imageUrlsJson) {
+                productImages = JSON.parse(imageUrlsJson);
+                currentImageIndex = 0;
+                updateProductImage();
+                document.getElementById('productModal').classList.add('active');
+            }
+        }
+
+        function updateProductImage() {
+            document.getElementById('productImage').src = productImages[currentImageIndex];
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const counter = document.getElementById('imageCounter');
+            if (productImages.length > 1) {
+                prevBtn.style.display = currentImageIndex > 0 ? 'block' : 'none';
+                nextBtn.style.display = currentImageIndex < productImages.length - 1 ? 'block' : 'none';
+                counter.style.display = 'block';
+                counter.textContent = `${currentImageIndex + 1} / ${productImages.length}`;
+            } else {
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+                counter.style.display = 'none';
+            }
+        }
+
+        function prevImage() { if (currentImageIndex > 0) { currentImageIndex--; updateProductImage(); } }
+        function nextImage() { if (currentImageIndex < productImages.length - 1) { currentImageIndex++; updateProductImage(); } }
+
+        function closeProductModal() {
+            document.getElementById('productModal').classList.remove('active');
+            document.getElementById('productImage').src = '';
+            productImages = [];
+            currentImageIndex = 0;
+        }
+
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
         function goBack() { window.location.href = '/liff/diseases'; }
-        function openCamera() { if (liff.isInClient()) liff.closeWindow(); else alert('กรุณาเปิดผ่าน LINE app'); }
         function shareDisease() {
             if (!currentDisease) return;
             const text = `🎋 ${currentDisease.name} (${currentDisease.nameEn})\n🔬 ${currentDisease.pathogen}\n\nดูข้อมูลเพิ่มเติมที่ ICP Ladda Bot`;
@@ -359,6 +451,7 @@
         }
         function fallbackShare(t) { if(navigator.share) navigator.share({title:'โรคอ้อย',text:t}); else navigator.clipboard.writeText(t).then(()=>alert('คัดลอกแล้ว')); }
         document.getElementById('diseaseModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        document.getElementById('productModal').addEventListener('click', function(e) { if (e.target === this) closeProductModal(); });
     </script>
 </body>
 </html>
