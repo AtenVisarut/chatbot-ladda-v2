@@ -291,15 +291,33 @@
 
     <!-- Product Image Modal -->
     <div class="modal" id="productModal">
-        <div class="modal-content" style="padding: 0; overflow: hidden;">
-            <div style="position: relative;">
+        <div class="modal-content" style="padding: 0; overflow: hidden; max-width: 500px;">
+            <div style="position: relative; background: #f5f5f5;">
                 <button onclick="closeProductModal()"
                     style="position: absolute; top: 10px; right: 10px; z-index: 10;
                            background: rgba(0,0,0,0.5); color: white; border: none;
                            width: 36px; height: 36px; border-radius: 50%; font-size: 1.2em;
                            cursor: pointer;">✕</button>
+                <!-- Navigation buttons -->
+                <button id="prevBtn" onclick="prevImage()"
+                    style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
+                           cursor: pointer; display: none;">‹</button>
+                <button id="nextBtn" onclick="nextImage()"
+                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 10;
+                           background: rgba(0,0,0,0.5); color: white; border: none;
+                           width: 40px; height: 40px; border-radius: 50%; font-size: 1.3em;
+                           cursor: pointer; display: none;">›</button>
                 <img id="productImage" src="" alt="รูปสินค้า"
-                     style="width: 100%; max-height: 80vh; object-fit: contain; display: block;">
+                     style="width: 100%; max-height: 75vh; object-fit: contain; display: block;">
+                <!-- Image counter -->
+                <div id="imageCounter"
+                     style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+                            background: rgba(0,0,0,0.6); color: white; padding: 5px 15px;
+                            border-radius: 15px; font-size: 0.9em; display: none;">
+                    1 / 1
+                </div>
             </div>
         </div>
     </div>
@@ -430,31 +448,78 @@
             document.getElementById('modalTreatment').innerHTML = d.treatment.map(t => `<li>${t}</li>`).join('');
             document.getElementById('modalProducts').textContent = d.products;
 
-            // แสดงปุ่มดูรูปสินค้าถ้ามี
+            // แสดงปุ่มดูรูปสินค้าถ้ามี (รองรับทั้ง string และ array)
             const productLink = document.getElementById('modalProductLink');
-            if (d.productImage && d.productImage.trim() !== '') {
-                productLink.dataset.imageUrl = d.productImage;
-                productLink.style.display = 'inline-block';
-            } else {
-                productLink.style.display = 'none';
+            let hasProductImage = false;
+            if (d.productImage) {
+                if (Array.isArray(d.productImage) && d.productImage.length > 0) {
+                    productLink.dataset.imageUrls = JSON.stringify(d.productImage);
+                    hasProductImage = true;
+                } else if (typeof d.productImage === 'string' && d.productImage.trim() !== '') {
+                    productLink.dataset.imageUrls = JSON.stringify([d.productImage]);
+                    hasProductImage = true;
+                }
             }
+            productLink.style.display = hasProductImage ? 'inline-block' : 'none';
 
             document.getElementById('diseaseModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
+        // Gallery state
+        let productImages = [];
+        let currentImageIndex = 0;
+
         function showProductImage() {
             const productLink = document.getElementById('modalProductLink');
-            const imageUrl = productLink.dataset.imageUrl;
-            if (imageUrl) {
-                document.getElementById('productImage').src = imageUrl;
+            const imageUrlsJson = productLink.dataset.imageUrls;
+            if (imageUrlsJson) {
+                productImages = JSON.parse(imageUrlsJson);
+                currentImageIndex = 0;
+                updateProductImage();
                 document.getElementById('productModal').classList.add('active');
+            }
+        }
+
+        function updateProductImage() {
+            document.getElementById('productImage').src = productImages[currentImageIndex];
+
+            // Show/hide navigation buttons
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const counter = document.getElementById('imageCounter');
+
+            if (productImages.length > 1) {
+                prevBtn.style.display = currentImageIndex > 0 ? 'block' : 'none';
+                nextBtn.style.display = currentImageIndex < productImages.length - 1 ? 'block' : 'none';
+                counter.style.display = 'block';
+                counter.textContent = `${currentImageIndex + 1} / ${productImages.length}`;
+            } else {
+                prevBtn.style.display = 'none';
+                nextBtn.style.display = 'none';
+                counter.style.display = 'none';
+            }
+        }
+
+        function prevImage() {
+            if (currentImageIndex > 0) {
+                currentImageIndex--;
+                updateProductImage();
+            }
+        }
+
+        function nextImage() {
+            if (currentImageIndex < productImages.length - 1) {
+                currentImageIndex++;
+                updateProductImage();
             }
         }
 
         function closeProductModal() {
             document.getElementById('productModal').classList.remove('active');
             document.getElementById('productImage').src = '';
+            productImages = [];
+            currentImageIndex = 0;
         }
 
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
