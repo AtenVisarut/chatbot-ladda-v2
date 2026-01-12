@@ -1924,17 +1924,10 @@ def create_initial_questions_flex() -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "👉 เพื่อความแม่นยำในการวินิจฉัย",
-                        "size": "sm",
-                        "color": "#E74C3C",
+                        "text": "📝 กรุณาพิมพ์ระบุชนิดของพืชที่:",
+                        "size": "md",
+                        "color": "#1a1a1a",
                         "weight": "bold"
-                    },
-                    {
-                        "type": "text",
-                        "text": "กรุณาตอบคำถามเพิ่มเติมค่ะ:",
-                        "size": "sm",
-                        "color": "#E74C3C",
-                        "margin": "sm"
                     },
                     {
                         "type": "separator",
@@ -1944,20 +1937,20 @@ def create_initial_questions_flex() -> Dict:
                         "type": "box",
                         "layout": "vertical",
                         "margin": "lg",
-                        "spacing": "md",
+                        "spacing": "lg",
                         "contents": [
                             {
                                 "type": "box",
                                 "layout": "horizontal",
                                 "contents": [
-                                    {"type": "text", "text": "1️⃣", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "1.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
                                     {
                                         "type": "box",
                                         "layout": "vertical",
                                         "margin": "md",
                                         "contents": [
-                                            {"type": "text", "text": "ชนิดพืช", "weight": "bold", "size": "sm"},
-                                            {"type": "text", "text": "ทุเรียน/มะม่วง/ข้าว/อื่นๆ?", "size": "xs", "color": "#888888"}
+                                            {"type": "text", "text": "ชนิดพืช", "weight": "bold", "size": "md", "color": "#1a1a1a"},
+                                            {"type": "text", "text": "เช่น ข้าว/ทุเรียน/ข้าวโพด/มันสำปะหลัง/อ้อย", "size": "sm", "color": "#666666"}
                                         ]
                                     }
                                 ]
@@ -1966,14 +1959,14 @@ def create_initial_questions_flex() -> Dict:
                                 "type": "box",
                                 "layout": "horizontal",
                                 "contents": [
-                                    {"type": "text", "text": "2️⃣", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "2.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
                                     {
                                         "type": "box",
                                         "layout": "vertical",
                                         "margin": "md",
                                         "contents": [
-                                            {"type": "text", "text": "ตำแหน่งอาการ", "weight": "bold", "size": "sm"},
-                                            {"type": "text", "text": "ใบ/ลำต้น/ผล/ราก?", "size": "xs", "color": "#888888"}
+                                            {"type": "text", "text": "ตำแหน่ง", "weight": "bold", "size": "md", "color": "#1a1a1a"},
+                                            {"type": "text", "text": "เช่น ใบ/ลำต้น/ผล/ราก/กาบใบ/รวง", "size": "sm", "color": "#666666"}
                                         ]
                                     }
                                 ]
@@ -1982,32 +1975,14 @@ def create_initial_questions_flex() -> Dict:
                                 "type": "box",
                                 "layout": "horizontal",
                                 "contents": [
-                                    {"type": "text", "text": "3️⃣", "flex": 0, "size": "sm"},
+                                    {"type": "text", "text": "3.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
                                     {
                                         "type": "box",
                                         "layout": "vertical",
                                         "margin": "md",
                                         "contents": [
-                                            {"type": "text", "text": "ลักษณะอาการ", "weight": "bold", "size": "sm"},
-                                            {"type": "text", "text": "• สีของจุด/แผล (น้ำตาล/เหลือง/ดำ/ขาว)", "size": "xs", "color": "#888888", "wrap": True},
-                                            {"type": "text", "text": "• พื้นที่เสียหาย (แค่กใบ/ปลายใบ/กลางใบ/ทั่วใบ)", "size": "xs", "color": "#888888", "wrap": True},
-                                            {"type": "text", "text": "• ขึ้นพองหรือไม่ (ถ้าขึ้น สีและขนาด)", "size": "xs", "color": "#888888", "wrap": True}
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "horizontal",
-                                "contents": [
-                                    {"type": "text", "text": "4️⃣", "flex": 0, "size": "sm"},
-                                    {
-                                        "type": "box",
-                                        "layout": "vertical",
-                                        "margin": "md",
-                                        "contents": [
-                                            {"type": "text", "text": "ระยะเวลาอาการ", "weight": "bold", "size": "sm"},
-                                            {"type": "text", "text": "เพิ่งพบหรือนานแค่ไหน?", "size": "xs", "color": "#888888"}
+                                            {"type": "text", "text": "ลักษณะที่เกิด", "weight": "bold", "size": "md", "color": "#1a1a1a"},
+                                            {"type": "text", "text": "เช่น จุดสีน้ำตาล/แผลไหม้/เน่าดำ/ใบเหลือง", "size": "sm", "color": "#666666"}
                                         ]
                                     }
                                 ]
@@ -2025,30 +2000,20 @@ def create_initial_questions_flex() -> Dict:
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "💡 ตัวอย่างการตอบกลับ:",
+                                "text": "💬 ตัวอย่าง:",
                                 "size": "sm",
                                 "color": "#3498DB",
                                 "weight": "bold"
                             },
                             {
                                 "type": "text",
-                                "text": "\"ทุเรียน ใบมีจุดสีน้ำตาล เห็นแผลตรงกลางใบ เกิดมา 3 วัน\"",
-                                "size": "xs",
-                                "color": "#666666",
+                                "text": "\"ข้าว ที่ใบ มีจุดสีน้ำตาล\"",
+                                "size": "md",
+                                "color": "#27AE60",
                                 "margin": "sm",
-                                "wrap": True,
-                                "style": "italic"
+                                "weight": "bold"
                             }
                         ]
-                    },
-                    {
-                        "type": "text",
-                        "text": "🔬 ยิ่งให้ข้อมูลเยอะ ยิ่งวิเคราะห์ได้แม่นยำค่ะ!",
-                        "size": "xs",
-                        "color": "#27AE60",
-                        "margin": "lg",
-                        "align": "center",
-                        "weight": "bold"
                     }
                 ]
             },
