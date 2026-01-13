@@ -1,0 +1,161 @@
+# Changelog - 13 มกราคม 2026
+
+## สรุปการเปลี่ยนแปลงวันนี้
+
+### 1. ระบบแนะนำสินค้า (Product Recommendation)
+
+#### 1.1 แก้ไขปัญหายาไม่ตรงกับโรค
+**ไฟล์:** `app/services/product_recommendation.py`
+
+**ปัญหา:** โรคไหม้ข้าว (Rice Blast) แนะนำยาเทอราโน่/รีโนเวท ซึ่งเป็นยาสำหรับโรคกาบใบ
+
+**การแก้ไข:**
+- เพิ่มฟังก์ชัน `is_no_product_disease()` ตรวจสอบโรคที่บริษัทไม่มียารักษา
+- เพิ่ม check ใน `retrieve_products_with_matching_score()` ให้ return [] สำหรับโรคไหม้ข้าว
+- Commit: `8953986`
+
+```python
+NO_PRODUCT_DISEASES = [
+    "rice blast", "โรคไหม้", "โรคไหม้ข้าว", "ไหม้ข้าว", "blast",
+    "pyricularia oryzae", "magnaporthe oryzae",
+]
+```
+
+#### 1.2 เพิ่ม Search Patterns สำหรับโรคกาบใบ
+**ปัญหา:** ไม่มี patterns สำหรับโรคกาบใบเน่าและกาบใบไหม้
+
+**การแก้ไข:**
+```python
+DISEASE_SEARCH_PATTERNS = {
+    "โรคกาบใบแห้ง": ["กาบใบแห้ง", "sheath blight", "rhizoctonia solani"],
+    "โรคกาบใบเน่า": ["กาบใบเน่า", "sheath rot", "sarocladium"],
+    "โรคกาบใบไหม้": ["กาบใบไหม้", "sheath burn", "rhizoctonia oryzae"],
+}
+```
+- Commit: `4502067`
+
+---
+
+### 2. หน้าโรคทุเรียน (diseases-durian.html)
+
+#### 2.1 เปลี่ยนการแสดงรูปสินค้าเป็น Popup Modal
+**ไฟล์:** `liff/diseases-durian.html`
+
+**ก่อนแก้ไข:** คลิกลิงก์เปิดรูปในแท็บใหม่
+**หลังแก้ไข:** คลิกปุ่มแสดง popup modal พร้อมปุ่ม prev/next
+
+**เพิ่ม HTML:**
+```html
+<div class="modal" id="productModal">
+    <span class="modal-close" onclick="closeProductModal()">&times;</span>
+    <div class="modal-content">
+        <button class="nav-button prev-button" onclick="prevImage()">&#10094;</button>
+        <img class="modal-product-img" id="modalProductImage">
+        <button class="nav-button next-button" onclick="nextImage()">&#10095;</button>
+    </div>
+    <div class="image-counter" id="imageCounter"></div>
+</div>
+```
+
+**เพิ่ม JavaScript:**
+- `showProductImage()` - แสดง modal
+- `updateProductImage()` - อัพเดทรูปปัจจุบัน
+- `prevImage()` / `nextImage()` - เลื่อนดูรูป
+- `closeProductModal()` - ปิด modal
+
+- Commit: `011f123`
+
+---
+
+### 3. เพิ่ม productImage Field
+
+#### 3.1 ข้าวโพด (diseases-corn.html)
+**ไฟล์:** `liff/diseases-corn.html`
+
+เพิ่ม `productImage: ""` ให้ทั้ง 9 โรค:
+- northern_leaf_blight (โรคใบไหม้แผลใหญ่)
+- southern_leaf_blight (โรคใบไหม้แผลเล็ก)
+- gray_leaf_spot (โรคใบจุดสีเทา)
+- rust (โรคราสนิม)
+- downy_mildew (โรคราน้ำค้าง)
+- stalk_rot (โรคลำต้นเน่า)
+- ear_rot (โรคฝักเน่า)
+- maize_dwarf_mosaic (โรคใบด่างแคระ)
+- maize_mosaic (โรคใบด่าง) - แก้ไข field ที่หายไป
+
+- Commits: `96c6903`, `467a66a`
+
+#### 3.2 มันสำปะหลัง (diseases-cassava.html)
+**ไฟล์:** `liff/diseases-cassava.html`
+
+เพิ่ม `productImage: ""` ให้ทั้ง 6 โรค:
+- cassava_anthracnose (โรคแอนแทรคโนส)
+- cassava_bacterial_blight (โรคใบไหม้)
+- cassava_brown_streak (โรคใบด่างสีน้ำตาล)
+- cassava_mosaic (โรคใบด่าง)
+- cassava_root_rot (โรครากเน่า)
+- cassava_witches_broom (โรคพุ่มแจ้)
+
+- Commit: `96c6903`
+
+#### 3.3 อ้อย (diseases-sugarcane.html)
+**ไฟล์:** `liff/diseases-sugarcane.html`
+
+มี `productImage: ""` อยู่แล้ว - ไม่ต้องแก้ไข
+
+#### 3.4 ข้าว (diseases-rice.html)
+**ไฟล์:** `liff/diseases-rice.html`
+
+อัพเดทข้อมูลโรคข้าว:
+- เพิ่มรูปโรค (diseaseImages)
+- เพิ่มรูปสินค้า (productImage) รองรับหลายรูป (array)
+- เพิ่มอัตราการใช้ (usageRate)
+
+- Commits: `8072b0f`, `ce34d3e`
+
+---
+
+## Commits วันนี้ (เรียงตามเวลา)
+
+| Commit | รายละเอียด |
+|--------|------------|
+| `8072b0f` | feat: เพิ่ม productImage field ให้โรคข้าวและอ้อย |
+| `ce34d3e` | update: ปรับปรุงข้อมูลโรคข้าวครบถ้วน |
+| `011f123` | feat: เปลี่ยนการแสดงรูปสินค้าทุเรียนเป็น popup modal |
+| `96c6903` | feat: เพิ่ม productImage field ให้ข้าวโพดและมันสำปะหลัง |
+| `467a66a` | fix: เพิ่ม productImage field ที่หายไปในโรค maize_mosaic |
+| `8953986` | fix: ไม่แนะนำสินค้าสำหรับโรคที่บริษัทไม่มียา |
+| `4502067` | feat: เพิ่ม search patterns สำหรับโรคกาบใบเน่าและกาบใบไหม้ |
+
+---
+
+## ไฟล์ที่แก้ไข
+
+1. `app/services/product_recommendation.py` - ระบบแนะนำสินค้า
+2. `liff/diseases-durian.html` - หน้าโรคทุเรียน
+3. `liff/diseases-corn.html` - หน้าโรคข้าวโพด
+4. `liff/diseases-cassava.html` - หน้าโรคมันสำปะหลัง
+5. `liff/diseases-rice.html` - หน้าโรคข้าว
+6. `liff/diseases-sugarcane.html` - หน้าโรคอ้อย (ตรวจสอบแล้วมี productImage อยู่แล้ว)
+
+---
+
+## หมายเหตุสำคัญ
+
+### โครงสร้าง productImage
+รองรับทั้ง string และ array:
+```javascript
+// แบบรูปเดียว
+productImage: "https://example.com/image.jpg"
+
+// แบบหลายรูป
+productImage: ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
+```
+
+### โรคที่บริษัทไม่มียารักษา
+- โรคไหม้ข้าว (Rice Blast) - ต้องใช้ Tricyclazole ซึ่งบริษัทไม่มี
+- ระบบจะไม่แนะนำสินค้า แค่ให้คำแนะนำการรักษาเบื้องต้น
+
+### โรคแบคทีเรีย
+- ใช้ `is_bacterial_disease()` ตรวจสอบ
+- ไม่แนะนำยาฆ่าเชื้อรา (Fungicide) สำหรับโรคแบคทีเรีย
