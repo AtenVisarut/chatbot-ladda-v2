@@ -50,9 +50,17 @@ def is_bacterial_disease(disease_name: str) -> bool:
 # =============================================================================
 NO_PRODUCT_DISEASES = [
     # โรคไหม้ข้าว (Rice Blast) - ต้องใช้ Tricyclazole ซึ่งบริษัทไม่มี
-    "rice blast", "โรคไหม้", "โรคไหม้ข้าว", "ไหม้ข้าว", "blast",
+    # หมายเหตุ: โรคไหม้คอรวง/เน่าคอรวง (Neck Blast/Rot) มียารักษา - ไม่รวมในนี้
+    "rice blast", "โรคไหม้ข้าว", "ไหม้ข้าว",
     "pyricularia oryzae", "magnaporthe oryzae",
     # หมายเหตุ: โรคแบคทีเรียและไวรัสถูกกรองแยกอยู่แล้วใน is_bacterial_disease()
+]
+
+# โรคที่มียารักษา แม้จะมีชื่อคล้ายกับโรคที่ไม่มียา
+# เช่น โรคไหม้คอรวง/เน่าคอรวง เกิดจากเชื้อเดียวกับโรคไหม้ แต่มียารักษาได้
+HAS_PRODUCT_EXCEPTIONS = [
+    "คอรวง", "neck blast", "neck rot", "panicle blast",
+    "เน่าคอรวง", "ไหม้คอรวง",
 ]
 
 
@@ -60,8 +68,18 @@ def is_no_product_disease(disease_name: str) -> bool:
     """
     ตรวจสอบว่าเป็นโรคที่บริษัทไม่มียารักษาหรือไม่
     โรคเหล่านี้จะไม่แนะนำสินค้า แค่ให้คำแนะนำการรักษาเบื้องต้น
+
+    หมายเหตุ: โรคไหม้คอรวง/เน่าคอรวง แม้เกิดจาก Pyricularia grisea เหมือนโรคไหม้ข้าว
+    แต่บริษัทมียารักษาได้ จึงไม่รวมในกลุ่มนี้
     """
     disease_lower = disease_name.lower()
+
+    # ตรวจสอบว่าเป็นโรคที่มียารักษา (exceptions) ก่อน
+    for exception in HAS_PRODUCT_EXCEPTIONS:
+        if exception.lower() in disease_lower:
+            return False  # มียารักษา - ไม่ใช่ no_product_disease
+
+    # ตรวจสอบว่าเป็นโรคที่ไม่มียารักษา
     for keyword in NO_PRODUCT_DISEASES:
         if keyword.lower() in disease_lower:
             return True
@@ -132,6 +150,8 @@ DISEASE_SEARCH_PATTERNS = {
     "โรคดอกกระถิน": ["ดอกกระถิน", "false smut"],
     "โรคเมล็ดด่าง": ["เมล็ดด่าง", "dirty panicle"],
     "โรคไหม้": ["ไหม้", "blast"],
+    "โรคไหม้คอรวง": ["คอรวง", "ไหม้คอรวง", "neck blast", "panicle blast", "pyricularia grisea"],
+    "โรคเน่าคอรวง": ["คอรวง", "เน่าคอรวง", "neck rot", "panicle rot", "pyricularia grisea"],
     "โรคกาบใบแห้ง": ["กาบใบแห้ง", "sheath blight", "rhizoctonia solani"],
     "โรคกาบใบเน่า": ["กาบใบเน่า", "sheath rot", "sarocladium"],
     "โรคกาบใบไหม้": ["กาบใบไหม้", "sheath burn", "rhizoctonia oryzae"],
