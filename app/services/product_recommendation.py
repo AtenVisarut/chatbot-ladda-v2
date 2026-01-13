@@ -79,7 +79,8 @@ FUNGAL_KEYWORDS = [
     "โรคเมล็ดด่าง", "dirty panicle", "grain discoloration",  # เพิ่มใหม่
     "โรคเน่าคอรวง", "neck rot", "neck blast",  # เพิ่มใหม่
     "โรคใบขีด", "narrow brown leaf spot", "cercospora",  # เพิ่มใหม่
-    "โรคกาบใบเน่า", "sheath rot",  # เพิ่มใหม่
+    "โรคกาบใบเน่า", "sheath rot", "sarocladium",  # เพิ่มใหม่
+    "โรคกาบใบไหม้", "sheath burn", "rhizoctonia oryzae-sativae",  # เพิ่มใหม่
     # โรคทั่วไป (General diseases)
     "โรคเน่า", "rot", "anthracnose", "แอนแทรคโนส",
     "โรคราน้ำค้าง", "downy mildew", "ราน้ำค้าง",
@@ -131,7 +132,9 @@ DISEASE_SEARCH_PATTERNS = {
     "โรคดอกกระถิน": ["ดอกกระถิน", "false smut"],
     "โรคเมล็ดด่าง": ["เมล็ดด่าง", "dirty panicle"],
     "โรคไหม้": ["ไหม้", "blast"],
-    "โรคกาบใบแห้ง": ["กาบใบแห้ง", "sheath blight"],
+    "โรคกาบใบแห้ง": ["กาบใบแห้ง", "sheath blight", "rhizoctonia solani"],
+    "โรคกาบใบเน่า": ["กาบใบเน่า", "sheath rot", "sarocladium"],
+    "โรคกาบใบไหม้": ["กาบใบไหม้", "sheath burn", "rhizoctonia oryzae"],
     "โรคใบจุด": ["ใบจุด", "leaf spot", "brown spot"],
     # โรค Oomycetes
     "โรครากเน่าโคนเน่า": ["รากเน่า", "โคนเน่า", "phytophthora"],
