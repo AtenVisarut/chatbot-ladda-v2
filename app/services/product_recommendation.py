@@ -427,11 +427,35 @@ def filter_products_for_oomycetes(products: List[Dict], disease_name: str) -> Li
     return products
 
 
+def has_oomycetes_active_ingredient(product: Dict) -> bool:
+    """
+    ตรวจสอบว่าสินค้ามี active ingredient ที่เหมาะกับ Oomycetes หรือไม่
+    ใช้กรองสินค้าที่ไม่เหมาะกับโรคเชื้อราแท้ (True Fungi)
+    """
+    active_ingredient = (product.get("active_ingredient") or "").lower()
+
+    # สาร Oomycetes-specific ที่ไม่เหมาะกับเชื้อราแท้
+    oomycetes_only_ingredients = [
+        "fosetyl", "ฟอสเอทิล", "ฟอสอีทิล",
+        "cymoxanil", "ไซม็อกซานิล", "ไซม๊อกซานิล",
+        "propamocarb", "โพรพาโมคาร์บ",
+        "metalaxyl", "เมทาแลกซิล", "mefenoxam",
+        "dimethomorph", "ไดเมโทมอร์ฟ",
+        "mandipropamid", "แมนดิโพรพามิด",
+    ]
+
+    for ingredient in oomycetes_only_ingredients:
+        if ingredient in active_ingredient:
+            return True
+    return False
+
+
 def filter_products_for_fungi(products: List[Dict], disease_name: str) -> List[Dict]:
     """
-    กรองสินค้าสำหรับโรคเชื้อรา (True Fungi) ให้เหลือเฉพาะที่มี pathogen_type = 'fungi'
+    กรองสินค้าสำหรับโรคเชื้อรา (True Fungi) ให้เหลือเฉพาะที่เหมาะสม
 
-    หลีกเลี่ยงการแนะนำยา Oomycetes (Propamocarb, Fosetyl-Al) สำหรับโรคเชื้อราทั่วไป
+    หลีกเลี่ยงการแนะนำยา Oomycetes (Propamocarb, Fosetyl-Al, Cymoxanil) สำหรับโรคเชื้อราทั่วไป
+    เช่น Cercospora, Colletotrichum, Fusarium, Rhizoctonia
 
     Args:
         products: รายการสินค้าทั้งหมด
@@ -445,22 +469,40 @@ def filter_products_for_fungi(products: List[Dict], disease_name: str) -> List[D
         return products
 
     logger.info(f"🍄 โรคเชื้อรา detected: {disease_name}")
-    logger.info(f"   กรองสินค้าตาม pathogen_type = 'fungi'...")
+    logger.info(f"   กรองสินค้าตาม pathogen_type = 'fungi' และ active ingredient...")
 
-    # Filter by pathogen_type column
+    # Step 1: Filter by pathogen_type column
     fungi_products = [p for p in products if p.get("pathogen_type") == "fungi"]
 
     if fungi_products:
         logger.info(f"   ✓ พบสินค้า pathogen_type='fungi': {len(fungi_products)} รายการ")
         return fungi_products
 
-    # Fallback: กรองออกยา Oomycetes-specific
+    # Step 2: Fallback - กรองออกยา Oomycetes (ทั้ง pathogen_type และ active ingredient)
     logger.warning(f"⚠️ ไม่พบสินค้า pathogen_type='fungi' → กรองออก Oomycetes products")
 
-    filtered = [p for p in products if p.get("pathogen_type") != "oomycetes"]
+    filtered = []
+    excluded = []
+    for p in products:
+        # กรองออกถ้า pathogen_type = 'oomycetes'
+        if p.get("pathogen_type") == "oomycetes":
+            excluded.append(p.get("product_name"))
+            continue
+        # กรองออกถ้ามี active ingredient ที่เป็น Oomycetes-specific
+        if has_oomycetes_active_ingredient(p):
+            excluded.append(p.get("product_name"))
+            continue
+        filtered.append(p)
+
+    if excluded:
+        logger.info(f"   ❌ กรองออก Oomycetes products: {excluded}")
+
     if filtered:
+        logger.info(f"   ✓ เหลือสินค้าที่เหมาะกับเชื้อรา: {len(filtered)} รายการ")
         return filtered
 
+    # ถ้าไม่เหลือเลย → return สินค้าทั้งหมด (fallback)
+    logger.warning(f"⚠️ ไม่เหลือสินค้าหลังกรอง → ใช้สินค้าทั้งหมด")
     return products
 
 
