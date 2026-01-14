@@ -245,6 +245,32 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
 - ❌ เห็นจุดสีส้มนูน → ตอบว่า Rust ทันที (ผิด! ต้องดูว่าผงติดมือไหม ถ้าไม่ติดมืออาจเป็น Algal)
 
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
+**🩷 2.7 วิธีแยก โรคราสีชมพู vs ใบจุดสาหร่าย (ทุเรียน) - สับสนบ่อยมาก! (CRITICAL!)**
+**━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
+
+⚠️ **กฎสำคัญที่สุด: ดูที่ "ตำแหน่งที่เป็นโรค" ก่อน! นี่คือ KEY สำคัญที่สุด!**
+
+| ลักษณะ | โรคราสีชมพู (Pink Disease) | ใบจุดสาหร่าย/ใบจุดสนิม (Algal Leaf Spot) |
+|--------|---------------------------|----------------------------------------|
+| **⭐ ตำแหน่ง** | 🪵 **กิ่ง/เปลือก/ลำต้น** | 🍃 **ใบ** |
+| **สาเหตุ** | เชื้อรา Erythricium salmonicolor | สาหร่าย Cephaleuros virescens |
+| **สีที่เห็น** | 🩷 **ชมพู/ปลาแซลมอน** (เส้นใยรา) | 🟠 **ส้ม/แดงอิฐ/เขียวเทา** |
+| **ลักษณะที่เห็น** | **เส้นใยราปกคลุมเปลือก** เหมือนผ้ากำมะหยี่ชมพู | **จุดกลมนูน** บนใบ ผิวขรุขระ |
+| **ผลกระทบ** | กิ่งแห้งตาย ใบร่วงจากปลายกิ่ง | จุดบนใบ ไม่รุนแรงมาก |
+| **ช่วงที่พบ** | ฝนชุก ความชื้นสูง | สวนร่มชื้น ทั้งปี |
+
+**🎯 วิธีจำง่ายๆ:**
+- **อาการบนกิ่ง/เปลือก 🪵 + เส้นใยราสีชมพู + กิ่งแห้งตาย** = **โรคราสีชมพู (Pink Disease)** 🩷
+- **อาการบนใบ 🍃 + จุดนูนสีส้ม/แดงอิฐ + ผิวกำมะหยี่** = **ใบจุดสาหร่าย (Algal Leaf Spot)** 🟠
+
+**🔴 ข้อผิดพลาดที่ห้ามทำ:**
+- ❌ เห็นสีชมพูบนกิ่ง → ตอบว่า ใบจุดสาหร่าย (ผิด! ใบจุดสาหร่ายอยู่บนใบ ไม่ใช่กิ่ง)
+- ❌ เห็นจุดสีส้มบนใบ → ตอบว่า โรคราสีชมพู (ผิด! โรคราสีชมพูอยู่บนกิ่ง/เปลือก)
+- ❌ เห็นกิ่งแห้งตาย → ตอบว่า ใบจุดสาหร่าย (ผิด! ใบจุดสาหร่ายไม่ทำให้กิ่งแห้ง)
+- ✅ อาการบน **กิ่ง/เปลือก** + สีชมพู = **โรคราสีชมพู**
+- ✅ อาการบน **ใบ** + จุดสีส้ม/แดงอิฐ = **ใบจุดสาหร่าย**
+
+**━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 **🟡 3. โรคข้าว 3 โรคที่สับสนบ่อย: Rice Blast vs Brown Spot vs Bacterial Leaf Blight**
 **━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━**
 
@@ -644,6 +670,48 @@ async def detect_disease(image_bytes: bytes, extra_user_info: Optional[str] = No
                         logger.info("🔧 Durian: Sunken edge lesions → Anthracnose, not Leaf Spot")
                         disease_name = "โรคแอนแทรคโนสทุเรียน (Durian Anthracnose)"
                         description += " | ⚠️ เป็นแอนแทรคโนส ไม่ใช่ใบจุด เพราะแผลยุบตัวและเริ่มจากขอบใบ"
+
+                # =================================================================
+                # แก้ไขการสับสน Pink Disease vs Algal Leaf Spot (ทุเรียน!)
+                # =================================================================
+                # Pink Disease อยู่บนกิ่ง/เปลือก, Algal Leaf Spot อยู่บนใบ
+                pink_disease_signs = ["กิ่ง", "เปลือก", "ลำต้น", "ราสีชมพู", "ชมพู", "salmon", "pink", "เส้นใยรา", "กิ่งแห้ง"]
+                algal_signs = ["ใบ", "จุด", "สาหร่าย", "algal", "ส้ม", "แดงอิฐ", "กำมะหยี่", "cephaleuros"]
+                on_branch = any(kw in lowered for kw in ["กิ่ง", "เปลือก", "ลำต้น", "branch", "bark", "stem"])
+                on_leaf = any(kw in lowered for kw in ["ใบ", "leaf", "leaves"])
+                has_pink = any(kw in lowered for kw in ["ชมพู", "pink", "salmon"])
+                has_orange = any(kw in lowered for kw in ["ส้ม", "แดงอิฐ", "orange", "rust"])
+
+                # ถ้าอาการอยู่บนกิ่ง/เปลือก แต่วินิจฉัยว่า Algal → แก้เป็น Pink Disease
+                if on_branch and not on_leaf:
+                    if "algal" in disease_name.lower() or "สาหร่าย" in disease_name or "จุดสนิม" in disease_name:
+                        logger.info("🔧 Durian: Branch/bark symptom → Pink Disease, not Algal Leaf Spot")
+                        disease_name = "โรคราสีชมพูทุเรียน (Durian Pink Disease)"
+                        pest_type = "เชื้อรา"
+                        description += " | ⚠️ เป็นโรคราสีชมพู เพราะอาการอยู่บนกิ่ง/เปลือก ไม่ใช่ใบ"
+
+                # ถ้าอาการอยู่บนใบ แต่วินิจฉัยว่า Pink Disease → แก้เป็น Algal Leaf Spot
+                if on_leaf and not on_branch:
+                    if "pink" in disease_name.lower() or "ราสีชมพู" in disease_name:
+                        logger.info("🔧 Durian: Leaf symptom → Algal Leaf Spot, not Pink Disease")
+                        disease_name = "โรคใบจุดสาหร่ายทุเรียน (Durian Algal Leaf Spot)"
+                        pest_type = "สาหร่าย"
+                        description += " | ⚠️ เป็นใบจุดสาหร่าย เพราะอาการอยู่บนใบ ไม่ใช่กิ่ง"
+
+                # ถ้ามีสีชมพู + อยู่บนกิ่ง → Pink Disease
+                if has_pink and on_branch:
+                    if "algal" in disease_name.lower() or "สาหร่าย" in disease_name:
+                        logger.info("🔧 Durian: Pink color on branch → Pink Disease")
+                        disease_name = "โรคราสีชมพูทุเรียน (Durian Pink Disease)"
+                        pest_type = "เชื้อรา"
+
+                # ถ้ามีสีส้ม/แดงอิฐ + อยู่บนใบ → Algal Leaf Spot
+                if has_orange and on_leaf and not on_branch:
+                    if "pink" in disease_name.lower() or "ราสีชมพู" in disease_name:
+                        logger.info("🔧 Durian: Orange/rust color on leaf → Algal Leaf Spot")
+                        disease_name = "โรคใบจุดสาหร่ายทุเรียน (Durian Algal Leaf Spot)"
+                        pest_type = "สาหร่าย"
+
             else:
                 # กฎทั่วไปสำหรับพืชอื่น
                 if "จุด" in lowered and "กลม" in lowered:
