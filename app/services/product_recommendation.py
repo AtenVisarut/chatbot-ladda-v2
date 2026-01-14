@@ -93,12 +93,22 @@ FUNGAL_KEYWORDS = [
     "โรคใบจุด", "leaf spot", "brown spot", "จุดสีน้ำตาล",
     "โรคกาบใบแห้ง", "sheath blight", "rhizoctonia",
     "โรคถอดฝัก", "bakanae", "fusarium",
-    "โรคดอกกระถิน", "false smut", "smut", "ustilaginoidea",  # เพิ่มใหม่
-    "โรคเมล็ดด่าง", "dirty panicle", "grain discoloration",  # เพิ่มใหม่
-    "โรคเน่าคอรวง", "neck rot", "neck blast",  # เพิ่มใหม่
-    "โรคใบขีด", "narrow brown leaf spot", "cercospora",  # เพิ่มใหม่
-    "โรคกาบใบเน่า", "sheath rot", "sarocladium",  # เพิ่มใหม่
-    "โรคกาบใบไหม้", "sheath burn", "rhizoctonia oryzae-sativae",  # เพิ่มใหม่
+    "โรคดอกกระถิน", "false smut", "smut", "ustilaginoidea",
+    "โรคเมล็ดด่าง", "dirty panicle", "grain discoloration",
+    "โรคเน่าคอรวง", "neck rot", "neck blast",
+    "โรคใบขีด", "narrow brown leaf spot", "cercospora",
+    "โรคกาบใบเน่า", "sheath rot", "sarocladium",
+    "โรคกาบใบไหม้", "sheath burn", "rhizoctonia oryzae-sativae",
+    # โรคอ้อย (Sugarcane diseases)
+    "แส้ดำ", "โรคแส้ดำ", "sugarcane smut", "sporisorium",
+    "ลำต้นเน่าแดง", "โรคเน่าแดง", "red rot", "colletotrichum falcatum",
+    "ยอดบิด", "โรคยอดบิด", "pokkah boeng",
+    # โรคข้าวโพด (Corn diseases)
+    "ใบไหม้แผลใหญ่", "southern corn leaf blight", "bipolaris maydis",
+    "ใบไหม้แผลเล็ก", "northern corn leaf blight", "exserohilum",
+    "ลำต้นเน่า", "stalk rot",
+    # โรคมันสำปะหลัง (Cassava diseases)
+    "โรคแอนแทรคโนสมัน", "cassava anthracnose",
     # โรคทั่วไป (General diseases)
     "โรคเน่า", "rot", "anthracnose", "แอนแทรคโนส",
     "โรคราน้ำค้าง", "downy mildew", "ราน้ำค้าง",
@@ -109,8 +119,8 @@ FUNGAL_KEYWORDS = [
     "โรครากเน่า", "root rot", "รากเน่า",
     "เชื้อรา", "fungus", "fungi", "ป้องกันโรค",
     # โรคไม้ผล (Fruit tree diseases)
-    "โรคราสีชมพู", "pink disease",  # เพิ่มใหม่
-    "โรคใบจุดสาหร่าย", "algal leaf spot",  # เพิ่มใหม่
+    "โรคราสีชมพู", "pink disease",
+    "โรคใบจุดสาหร่าย", "algal leaf spot",
 ]
 
 # Keywords สำหรับแมลง/ศัตรูพืช
@@ -564,17 +574,14 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
         required_category: ประเภทที่ต้องการ (ป้องกันโรค, กำจัดแมลง, กำจัดวัชพืช)
 
     Returns:
-        รายการสินค้าที่ตรงประเภท (ถ้าไม่พบให้ return สินค้าที่ไม่แน่ใจประเภท)
+        รายการสินค้าที่ตรงประเภท เท่านั้น (ไม่มี fallback ที่ผิดประเภท)
     """
     if not required_category:
         return products
 
     # กรองสินค้าตรงประเภท
     matched_products = []
-    unknown_products = []  # สินค้าที่ไม่แน่ใจประเภท
-
-    # ประเภททั้งหมดใน DB (ภาษาไทย)
-    all_categories = {"ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง"}
+    wrong_category_products = []
 
     for product in products:
         product_category = get_product_category(product)
@@ -584,23 +591,39 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
 
         if product_category == required_category:
             matched_products.append(product)
-        elif product_category == "unknown" or product_category is None:
-            unknown_products.append(product)
-        # ถ้าเป็นประเภทอื่น → ไม่เอา
+        else:
+            # ตรวจสอบว่าเป็นประเภทที่ผิดชัดเจนหรือไม่
+            wrong_categories = {"ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง"} - {required_category}
+            if product_category in wrong_categories:
+                wrong_category_products.append(product.get('product_name'))
+            # ถ้าเป็น unknown → ตรวจสอบเพิ่มเติมจาก active ingredient
+            elif product_category == "unknown" or product_category is None:
+                # กรองออกถ้าเป็นยาฆ่าหญ้า/แมลงชัดเจน (จาก active ingredient)
+                active = (product.get("active_ingredient") or "").lower()
+                herbicide_ingredients = ["ametryn", "acetochlor", "paraquat", "glyphosate", "atrazine", "2,4-d"]
+                insecticide_ingredients = ["fipronil", "cypermethrin", "imidacloprid", "abamectin", "chlorpyrifos"]
 
-    logger.info(f"🔍 Filter by '{required_category}': {len(matched_products)} matched, {len(unknown_products)} unknown, {len(products) - len(matched_products) - len(unknown_products)} excluded")
+                is_herbicide = any(h in active for h in herbicide_ingredients)
+                is_insecticide = any(i in active for i in insecticide_ingredients)
+
+                # ถ้าต้องการยาป้องกันโรค แต่ active ingredient เป็นยาฆ่าหญ้า/แมลง → กรองออก
+                if required_category == "ป้องกันโรค" and (is_herbicide or is_insecticide):
+                    wrong_category_products.append(product.get('product_name'))
+                    continue
+                # ถ้าไม่แน่ใจและไม่ใช่ประเภทที่ผิดชัดเจน → ไม่เอา (เข้มงวดขึ้น)
+                wrong_category_products.append(product.get('product_name'))
+
+    if wrong_category_products:
+        logger.info(f"❌ กรองออกสินค้าผิดประเภท: {wrong_category_products[:5]}...")
+
+    logger.info(f"🔍 Filter by '{required_category}': {len(matched_products)} matched, {len(wrong_category_products)} excluded")
 
     # ถ้ามีสินค้าตรงประเภท → ใช้เฉพาะสินค้าตรงประเภท
     if matched_products:
         return matched_products
 
-    # ถ้าไม่มีสินค้าตรงประเภท → ใช้สินค้าที่ไม่แน่ใจ (unknown)
-    if unknown_products:
-        logger.warning(f"⚠️ ไม่พบสินค้าประเภท {required_category} → ใช้สินค้าที่ไม่แน่ใจประเภท")
-        return unknown_products
-
-    # ถ้าไม่มีเลย → return list ว่าง
-    logger.warning(f"⚠️ ไม่พบสินค้าประเภท {required_category}")
+    # ถ้าไม่มีเลย → return list ว่าง (ไม่ fallback ไปประเภทอื่น)
+    logger.warning(f"⚠️ ไม่พบสินค้าประเภท {required_category} - ไม่แนะนำสินค้าผิดประเภท")
     return []
 
 
