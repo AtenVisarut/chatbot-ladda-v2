@@ -638,160 +638,6 @@ def create_registration_required_flex() -> Dict:
         }
     }
 
-
-def create_registration_complete_flex(
-    name: str,
-    phone: str,
-    province: str,
-    crops: List[str]
-) -> Dict:
-    """
-    สร้าง Flex Message สรุปการลงทะเบียนสำเร็จ
-    """
-    crops_text = ", ".join(crops) if crops else "ไม่ระบุ"
-
-    return {
-        "type": "flex",
-        "altText": "ลงทะเบียนสำเร็จ!",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "✅ ลงทะเบียนสำเร็จ!",
-                        "color": "#ffffff",
-                        "size": "lg",
-                        "weight": "bold",
-                        "align": "center"
-                    }
-                ],
-                "backgroundColor": "#27AE60",
-                "paddingAll": "15px"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "👤 ชื่อ",
-                                "size": "sm",
-                                "color": "#888888",
-                                "flex": 2
-                            },
-                            {
-                                "type": "text",
-                                "text": name,
-                                "size": "sm",
-                                "color": "#333333",
-                                "flex": 4,
-                                "weight": "bold"
-                            }
-                        ],
-                        "margin": "md"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "📱 เบอร์",
-                                "size": "sm",
-                                "color": "#888888",
-                                "flex": 2
-                            },
-                            {
-                                "type": "text",
-                                "text": phone,
-                                "size": "sm",
-                                "color": "#333333",
-                                "flex": 4,
-                                "weight": "bold"
-                            }
-                        ],
-                        "margin": "sm"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "📍 จังหวัด",
-                                "size": "sm",
-                                "color": "#888888",
-                                "flex": 2
-                            },
-                            {
-                                "type": "text",
-                                "text": province,
-                                "size": "sm",
-                                "color": "#333333",
-                                "flex": 4,
-                                "weight": "bold"
-                            }
-                        ],
-                        "margin": "sm"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "🌾 พืช",
-                                "size": "sm",
-                                "color": "#888888",
-                                "flex": 2
-                            },
-                            {
-                                "type": "text",
-                                "text": crops_text,
-                                "size": "sm",
-                                "color": "#333333",
-                                "flex": 4,
-                                "weight": "bold",
-                                "wrap": True
-                            }
-                        ],
-                        "margin": "sm"
-                    },
-                    {
-                        "type": "separator",
-                        "margin": "lg"
-                    },
-                    {
-                        "type": "text",
-                        "text": "🎉 พร้อมใช้งานแล้ว!",
-                        "size": "sm",
-                        "color": "#27AE60",
-                        "align": "center",
-                        "margin": "lg",
-                        "weight": "bold"
-                    },
-                    {
-                        "type": "text",
-                        "text": "ส่งรูปพืชมาวิเคราะห์โรคได้เลยค่ะ",
-                        "size": "xs",
-                        "color": "#888888",
-                        "align": "center",
-                        "margin": "sm"
-                    }
-                ]
-            }
-        }
-    }
-
-
 def create_disease_result_flex(
     disease_name: str,
     confidence: str,
@@ -2166,7 +2012,7 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "กรุณาลงทะเบียนก่อนใช้งาน",
+        "altText": "⚠️ กรุณาลงทะเบียนให้ครบถ้วนเพื่อใช้งาน Chatbot",
         "contents": {
             "type": "bubble",
             "size": "kilo",
@@ -2176,7 +2022,7 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "🌾 Login ICP",
+                        "text": "🌾 ลงทะเบียนใช้งาน",
                         "color": "#ffffff",
                         "size": "xl",
                         "weight": "bold",
@@ -2184,7 +2030,7 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
                     },
                     {
                         "type": "text",
-                        "text": "ลงทะเบียนเกษตรกรอัจฉริยะ",
+                        "text": "ICP Ladda - ผู้ช่วยเกษตรกรอัจฉริยะ",
                         "color": "#ffffff",
                         "size": "sm",
                         "align": "center",
@@ -2199,28 +2045,46 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
                 "layout": "vertical",
                 "contents": [
                     {
-                        "type": "text",
-                        "text": "เพื่อให้บริการคุณได้ดียิ่งขึ้น",
-                        "size": "sm",
-                        "color": "#333333",
-                        "align": "center"
-                    },
-                    {
-                        "type": "text",
-                        "text": "กรุณาลงทะเบียนข้อมูลพื้นฐาน",
-                        "size": "sm",
-                        "color": "#333333",
-                        "align": "center",
-                        "margin": "sm"
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚠️ กรุณาลงทะเบียนให้ครบถ้วน",
+                                "size": "md",
+                                "color": "#D32F2F",
+                                "align": "center",
+                                "weight": "bold"
+                            },
+                            {
+                                "type": "text",
+                                "text": "เพื่อเปิดใช้งานระบบวิเคราะห์โรคพืช",
+                                "size": "sm",
+                                "color": "#333333",
+                                "align": "center",
+                                "margin": "sm"
+                            }
+                        ],
+                        "backgroundColor": "#FFF3E0",
+                        "paddingAll": "12px",
+                        "cornerRadius": "8px"
                     },
                     {
                         "type": "separator",
                         "margin": "lg"
                     },
                     {
+                        "type": "text",
+                        "text": "ข้อมูลที่ต้องกรอก:",
+                        "size": "sm",
+                        "color": "#333333",
+                        "margin": "lg",
+                        "weight": "bold"
+                    },
+                    {
                         "type": "box",
                         "layout": "vertical",
-                        "margin": "lg",
+                        "margin": "md",
                         "spacing": "sm",
                         "contents": [
                             {
@@ -2259,7 +2123,7 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
                     },
                     {
                         "type": "text",
-                        "text": "ใช้เวลาไม่ถึง 1 นาที!",
+                        "text": "✅ ลงทะเบียนครบแล้วใช้งานได้ทันที!",
                         "size": "xs",
                         "color": "#4a7c23",
                         "align": "center",
