@@ -298,6 +298,33 @@
         </div>
     </div>
 
+    <!-- Video Modal -->
+    <div class="modal" id="videoModal" onclick="if(event.target===this)closeVideoModal()">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="padding: 30px 20px;">
+                <div style="font-size: 4em; margin-bottom: 15px;">🎬</div>
+                <h3 style="margin-bottom: 10px; color: #333;">วิดีโอคู่มือ</h3>
+                <p id="videoTitle" style="color: #666; margin-bottom: 20px; font-size: 0.95em;">-</p>
+                <button onclick="playVideo()"
+                    style="background: linear-gradient(135deg, #c62828 0%, #e53935 100%); color: white;
+                           border: none; padding: 15px 40px; border-radius: 25px; font-size: 1.1em;
+                           font-weight: 600; cursor: pointer; font-family: 'Sarabun', sans-serif;
+                           box-shadow: 0 4px 15px rgba(198,40,40,0.3);">
+                    ▶️ เปิดดูวิดีโอ
+                </button>
+                <p style="color: #999; font-size: 0.8em; margin-top: 15px;">วิดีโอจะเปิดในหน้าต่างใหม่</p>
+            </div>
+            <div style="border-top: 1px solid #eee; padding: 15px;">
+                <button onclick="closeVideoModal()"
+                    style="background: #f0f0f0; color: #333; border: none; padding: 10px 30px;
+                           border-radius: 10px; font-size: 0.95em; cursor: pointer;
+                           font-family: 'Sarabun', sans-serif;">
+                    ปิด
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Product Image Modal -->
     <div class="modal" id="productModal" onclick="if(event.target===this)closeProductModal()">
         <div style="position: relative; max-width: 95%; max-height: 90vh; margin: auto;">
@@ -536,12 +563,27 @@
             currentImageIndex = 0;
         }
 
+        let currentVideoUrl = '';
+
         function openVideo() {
             const videoLink = document.getElementById('modalVideoLink');
-            const videoUrl = videoLink.dataset.videoUrl;
-            if (videoUrl) {
-                window.open(videoUrl, '_blank');
+            currentVideoUrl = videoLink.dataset.videoUrl;
+            if (currentVideoUrl && currentDisease) {
+                document.getElementById('videoTitle').textContent = currentDisease.name;
+                document.getElementById('videoModal').classList.add('active');
             }
+        }
+
+        function playVideo() {
+            if (currentVideoUrl) {
+                window.open(currentVideoUrl, '_blank');
+                closeVideoModal();
+            }
+        }
+
+        function closeVideoModal() {
+            document.getElementById('videoModal').classList.remove('active');
+            currentVideoUrl = '';
         }
 
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
