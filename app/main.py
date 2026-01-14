@@ -711,20 +711,19 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     continue
 
                 try:
-                    # Get image content
-                    image_bytes = await get_image_content_from_line(message_id)
+                    # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
+                    questions_flex = create_initial_questions_flex()
+                    await reply_line(reply_token, questions_flex)
+                    logger.info(f"Replied immediately to user {user_id}")
                     
-                    # Store image context and set state to awaiting additional info
+                    # FIX: Store only message_id (50 bytes) instead of image_bytes (5-7 MB)
+                    # This reduces cache save time from 55 seconds to < 1 second
                     await save_pending_context(user_id, {
-                        "image_bytes": image_bytes,
+                        "message_id": message_id,
                         "timestamp": asyncio.get_event_loop().time(),
                         "state": "awaiting_info",
                         "additional_info": None
                     })
-                    
-                    # Ask for additional information instead of immediate analysis
-                    questions_flex = create_initial_questions_flex()
-                    await reply_line(reply_token, questions_flex)
 
                     # Add to memory
                     await add_to_memory(user_id, "user", "[ส่งรูปภาพพืช]")
@@ -799,8 +798,10 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     if ctx.get("state") == "awaiting_info":
                         logger.info(f"Processing user response to image questions for {user_id}")
                         
-                        # Get the image bytes
-                        image_bytes = ctx["image_bytes"]
+                        # FIX: Download image now using stored message_id
+                        message_id_from_ctx = ctx["message_id"]
+                        logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
+                        image_bytes = await get_image_content_from_line(message_id_from_ctx)
                         
                         # Check if user wants to skip questions
                         if should_skip_questions(text):
