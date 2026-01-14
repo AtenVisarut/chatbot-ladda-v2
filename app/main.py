@@ -799,9 +799,15 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         logger.info(f"Processing user response to image questions for {user_id}")
                         
                         # FIX: Download image now using stored message_id
-                        message_id_from_ctx = ctx["message_id"]
-                        logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
-                        image_bytes = await get_image_content_from_line(message_id_from_ctx)
+                        try:
+                            message_id_from_ctx = ctx["message_id"]
+                            logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
+                            image_bytes = await get_image_content_from_line(message_id_from_ctx)
+                        except Exception as e:
+                            logger.error(f"Failed to download image: {e}")
+                            await reply_line(reply_token, "ขออภัยค่ะ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
+                            await delete_pending_context(user_id)
+                            return JSONResponse(content={"status": "error", "message": "Image download failed"})
                         
                         # Check if user wants to skip questions
                         if should_skip_questions(text):

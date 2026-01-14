@@ -10,7 +10,7 @@ from app.services.reranker import rerank_products_with_llm, simple_relevance_boo
 logger = logging.getLogger(__name__)
 
 # Configuration for re-ranking
-ENABLE_RERANKING = True  # Set to False to disable re-ranking for faster response
+ENABLE_RERANKING = False  # Set to False to disable re-ranking for faster response
 
 # =============================================================================
 # Mapping โรค/ปัญหา → ประเภทสินค้าที่เหมาะสม (ใช้ระบุ required_category)
