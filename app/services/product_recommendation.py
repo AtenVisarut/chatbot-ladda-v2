@@ -511,9 +511,9 @@ def filter_products_for_fungi(products: List[Dict], disease_name: str) -> List[D
         logger.info(f"   ✓ เหลือสินค้าที่เหมาะกับเชื้อรา: {len(filtered)} รายการ")
         return filtered
 
-    # ถ้าไม่เหลือเลย → return สินค้าทั้งหมด (fallback)
-    logger.warning(f"⚠️ ไม่เหลือสินค้าหลังกรอง → ใช้สินค้าทั้งหมด")
-    return products
+    # ถ้าไม่เหลือเลย → return list ว่าง (ดีกว่าแนะนำสินค้าผิดประเภท)
+    logger.warning(f"⚠️ ไม่เหลือสินค้าหลังกรอง Oomycetes → ไม่แนะนำสินค้า (ป้องกันแนะนำผิด)")
+    return []
 
 
 def get_required_category(disease_name: str) -> tuple:
