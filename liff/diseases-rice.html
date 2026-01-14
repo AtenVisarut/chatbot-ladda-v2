@@ -699,6 +699,15 @@
                         📷 ดูรูปสินค้า
                     </button>
                 </div>
+                <div class="detail-section" id="videoSection" style="display: none;">
+                    <div class="detail-title">🎬 วิดีโอคู่มือ</div>
+                    <button id="modalVideoLink" onclick="openVideo()"
+                       style="margin-top: 8px; color: #c62828; font-weight: 600;
+                              background: #ffebee; padding: 10px 18px; border-radius: 10px; border: none;
+                              cursor: pointer; font-family: 'Sarabun', sans-serif; font-size: 0.95em;">
+                        ▶️ ดูวิดีโอคู่มือ
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn close" onclick="closeModal()">ปิด</button>
@@ -770,8 +779,8 @@
                     "กำจัดวัชพืชที่เป็นแหล่งเชื้อ"
                 ],
                 products: "",
-                productImage: ""
-                
+                productImage: "",
+                videoUrl: ""
             },
             brown_spot: {
                 name: "โรคใบจุดสีน้ำตาล",
@@ -791,7 +800,8 @@
                     "ใช้เมล็ดพันธุ์ที่ปลอดโรค"
                 ],
                 products: "อาร์เทมีส DIFENOCONAZOLE + AZOXYSTROBIN 12.5%+20% W/V SC ใช้อัตรา 50 ซีซีต่อไร่ ในช่วงข้าวแตกกอ-ออกรวง",
-                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t39.30808-6/498644470_1097608865725238_3627852962199887161_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=127cfc&_nc_ohc=c8_I84Xo4z4Q7kNvwEm8fPq&_nc_oc=Adm12_JachUqTH8ZuvPWGJNXFx1u33LpFpionHKoiCMgAbF7PHP-PftV2Xhz0NYgzOc&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=MYNRhjoK8yC_noU4hLWMkw&oh=00_AfqZmQwfICrQscX1wNhEJcbwsP7b7eoUOe1zoA1BSFsIBA&oe=696B746C"
+                productImage: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/Rtem.jpg",
+                videoUrl: ""
             },
             sheath_blight: {
                 name: "โรคกาบใบแห้ง",
@@ -811,8 +821,8 @@
                     "ทำลายซากพืชหลังเก็บเกี่ยว"
                 ],
                 products: "อาร์เทมีส DIFENOCONAZOLE + AZOXYSTROBIN 12.5%+20% W/V SC ใช้อัตรา 50 ซีซีต่อไร่ ในช่วงข้าวแตกกอ-ออกรวง , เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC",
-                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t39.30808-6/498644470_1097608865725238_3627852962199887161_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=127cfc&_nc_ohc=c8_I84Xo4z4Q7kNvwEm8fPq&_nc_oc=Adm12_JachUqTH8ZuvPWGJNXFx1u33LpFpionHKoiCMgAbF7PHP-PftV2Xhz0NYgzOc&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=MYNRhjoK8yC_noU4hLWMkw&oh=00_AfqZmQwfICrQscX1wNhEJcbwsP7b7eoUOe1zoA1BSFsIBA&oe=696B746C"
-                
+                productImage: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/Rtem.jpg",
+                videoUrl: ""
             },
             narrow_brown_spot: {
                 name: "โรคใบขีดสีน้ำตาล",
@@ -831,7 +841,8 @@
                     "ไม่จำเป็นต้องพ่นยาถ้าไม่รุนแรง"
                 ],
                 products: "อาร์เทมีส DIFENOCONAZOLE + AZOXYSTROBIN 12.5%+20% W/V SC ใช้อัตรา 50 ซีซีต่อไร่ ในช่วงข้าวแตกกอ-ออกรวง",
-                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t39.30808-6/498644470_1097608865725238_3627852962199887161_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=127cfc&_nc_ohc=c8_I84Xo4z4Q7kNvwEm8fPq&_nc_oc=Adm12_JachUqTH8ZuvPWGJNXFx1u33LpFpionHKoiCMgAbF7PHP-PftV2Xhz0NYgzOc&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=MYNRhjoK8yC_noU4hLWMkw&oh=00_AfqZmQwfICrQscX1wNhEJcbwsP7b7eoUOe1zoA1BSFsIBA&oe=696B746C"
+                productImage: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/Rtem.jpg",
+                videoUrl: ""
             },
             false_smut: {
                 name: "โรคเมล็ดด่าง",
@@ -850,7 +861,8 @@
                     "ไม่ใส่ปุ๋ยไนโตรเจนมากเกินไป"
                 ],
                 products: "อาร์เทมีส DIFENOCONAZOLE + AZOXYSTROBIN 12.5%+20% W/V SC ใช้อัตรา 50 ซีซีต่อไร่ ในช่วงข้าวแตกกอ-ออกรวง  , เทอราโน ",
-                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t39.30808-6/498644470_1097608865725238_3627852962199887161_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=127cfc&_nc_ohc=c8_I84Xo4z4Q7kNvwEm8fPq&_nc_oc=Adm12_JachUqTH8ZuvPWGJNXFx1u33LpFpionHKoiCMgAbF7PHP-PftV2Xhz0NYgzOc&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=MYNRhjoK8yC_noU4hLWMkw&oh=00_AfqZmQwfICrQscX1wNhEJcbwsP7b7eoUOe1zoA1BSFsIBA&oe=696B746C"
+                productImage: "https://fwzdgzpuajcsigwlyojr.supabase.co/storage/v1/object/public/disease-image/Rtem.jpg",
+                videoUrl: ""
             },
             sheath_rot: {
                 name: "โรคกาบใบเน่า",
@@ -869,8 +881,9 @@
                     "พ่นยาป้องกันช่วงตั้งท้อง",
                     "ทำลายซากพืชหลังเก็บเกี่ยว"
                 ],
-                products: "เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC ในไม้ผล(ทุเรียน) ใช้ 200 ซีซีต่อ 200 ลิตร ในนาข้าว ใช้ 50 ซีซีต่อไร่ ในระยะข้าวเริ่มออกรวง 5%, รีโนเวท PROPICONAZOLE 9% + PROCHLORAZ 40% EC",
-                productImage: ""
+                products: "เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC",
+                productImage: "https://scontent.fbkk5-1.fna.fbcdn.net/v/t39.30808-6/494420647_9767015266699633_3972000234305055108_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_ohc=gkWoE6KQetQQ7kNvwE69fuy&_nc_oc=AdlZHmLrzMAD7jD0-PPu12juyZewfbLild7F9kkgd74PQYI7ZTeM1KMgUJ82Rdd8FKs&_nc_zt=23&_nc_ht=scontent.fbkk5-1.fna&_nc_gid=51B3W81Q63bW1zZcA_WqRQ&oh=00_Afr1l8AlNbanEwggrSeTDoVsnRYhspkWwxWMu_IX-VGb6Q&oe=696BCF81",
+                videoUrl: ""
             },
             sheath_scorch: {
                 name: "โรคกาบใบไหม้",
@@ -890,7 +903,8 @@
                     "ทำลายซากพืชหลังเก็บเกี่ยว"
                 ],
                 products: "เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC ในไม้ผล(ทุเรียน) ใช้ 200 ซีซีต่อ 200 ลิตร ในนาข้าว ใช้ 50 ซีซีต่อไร่ ในระยะข้าวเริ่มออกรวง 5%, รีโนเวท PROPICONAZOLE 9% + PROCHLORAZ 40% EC",
-                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t1.6435-9/46789724_1967257026675535_5201799599886434304_n.jpg?_nc_cat=104&ccb=1-7&_nc_sid=127cfc&_nc_ohc=S03jrN25J0cQ7kNvwGcyBsE&_nc_oc=AdmEKHWfhzni23nQj-exQSY-ssaEkIh61fKKf7wXAi2NjFBm4WkvnNZU1xW5SvIKIdk&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=GodccqWBPlfH_Ev8j5iW4Q&oh=00_AfocKKjFPUwo8j2cnkwuz1idudAWmjIHUJ77SjUHbVDmdA&oe=698D38BC"
+                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t1.6435-9/46789724_1967257026675535_5201799599886434304_n.jpg?_nc_cat=104&ccb=1-7&_nc_sid=127cfc&_nc_ohc=S03jrN25J0cQ7kNvwGcyBsE&_nc_oc=AdmEKHWfhzni23nQj-exQSY-ssaEkIh61fKKf7wXAi2NjFBm4WkvnNZU1xW5SvIKIdk&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=GodccqWBPlfH_Ev8j5iW4Q&oh=00_AfocKKjFPUwo8j2cnkwuz1idudAWmjIHUJ77SjUHbVDmdA&oe=698D38BC",
+                videoUrl: ""
             },
             bakanae: {
                 name: "โรคถอดฝักดาบ",
@@ -910,7 +924,8 @@
                     "ถอนทำลายต้นที่เป็นโรค"
                 ],
                 products: "เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC ในไม้ผล(ทุเรียน) ใช้ 200 ซีซีต่อ 200 ลิตร ในนาข้าว ใช้ 50 ซีซีต่อไร่ ในระยะข้าวเริ่มออกรวง 5%, รีโนเวท PROPICONAZOLE 9% + PROCHLORAZ 40% EC",
-                productImage: "https://scontent.fbkk5-1.fna.fbcdn.net/v/t39.30808-6/494420647_9767015266699633_3972000234305055108_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_ohc=gkWoE6KQetQQ7kNvwE69fuy&_nc_oc=AdlZHmLrzMAD7jD0-PPu12juyZewfbLild7F9kkgd74PQYI7ZTeM1KMgUJ82Rdd8FKs&_nc_zt=23&_nc_ht=scontent.fbkk5-1.fna&_nc_gid=RkK0Q7_CAPSH_c_akVst-g&oh=00_Afpr7a0-rwvZWwlN9JKIMFaJGJwXxWP7OsvH5qwbqoMZ9g&oe=696B9741"
+                productImage: "https://scontent.fbkk5-1.fna.fbcdn.net/v/t39.30808-6/494420647_9767015266699633_3972000234305055108_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_ohc=gkWoE6KQetQQ7kNvwE69fuy&_nc_oc=AdlZHmLrzMAD7jD0-PPu12juyZewfbLild7F9kkgd74PQYI7ZTeM1KMgUJ82Rdd8FKs&_nc_zt=23&_nc_ht=scontent.fbkk5-1.fna&_nc_gid=RkK0Q7_CAPSH_c_akVst-g&oh=00_Afpr7a0-rwvZWwlN9JKIMFaJGJwXxWP7OsvH5qwbqoMZ9g&oe=696B9741",
+                videoUrl: ""
             },
             udbatta: {
                 name: "โรคดอกกระถิน",
@@ -930,7 +945,8 @@
                     "หมุนเวียนพืชปลูก"
                 ],
                 products: "รีโนเวท PROPICONAZOLE 9% + PROCHLORAZ 40% EC",
-                productImage: "https://www.icpladda.com/wp-content/uploads/2019/09/Leaflet_%E0%B8%A3%E0%B8%B5%E0%B9%82%E0%B8%99%E0%B9%80%E0%B8%A7%E0%B8%97-%E0%B8%99%E0%B8%B2%E0%B8%82%E0%B9%89%E0%B8%B2%E0%B8%A7-01.jpg"
+                productImage: "https://www.icpladda.com/wp-content/uploads/2019/09/Leaflet_%E0%B8%A3%E0%B8%B5%E0%B9%82%E0%B8%99%E0%B9%80%E0%B8%A7%E0%B8%97-%E0%B8%99%E0%B8%B2%E0%B8%82%E0%B9%89%E0%B8%B2%E0%B8%A7-01.jpg",
+                videoUrl: ""
             },
             // Bacterial
             blight: {
@@ -950,8 +966,9 @@
                     "ระบายน้ำเมื่อพบโรค",
                     "พ่นยากลุ่มทองแดง"
                 ],
-                products: "คอปเปอร์ไฮดรอกไซด์ 77WP, สเตรปโตมัยซิน",
-                productImage: ""
+                products: "",
+                productImage: "",
+                videoUrl: ""
             },
             leaf_streak: {
                 name: "โรคใบขีดโปร่งแสง",
@@ -970,7 +987,8 @@
                     "พ่นยากลุ่มทองแดงป้องกัน"
                 ],
                 products: "",
-                productImage: ""
+                productImage: "",
+                videoUrl: ""
             },
             foot_rot: {
                 name: "โรคเน่าคอรวง",
@@ -989,7 +1007,8 @@
                     "หลีกเลี่ยงใส่ปุ๋ยไนโตรเจนมากช่วงออกรวง"
                 ],
                 products: "รีโนเวท PROPICONAZOLE 9% + PROCHLORAZ 40% EC, เทอราโน่ DIFENOCONAZOLE + PROPICONAZOLE 15+15% EC",
-                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t1.6435-9/46789724_1967257026675535_5201799599886434304_n.jpg?_nc_cat=104&ccb=1-7&_nc_sid=127cfc&_nc_ohc=S03jrN25J0cQ7kNvwGcyBsE&_nc_oc=AdmEKHWfhzni23nQj-exQSY-ssaEkIh61fKKf7wXAi2NjFBm4WkvnNZU1xW5SvIKIdk&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=GodccqWBPlfH_Ev8j5iW4Q&oh=00_AfocKKjFPUwo8j2cnkwuz1idudAWmjIHUJ77SjUHbVDmdA&oe=698D38BC"
+                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t1.6435-9/46789724_1967257026675535_5201799599886434304_n.jpg?_nc_cat=104&ccb=1-7&_nc_sid=127cfc&_nc_ohc=S03jrN25J0cQ7kNvwGcyBsE&_nc_oc=AdmEKHWfhzni23nQj-exQSY-ssaEkIh61fKKf7wXAi2NjFBm4WkvnNZU1xW5SvIKIdk&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=GodccqWBPlfH_Ev8j5iW4Q&oh=00_AfocKKjFPUwo8j2cnkwuz1idudAWmjIHUJ77SjUHbVDmdA&oe=698D38BC",
+                videoUrl: ""
             },
             // Viral
             tungro: {
@@ -1010,7 +1029,8 @@
                     "ปลูกพร้อมกันในชุมชน"
                 ],
                 products: "ไพรซีน Pymetrozine 50%WG อัตรา 50 กรัม/ไร่",
-                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t39.30808-6/506451757_1117563113729813_4524771641130576645_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=100&ccb=1-7&_nc_sid=127cfc&_nc_ohc=jDiQu_s262MQ7kNvwHv03SE&_nc_oc=AdkBcLwWQ6lpx-W_KKKQayoFOOfyh5GdlvDvRQ1hhMbM5RYtViHOtX4KQdHmOjrrWUs&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=RklEolvA33uh3tB0UUZk4A&oh=00_AfqZNqg4KqhYzll9Fd7_QmJuA_Xb1PP1L1uZCRZax8rT6w&oe=696BA42C"
+                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t39.30808-6/506451757_1117563113729813_4524771641130576645_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=100&ccb=1-7&_nc_sid=127cfc&_nc_ohc=jDiQu_s262MQ7kNvwHv03SE&_nc_oc=AdkBcLwWQ6lpx-W_KKKQayoFOOfyh5GdlvDvRQ1hhMbM5RYtViHOtX4KQdHmOjrrWUs&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=RklEolvA33uh3tB0UUZk4A&oh=00_AfqZNqg4KqhYzll9Fd7_QmJuA_Xb1PP1L1uZCRZax8rT6w&oe=696BA42C",
+                videoUrl: ""
             },
             grassy_stunt: {
                 name: "โรคใบหงิก",
@@ -1030,7 +1050,8 @@
                     "ไม่ปลูกข้าวต่อเนื่องตลอดปี"
                 ],
                 products: "อิมิดาโกลด์ 70 IMIDACLOPRID 70% WG (กำจัดเพลี้ย) ",
-                productImage: "https://scontent.fbkk5-1.fna.fbcdn.net/v/t39.30808-6/599509388_1270696405083149_5005611246638827018_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_ohc=J69Hnbe1zccQ7kNvwHGg7Rh&_nc_oc=AdnpLN9XS-tfJ4hrOufEPF-xsgeRMsO8tZ5gSGaomPVGirZBarkNhhFRUz5adwchoyI&_nc_zt=23&_nc_ht=scontent.fbkk5-1.fna&_nc_gid=MosVwRMbySHScc2R-sfVnA&oh=00_AfqR545B4UtRfA8HNZpxXfVFB08ZL-0UXRRJD0CmBDd15A&oe=696B79FB"
+                productImage: "https://scontent.fbkk5-1.fna.fbcdn.net/v/t39.30808-6/599509388_1270696405083149_5005611246638827018_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_ohc=J69Hnbe1zccQ7kNvwHGg7Rh&_nc_oc=AdnpLN9XS-tfJ4hrOufEPF-xsgeRMsO8tZ5gSGaomPVGirZBarkNhhFRUz5adwchoyI&_nc_zt=23&_nc_ht=scontent.fbkk5-1.fna&_nc_gid=MosVwRMbySHScc2R-sfVnA&oh=00_AfqR545B4UtRfA8HNZpxXfVFB08ZL-0UXRRJD0CmBDd15A&oe=696B79FB",
+                videoUrl: ""
             },
             ragged_stunt: {
                 name: "โรคใบหงิกเหลือง",
@@ -1050,7 +1071,8 @@
                     "ปลูกข้าวให้ห่างจากแหล่งระบาด"
                 ],
                 products: "ไพรซีน Pymetrozine 50%WG อัตรา 50 กรัม/ไร่",
-                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t39.30808-6/506451757_1117563113729813_4524771641130576645_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=100&ccb=1-7&_nc_sid=127cfc&_nc_ohc=jDiQu_s262MQ7kNvwHv03SE&_nc_oc=AdkBcLwWQ6lpx-W_KKKQayoFOOfyh5GdlvDvRQ1hhMbM5RYtViHOtX4KQdHmOjrrWUs&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=RklEolvA33uh3tB0UUZk4A&oh=00_AfqZNqg4KqhYzll9Fd7_QmJuA_Xb1PP1L1uZCRZax8rT6w&oe=696BA42C"
+                productImage: "https://scontent.fbkk5-5.fna.fbcdn.net/v/t39.30808-6/506451757_1117563113729813_4524771641130576645_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=100&ccb=1-7&_nc_sid=127cfc&_nc_ohc=jDiQu_s262MQ7kNvwHv03SE&_nc_oc=AdkBcLwWQ6lpx-W_KKKQayoFOOfyh5GdlvDvRQ1hhMbM5RYtViHOtX4KQdHmOjrrWUs&_nc_zt=23&_nc_ht=scontent.fbkk5-5.fna&_nc_gid=RklEolvA33uh3tB0UUZk4A&oh=00_AfqZNqg4KqhYzll9Fd7_QmJuA_Xb1PP1L1uZCRZax8rT6w&oe=696BA42C",
+                videoUrl: ""
             }
         };
 
@@ -1118,6 +1140,16 @@
             }
             productLink.style.display = hasProductImage ? 'inline-block' : 'none';
 
+            // แสดงปุ่มดูวิดีโอถ้ามี
+            const videoSection = document.getElementById('videoSection');
+            const videoLink = document.getElementById('modalVideoLink');
+            if (disease.videoUrl && disease.videoUrl.trim() !== '') {
+                videoLink.dataset.videoUrl = disease.videoUrl;
+                videoSection.style.display = 'block';
+            } else {
+                videoSection.style.display = 'none';
+            }
+
             document.getElementById('diseaseModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
@@ -1167,6 +1199,14 @@
             document.getElementById('productImage').src = '';
             productImages = [];
             currentImageIndex = 0;
+        }
+
+        function openVideo() {
+            const videoLink = document.getElementById('modalVideoLink');
+            const videoUrl = videoLink.dataset.videoUrl;
+            if (videoUrl) {
+                window.open(videoUrl, '_blank');
+            }
         }
 
         function closeModal() {

@@ -281,6 +281,15 @@
                         📷 ดูรูปสินค้า
                     </button>
                 </div>
+                <div class="detail-section" id="videoSection" style="display: none;">
+                    <div class="detail-title">🎬 วิดีโอคู่มือ</div>
+                    <button id="modalVideoLink" onclick="openVideo()"
+                       style="margin-top: 8px; color: #c62828; font-weight: 600;
+                              background: #ffebee; padding: 10px 18px; border-radius: 10px; border: none;
+                              cursor: pointer; font-family: 'Sarabun', sans-serif; font-size: 0.95em;">
+                        ▶️ ดูวิดีโอคู่มือ
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="modal-btn close" onclick="closeModal()">ปิด</button>
@@ -333,7 +342,8 @@
                 symptoms: ["รากและโคนต้นเน่าดำ เปลือกลอก", "มีน้ำเยิ้มสีน้ำตาลแดงไหลออกจากรอยแผล", "ใบเหลืองร่วง ต้นโทรม", "อาจตายทั้งต้นถ้าไม่รักษา"],
                 treatment: ["ขุดร่องระบายน้ำไม่ให้น้ำขัง", "ทายาป้องกันเชื้อราที่โคนต้น", "ตัดแต่งรากเน่าและทาปูนแดงผสมยากำจัดเชื้อรา", "พ่นยา Metalaxyl หรือ Fosetyl-al"],
                 products: "คาริสมา (ราดโคน ) , โทมาฮอค(พ่นทางใบ), ไซม๊อกซิเมท(พ่นทางใบ),",
-                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=mECVTESzdgQ7P5i_wpybtg&oh=00_Afr1j99EU0DSNiNHjnBWQ8oE7K05Ocu3ZKbY0rDxw-n1wA&oe=6966A4D2"
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=mECVTESzdgQ7P5i_wpybtg&oh=00_Afr1j99EU0DSNiNHjnBWQ8oE7K05Ocu3ZKbY0rDxw-n1wA&oe=6966A4D2",
+                videoUrl: ""
             },
             anthracnose: {
                 name: "โรคแอนแทรคโนส", nameEn: "Anthracnose",
@@ -341,8 +351,9 @@
                 pathogen: "เชื้อรา Colletotrichum gloeosporioides",
                 symptoms: ["จุดสีน้ำตาลดำบนใบ ขอบแผลชัด", "ผลเป็นจุดดำยุบตัว ขยายใหญ่ขึ้น", "มีสปอร์สีชมพูในสภาพอากาศชื้น", "ดอกร่วง ผลอ่อนร่วง"],
                 treatment: ["ตัดแต่งกิ่งให้โปร่ง", "พ่นยาป้องกันก่อนออกดอกและติดผล", "เก็บทำลายส่วนที่เป็นโรค", "พ่นยากลุ่ม Mancozeb, Carbendazim"],
-                products: "โค-ราซ, PROCHLORAZ 45% W/V EW ,สูตร EW ปลอดภัยต่อดอก เด่นในการควบคุมโรค แอนแทรคโนส, อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
-                productImage: "https://www.icpladda.com/wp-content/uploads/2019/09/Leaflet_%E0%B9%82%E0%B8%84%E0%B8%A3%E0%B8%B2%E0%B8%8B_%E0%B8%A1%E0%B8%B0%E0%B8%A1%E0%B9%88%E0%B8%A7%E0%B8%87-01.jpg"
+                products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC ,โค-ราซ, PROCHLORAZ 45% W/V EW ,สูตร EW ปลอดภัยต่อดอก เด่นในการควบคุมโรค แอนแทรคโนส",
+                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t39.30808-6/486616929_1057672616385530_8694889675942054777_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeE5soWz9V4yftTE6mN4i8uP4DJlfxWtIkHgMmV_Fa0iQVcV6pUS3HDS34aZYyouwWGw3CTn53JH5aDAXcMgBc6h&_nc_ohc=JgY8p5vULcwQ7kNvwFibCi4&_nc_oc=AdnPfC1GBln6PV-UEyDp3haD7tJ9_iKpKFbM-UkHu5NShrp4DYgtPT4t1Y-3yHGaT_Y&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=L_WxhHB05qpHR5gwPfslbA&oh=00_AfoS8feGHbU3M-qYS2KDwVyuZFgTDM364azs8ZvuCOtxNQ&oe=696D349C",
+                videoUrl: "https://www.facebook.com/share/r/16826tVF63/"
             },
             algal_spot: {
                 name: "โรคจุดสาหร่าย,ใบจุดสนิม", nameEn: "Algal Leaf Spot",
@@ -351,7 +362,8 @@
                 symptoms: ["จุดกลมนูนสีเขียวเทาบนใบ", "ผิวหยาบคล้ายกำมะหยี่", "พบมากในสภาพร่มชื้น", "ไม่ค่อยส่งผลรุนแรง"],
                 treatment: ["ตัดแต่งกิ่งให้โปร่ง รับแสง", "พ่นยากลุ่มทองแดง", "ปรับสภาพแวดล้อมให้ไม่ชื้นเกินไป"],
                 products: "โค-ราซ PROCHLORAZ 45% W/V EW(ผสมน้ำฉีดพ่นบริเวณ ดอกและผลอ่อน), ไซม๊อกซิเมท, Cymoxanil + Mancozeb 8% + 64% WP",
-                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=HrwUdfbppatoHYhhTQAb3Q&oh=00_AfrvgrM1l6tC5U5SV3YKw4fK_NzGyNnGccl91cZJJLe8uQ&oe=6966A4D2"
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/484872434_1048316707321121_158349589531389043_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeH-JIoLVio47-3QmfJvRGbeOpAFTfnI8i06kAVN-cjyLTrfSkOcIPobq1zNtiBUrp1SiFxn6zM2YWm-KpUuqB-b&_nc_ohc=N7KQ2mHYqngQ7kNvwFcJcZq&_nc_oc=Adn8Wtj42OfMva8Pdy3II8W7ZpkJd3w54zr38DU4m7KkgB1NzYkxG9B5N_yN8_a9ITY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=HrwUdfbppatoHYhhTQAb3Q&oh=00_AfrvgrM1l6tC5U5SV3YKw4fK_NzGyNnGccl91cZJJLe8uQ&oe=6966A4D2",
+                videoUrl: ""
             },
             pink_disease: {
                 name: "โรคราสีชมพู", nameEn: "Pink Disease",
@@ -359,8 +371,9 @@
                 pathogen: "เชื้อรา Erythricium salmonicolor",
                 symptoms: ["เปลือกกิ่งมีเส้นใยราสีชมพูปกคลุม", "กิ่งแห้งตายจากปลาย", "มักเกิดในช่วงฝนชุก", "ต้นอ่อนแอ ใบร่วง"],
                 treatment: ["ตัดกิ่งที่เป็นโรคออกเผาทำลาย", "ทายาป้องกันรอยตัด", "พ่นยากลุ่มทองแดงหรือ Validamycin"],
-                products: "คอปเปอร์ไฮดรอกไซด์ 77WP, วาลิดาซิน 3L",
-                productImage: "https://www.icpladda.com/wp-content/uploads/2020/09/%E0%B8%A3%E0%B8%B2%E0%B8%AA%E0%B8%B5%E0%B8%8A%E0%B8%A1%E0%B8%9E%E0%B8%B9%E0%B9%83%E0%B8%99%E0%B8%97%E0%B8%B8%E0%B9%80%E0%B8%A3%E0%B8%B5%E0%B8%A2%E0%B8%99-04-300x300.jpg"
+                products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
+                productImage: "https://scontent.fbkk5-8.fna.fbcdn.net/v/t39.30808-6/527993689_1159908936161897_1146916638933539114_n.jpg?stp=dst-jpg_s640x640_tt6&_nc_cat=106&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeE4UzN0VYWd5DXyZi8GJb4TCPe_TxaYVp0I979PFphWnSMF1AiHA5XpDMAafKKqgbmSBkBCausytu-xsSTIIlk9&_nc_ohc=cQrWxW0GgxwQ7kNvwHa7aNR&_nc_oc=Adk7TL3FAhA0CM1D1pZiSI3t-dEihwdiJaFLu_9TES2ayabq-Yj0lG575Vxai3olVtw&_nc_zt=23&_nc_ht=scontent.fbkk5-8.fna&_nc_gid=5TfGZ6mvPtzxis3MGCr98A&oh=00_Afoc-cN4LYUzZ_b4AdSscQNw1kAGE3Qhv4lFjdizdqG8Wg&oe=696D3CEA",
+                videoUrl: ""
             },
             fruit_rot: {
                 name: "โรคผลเน่า", nameEn: "Fruit Rot",
@@ -369,7 +382,8 @@
                 symptoms: ["ผลเน่าสีน้ำตาลดำ เริ่มจากขั้วหรือปลาย", "เนื้อเน่าเละ มีกลิ่นเหม็น", "มักเกิดหลังฝนตกหนัก", "แพร่กระจายเร็วในสภาพชื้น"],
                 treatment: ["เก็บผลเน่าทิ้งเผาทำลาย", "พ่นยาป้องกันช่วงผลอ่อน", "ไม่ให้น้ำขังใต้ต้น", "ห่อผลด้วยถุงกระดาษ"],
                 products: "ไซม๊อกซิเมท(ป้องกันใบและลำต้น) , คาริสมา (ป้องกันโคนต้นก่อนลุกลาม)  ",
-                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/594194977_1260221996130590_3219186708295422281_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFAAxi3GpuOpxiNKTuZohuXnOAuxbsw1zCc4C7FuzDXMEH1USoPc8nYoDo_gzb-HWGcsizdZyVo6yj-NC_aMzuj&_nc_ohc=hZFHEPb4Z4gQ7kNvwHyB4CI&_nc_oc=AdmLcx_1EFyNiVKn6xVJqr_bOmIl1P1DQTPwyvqqgnjZFsIO-H2zNqRZ0zNOZSvjcoY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=ovpepC-4t1n2AOPSkvqfyg&oh=00_Afri3V1KXcuSbmrHs7g7TdIjqxDsBqzWLHMN3tzarpSE8w&oe=69669559"
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/594194977_1260221996130590_3219186708295422281_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFAAxi3GpuOpxiNKTuZohuXnOAuxbsw1zCc4C7FuzDXMEH1USoPc8nYoDo_gzb-HWGcsizdZyVo6yj-NC_aMzuj&_nc_ohc=hZFHEPb4Z4gQ7kNvwHyB4CI&_nc_oc=AdmLcx_1EFyNiVKn6xVJqr_bOmIl1P1DQTPwyvqqgnjZFsIO-H2zNqRZ0zNOZSvjcoY&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=ovpepC-4t1n2AOPSkvqfyg&oh=00_Afri3V1KXcuSbmrHs7g7TdIjqxDsBqzWLHMN3tzarpSE8w&oe=69669559",
+                videoUrl: ""
             },
              Durian_Leaf_Blight: {
                 name: "โรคใบติด หรือ โรคใบไหม้",nameEn: "Durian Leaf Blight",
@@ -378,7 +392,8 @@
                 symptoms: [ "ใบเกิดแผลสีน้ำตาลไหม้","แผลขยายเร็ว ใบแห้งแต่ไม่ร่วง", "ใบติดกันเป็นกระจุก โดยเฉพาะช่วงอากาศชื้น" ],
                 treatment: [ "ตัดใบที่เป็นโรคและทำลาย", "ตัดแต่งทรงพุ่มให้โปร่ง ลดความชื้น", "พ่นสารป้องกันเชื้อราและสลับกลุ่มยา" ],
                 products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
-                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/489845148_1070322481787210_5177090310035499039_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFP6iw8_0dzNPlM9Oq4wVOcJC5PLcodT0IkLk8tyh1PQqB0F4ywcpmGQua31GA-b1pbZHDZ7UqYTnOGeHOgx2oH&_nc_ohc=mKFzAumvWfUQ7kNvwHshfCM&_nc_oc=AdlyagRyawmGZoNH4hBwmCmhlvxF9b1uMDnjWpeC5x7fEDAxRYqZcfB9noxoT4N2eYE&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=fgy3-MTWJ1utqt2lNM02SQ&oh=00_AfrE4IcO9Qr5Eb2TyKv5KgoDP_1d4y-538F6JPN-qrkNKg&oe=6966A622"
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t39.30808-6/489845148_1070322481787210_5177090310035499039_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFP6iw8_0dzNPlM9Oq4wVOcJC5PLcodT0IkLk8tyh1PQqB0F4ywcpmGQua31GA-b1pbZHDZ7UqYTnOGeHOgx2oH&_nc_ohc=mKFzAumvWfUQ7kNvwHshfCM&_nc_oc=AdlyagRyawmGZoNH4hBwmCmhlvxF9b1uMDnjWpeC5x7fEDAxRYqZcfB9noxoT4N2eYE&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=fgy3-MTWJ1utqt2lNM02SQ&oh=00_AfrE4IcO9Qr5Eb2TyKv5KgoDP_1d4y-538F6JPN-qrkNKg&oe=6966A622",
+                videoUrl: "https://www.facebook.com/share/r/16826tVF63/"
             },
             branch_dieback: {
                 name: "โรคกิ่งแห้งทุเรียน", nameEn: "Branch Dieback",
@@ -387,7 +402,8 @@
                 symptoms: ["กิ่งแห้งตายจากปลายกิ่ง", "เปลือกกิ่งแห้งกรอบ เปลี่ยนสี", "ใบเหี่ยวเหลืองและร่วง", "อาจลุกลามไปยังกิ่งอื่นและลำต้น"],
                 treatment: ["ตัดกิ่งที่เป็นโรคออก ตัดให้เลยแผล 15-20 ซม.", "ทายาป้องกันเชื้อราที่รอยตัด", "พ่นสารป้องกันกำจัดเชื้อราอย่างสม่ำเสมอ", "ตัดแต่งทรงพุ่มให้โปร่ง ระบายอากาศดี"],
                 products: "อาร์เทมิส Difenoconazole + Azoxystrobin 12.5%+20% W/V SC",
-                productImage: "https://scontent.fbkk5-4.fna.fbcdn.net/v/t39.30808-6/600238721_1270682218417901_6924044580674219428_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeE8i1pcgdn999gnRmHrpnG4lxb5PgvaOo6XFvk-C9o6jlyGIEsZ-68ixReDEXBDggr-6E10D2KJHEnoZMx53j2L&_nc_ohc=s7m5vZRgDLwQ7kNvwHG0KvU&_nc_oc=AdlAUfSFNRbc7EeOvKZtFEJAsVMYcwTc3LWhZmUGVKEvjU352arP8t9mpid2dmcABKE&_nc_zt=23&_nc_ht=scontent.fbkk5-4.fna&_nc_gid=Sp1NpgKU25VgIOuJeDplPg&oh=00_AfqeFCTz7Y6jEoHjxx9KXBpNtIWGnAtPT15eOj_3NT0-Xg&oe=69667C50"
+                productImage: "https://scontent.fbkk5-8.fna.fbcdn.net/v/t39.30808-6/527993689_1159908936161897_1146916638933539114_n.jpg?stp=dst-jpg_s640x640_tt6&_nc_cat=106&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeE4UzN0VYWd5DXyZi8GJb4TCPe_TxaYVp0I979PFphWnSMF1AiHA5XpDMAafKKqgbmSBkBCausytu-xsSTIIlk9&_nc_ohc=cQrWxW0GgxwQ7kNvwHa7aNR&_nc_oc=Adk7TL3FAhA0CM1D1pZiSI3t-dEihwdiJaFLu_9TES2ayabq-Yj0lG575Vxai3olVtw&_nc_zt=23&_nc_ht=scontent.fbkk5-8.fna&_nc_gid=5TfGZ6mvPtzxis3MGCr98A&oh=00_Afoc-cN4LYUzZ_b4AdSscQNw1kAGE3Qhv4lFjdizdqG8Wg&oe=696D3CEA",
+                videoUrl: "https://www.facebook.com/share/r/16826tVF63/"
             },
             mosaic: {
                 name: "โรคใบด่าง", nameEn: "Mosaic Virus",
@@ -396,7 +412,8 @@
                 symptoms: ["ใบมีลายด่างเขียวอ่อนสลับเขียวเข้ม", "ใบบิดเบี้ยว ผิวใบไม่เรียบ", "ต้นแคระแกร็น โตช้า", "ผลผลิตลดลง"],
                 treatment: ["ถอนทำลายต้นที่เป็นโรค", "กำจัดเพลี้ยอ่อนพาหะ", "ใช้กิ่งพันธุ์จากต้นแม่ที่ปลอดโรค", "ปลูกพืชกีดขวางรอบแปลง"],
                 products: "อิมิดาโกลด์ 70 (กำจัดเพลี้ย)",
-                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t1.6435-9/69165558_2389830731084827_5698185402830028800_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeG_9qwWXStVuJy1T912zN3Jr1cpFUw_ceKvVykVTD9x4p7IRQawBw0EsKR_vuxeNKeBTrqFM2AssbE0EU-iu6Gn&_nc_ohc=Hpq6cmWCCQUQ7kNvwG0wgg1&_nc_oc=AdmHhLl5-sWy2lcnk3ZezhNunAB-xTcG4hLD-GSKAXQhB4sXPQo5f8dhmsPbep494vw&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=2QHUkXDWCoMhLRayGYrBRw&oh=00_AfqbGOD0Pc9phEsh9jacGWl9pYeQvsgnix9M-bNhAP1Niw&oe=69882426"
+                productImage: "https://scontent.fbkk5-3.fna.fbcdn.net/v/t1.6435-9/69165558_2389830731084827_5698185402830028800_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeG_9qwWXStVuJy1T912zN3Jr1cpFUw_ceKvVykVTD9x4p7IRQawBw0EsKR_vuxeNKeBTrqFM2AssbE0EU-iu6Gn&_nc_ohc=Hpq6cmWCCQUQ7kNvwG0wgg1&_nc_oc=AdmHhLl5-sWy2lcnk3ZezhNunAB-xTcG4hLD-GSKAXQhB4sXPQo5f8dhmsPbep494vw&_nc_zt=23&_nc_ht=scontent.fbkk5-3.fna&_nc_gid=2QHUkXDWCoMhLRayGYrBRw&oh=00_AfqbGOD0Pc9phEsh9jacGWl9pYeQvsgnix9M-bNhAP1Niw&oe=69882426",
+                videoUrl: ""
             },
             fruit_borer: {
                 name: "หนอนเจาะผลทุเรียน", nameEn: "Durian Fruit Borer",
@@ -405,7 +422,8 @@
                 symptoms: ["ผลถูกเจาะเป็นรูขนาดเล็ก", "มีมูลหนอนสีน้ำตาลบนผิวผลหรือตามรอยเจาะ", "เนื้อผลเสียหาย เน่าเสีย", "ผลร่วงก่อนกำหนด คุณภาพลดลง", "พบหนอนสีขาวอมชมพูในผล"],
                 treatment: ["สำรวจสวนสม่ำเสมอ เก็บผลที่ถูกทำลายไปเผา", "ห่อผลด้วยถุงกระดาษหรือถุงพลาสติกเจาะรู", "พ่นสารกำจัดแมลงช่วงติดผลอ่อน", "ใช้กับดักแสงไฟดักจับผีเสื้อตัวเต็มวัย", "ตัดแต่งกิ่งให้โปร่ง ลดที่หลบซ่อน"],
                 products: "ไฮซีส (EMAMECTIN BENZOATE 2.0% W/V ME),",
-                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t1.6435-9/72273208_2468208306580402_8813792603909652480_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeEn_w5rv6S7TYhB6fAxxanDyWpFrWuqcpLJakWta6pykrq9wUdREaJVQ5n-gxl5bXGC3hzryLqAqRxTmWjCYgpg&_nc_ohc=UJT5jXvT20UQ7kNvwFQ7Xhy&_nc_oc=Adlc4yo729vL07-de-ZLN9iwJm84S2KyeAeJIWJdyTtpe79OfhkTlg7Cd6ezCqTanrs&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=iRbU0nXcguvcBVxY4Isj1Q&oh=00_AfpcUP5E0qjY8I7rxxt_ksL1o7iJacZ9mUBVewIDLSzPPw&oe=69882DAB"
+                productImage: "https://scontent.fbkk5-7.fna.fbcdn.net/v/t1.6435-9/72273208_2468208306580402_8813792603909652480_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeEn_w5rv6S7TYhB6fAxxanDyWpFrWuqcpLJakWta6pykrq9wUdREaJVQ5n-gxl5bXGC3hzryLqAqRxTmWjCYgpg&_nc_ohc=UJT5jXvT20UQ7kNvwFQ7Xhy&_nc_oc=Adlc4yo729vL07-de-ZLN9iwJm84S2KyeAeJIWJdyTtpe79OfhkTlg7Cd6ezCqTanrs&_nc_zt=23&_nc_ht=scontent.fbkk5-7.fna&_nc_gid=iRbU0nXcguvcBVxY4Isj1Q&oh=00_AfpcUP5E0qjY8I7rxxt_ksL1o7iJacZ9mUBVewIDLSzPPw&oe=69882DAB",
+                videoUrl: ""
             }
         };
         let currentDisease = null;
@@ -457,6 +475,16 @@
             }
             productLink.style.display = hasProductImage ? 'inline-block' : 'none';
 
+            // แสดงปุ่มดูวิดีโอถ้ามี
+            const videoSection = document.getElementById('videoSection');
+            const videoLink = document.getElementById('modalVideoLink');
+            if (d.videoUrl && d.videoUrl.trim() !== '') {
+                videoLink.dataset.videoUrl = d.videoUrl;
+                videoSection.style.display = 'block';
+            } else {
+                videoSection.style.display = 'none';
+            }
+
             document.getElementById('diseaseModal').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
@@ -506,6 +534,14 @@
             document.getElementById('productImage').src = '';
             productImages = [];
             currentImageIndex = 0;
+        }
+
+        function openVideo() {
+            const videoLink = document.getElementById('modalVideoLink');
+            const videoUrl = videoLink.dataset.videoUrl;
+            if (videoUrl) {
+                window.open(videoUrl, '_blank');
+            }
         }
 
         function closeModal() { document.getElementById('diseaseModal').classList.remove('active'); document.body.style.overflow = ''; }
