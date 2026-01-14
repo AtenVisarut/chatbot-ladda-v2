@@ -116,6 +116,7 @@ test_*.py
 !README.md
 !DEPLOYMENT_GUIDE.md
 !FLY_IO_DEPLOYMENT.md
+!docs/GUIDE_ADD_PRODUCT.md
 
 # Exclude verification and debug scripts
 verify_*.py
