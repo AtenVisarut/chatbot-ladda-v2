@@ -53,7 +53,11 @@ from app.utils.flex_messages import (
     create_liff_welcome_flex,
     create_initial_questions_flex,
     create_analyzing_flex,
-    create_product_carousel_flex
+    create_product_carousel_flex,
+    create_position_question_flex,
+    create_symptom_question_flex,
+    create_other_plant_prompt_flex,
+    create_plant_type_retry_flex
 )
 from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
@@ -712,24 +716,27 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
                 try:
                     # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
+                    # Step 1: Ask for plant type with Quick Reply buttons
                     questions_flex = create_initial_questions_flex()
                     await reply_line(reply_token, questions_flex)
-                    logger.info(f"Replied immediately to user {user_id}")
-                    
+                    logger.info(f"Replied immediately to user {user_id} - asking plant type (Step 1/3)")
+
                     # FIX: Store only message_id (50 bytes) instead of image_bytes (5-7 MB)
                     # This reduces cache save time from 55 seconds to < 1 second
                     await save_pending_context(user_id, {
                         "message_id": message_id,
                         "timestamp": asyncio.get_event_loop().time(),
-                        "state": "awaiting_info",
-                        "additional_info": None
+                        "state": "awaiting_plant_type",  # Step 1: รอเลือกชนิดพืช
+                        "plant_type": None,
+                        "position": None,
+                        "symptom": None
                     })
 
                     # Add to memory
                     await add_to_memory(user_id, "user", "[ส่งรูปภาพพืช]")
-                    await add_to_memory(user_id, "assistant", "[ถามข้อมูลเพิ่มเติมสำหรับวิเคราะห์]")
-                    
-                    logger.info(f"Asked questions for user {user_id}, waiting for additional info")
+                    await add_to_memory(user_id, "assistant", "[ถามชนิดพืช - ขั้นตอน 1/3]")
+
+                    logger.info(f"Asked plant type for user {user_id}, waiting for selection")
                     
                 except Exception as e:
                     logger.error(f"Error processing image: {e}")
@@ -794,11 +801,113 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # ============================================================================#
 
                 if ctx:
-                    # Check if we're waiting for additional info
-                    if ctx.get("state") == "awaiting_info":
-                        logger.info(f"Processing user response to image questions for {user_id}")
-                        
-                        # FIX: Download image now using stored message_id
+                    # ==========================================================================
+                    # STEP 1: Awaiting Plant Type Selection
+                    # ==========================================================================
+                    if ctx.get("state") == "awaiting_plant_type":
+                        logger.info(f"Step 1/3: User {user_id} selecting plant type: {text}")
+
+                        # Valid plant types
+                        valid_plants = ["ข้าว", "ทุเรียน", "ข้าวโพด", "มันสำปะหลัง", "อ้อย"]
+
+                        if text == "อื่นๆ":
+                            # User wants to type custom plant name
+                            other_plant_flex = create_other_plant_prompt_flex()
+                            await reply_line(reply_token, other_plant_flex)
+
+                            # Update state to await custom plant name
+                            await save_pending_context(user_id, {
+                                **ctx,
+                                "state": "awaiting_other_plant"
+                            })
+                            logger.info(f"Asking user {user_id} to type custom plant name")
+
+                        elif text in valid_plants:
+                            # Valid plant selected - go to Step 2
+                            position_flex = create_position_question_flex()
+                            await reply_line(reply_token, position_flex)
+
+                            # Update context with plant type
+                            await save_pending_context(user_id, {
+                                **ctx,
+                                "state": "awaiting_position",
+                                "plant_type": text
+                            })
+                            logger.info(f"Plant type '{text}' selected, asking position (Step 2/3)")
+
+                        else:
+                            # Invalid response - ask again
+                            retry_flex = create_plant_type_retry_flex()
+                            await reply_line(reply_token, retry_flex)
+                            logger.info(f"Invalid plant type response: {text}, asking again")
+
+                    # ==========================================================================
+                    # STEP 1.5: Awaiting Custom Plant Name (when "อื่นๆ" selected)
+                    # ==========================================================================
+                    elif ctx.get("state") == "awaiting_other_plant":
+                        logger.info(f"Step 1.5: User {user_id} typing custom plant: {text}")
+
+                        # Accept any text as plant name, go to Step 2
+                        position_flex = create_position_question_flex()
+                        await reply_line(reply_token, position_flex)
+
+                        # Update context with custom plant type
+                        await save_pending_context(user_id, {
+                            **ctx,
+                            "state": "awaiting_position",
+                            "plant_type": text
+                        })
+                        logger.info(f"Custom plant '{text}' accepted, asking position (Step 2/3)")
+
+                    # ==========================================================================
+                    # STEP 2: Awaiting Position Selection
+                    # ==========================================================================
+                    elif ctx.get("state") == "awaiting_position":
+                        logger.info(f"Step 2/3: User {user_id} selecting position: {text}")
+
+                        # Valid positions
+                        valid_positions = ["ใบ", "ลำต้น", "ผล", "ราก", "กาบใบ", "รวง", "กิ่ง", "ทั้งหมด", "ข้าม"]
+
+                        position_value = text if text != "ข้าม" else None
+
+                        # Go to Step 3
+                        symptom_flex = create_symptom_question_flex()
+                        await reply_line(reply_token, symptom_flex)
+
+                        # Update context with position
+                        await save_pending_context(user_id, {
+                            **ctx,
+                            "state": "awaiting_symptom",
+                            "position": position_value
+                        })
+                        logger.info(f"Position '{position_value}' selected, asking symptom (Step 3/3)")
+
+                    # ==========================================================================
+                    # STEP 3: Awaiting Symptom Selection - Then Analyze
+                    # ==========================================================================
+                    elif ctx.get("state") == "awaiting_symptom":
+                        logger.info(f"Step 3/3: User {user_id} selecting symptom: {text}")
+
+                        symptom_value = text if text != "ข้าม" else None
+
+                        # Build extra_user_info from collected data
+                        plant_type = ctx.get("plant_type", "")
+                        position = ctx.get("position", "")
+
+                        # Combine info for AI analysis
+                        info_parts = []
+                        if plant_type:
+                            info_parts.append(f"พืช: {plant_type}")
+                        if position:
+                            info_parts.append(f"ตำแหน่ง: {position}")
+                        if symptom_value:
+                            info_parts.append(f"ลักษณะ: {symptom_value}")
+
+                        extra_user_info = ", ".join(info_parts) if info_parts else None
+
+                        logger.info(f"All steps complete. Analyzing with info: {extra_user_info}")
+
+                        # Download image and analyze
                         try:
                             message_id_from_ctx = ctx["message_id"]
                             logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
@@ -808,209 +917,111 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             await reply_line(reply_token, "ขออภัยค่ะ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
                             await delete_pending_context(user_id)
                             return JSONResponse(content={"status": "error", "message": "Image download failed"})
-                        
-                        # Check if user wants to skip questions
-                        if should_skip_questions(text):
-                            # Analyze without additional info
+
+                        # Analyze with collected information
+                        try:
+                            analyzing_flex = create_analyzing_flex(with_info=bool(extra_user_info))
+                            await reply_line(reply_token, analyzing_flex)
+
+                            # Run detection with extra context
+                            detection_result = await smart_detect_disease(image_bytes, extra_user_info=extra_user_info)
+
+                            # Override plant_type if user specified
+                            if plant_type and not detection_result.plant_type:
+                                detection_result.plant_type = plant_type
+
+                            # Check if we should recommend products
+                            skip_keywords = [
+                                "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
+                                "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
+                                "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
+                                "Deficiency", "deficiency",
+                                "ใบเหลือง", "ใบซีด", "ใบด่าง",
+                                "สุขภาพดี", "healthy", "Healthy",
+                                "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
+                                "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
+                            ]
+                            should_recommend = True
+                            disease_name_lower = detection_result.disease_name.lower()
+
                             try:
-                                skip_flex = create_analyzing_flex(with_info=False)
-                                await reply_line(reply_token, skip_flex)
-                                
-                                detection_result = await smart_detect_disease(image_bytes)
+                                conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
+                                if conf_value is not None and conf_value < 10:
+                                    should_recommend = False
+                                    logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
+                            except (ValueError, TypeError):
+                                pass  # If conversion fails, continue with recommendation
 
-                                # Check if we should recommend products
-                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency, Technical Error
-                                skip_keywords = [
-                                    "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
-                                    "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
-                                    "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
-                                    "Deficiency", "deficiency",
-                                    "ใบเหลือง", "ใบซีด", "ใบด่าง",
-                                    "สุขภาพดี", "healthy", "Healthy",
-                                    "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
-                                    "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
-                                ]
-                                should_recommend = True
-                                disease_name_lower = detection_result.disease_name.lower()
+                            for kw in skip_keywords:
+                                if kw.lower() in disease_name_lower:
+                                    should_recommend = False
+                                    logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
+                                    break
 
-                                # Skip if confidence is 0 or very low (< 10%)
-                                # Note: confidence comes as integer percent (0-100), not decimal
-                                try:
-                                    conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
-                                    if conf_value is not None and conf_value < 10:
-                                        should_recommend = False
-                                        logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
-                                except (ValueError, TypeError):
-                                    pass  # If conversion fails, continue with recommendation
+                            # Extract pest_type from raw_analysis
+                            pest_type = "ศัตรูพืช"
+                            if detection_result.raw_analysis:
+                                parts = detection_result.raw_analysis.split(":")
+                                if len(parts) > 0:
+                                    pest_type = parts[0].strip()
 
-                                for kw in skip_keywords:
-                                    if kw.lower() in disease_name_lower:
-                                        should_recommend = False
-                                        logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
-                                        break
+                            # Track analytics
+                            if analytics_tracker:
+                                await analytics_tracker.track_image_analysis(
+                                    user_id=user_id,
+                                    disease_name=detection_result.disease_name,
+                                    pest_type=pest_type,
+                                    confidence=detection_result.confidence,
+                                    response_time_ms=0.0
+                                )
 
-                                # Extract pest_type from raw_analysis
-                                pest_type = "ศัตรูพืช"
-                                if detection_result.raw_analysis:
-                                    parts = detection_result.raw_analysis.split(":")
-                                    if len(parts) > 0:
-                                        pest_type = parts[0].strip()
+                            if should_recommend:
+                                # ถามระยะปลูกก่อนแนะนำสินค้า
+                                logger.info(f"🌱 Asking for growth stage before product recommendation")
 
-                                # Track analytics
-                                if analytics_tracker:
-                                    await analytics_tracker.track_image_analysis(
-                                        user_id=user_id,
-                                        disease_name=detection_result.disease_name,
-                                        pest_type=pest_type,
-                                        confidence=detection_result.confidence,
-                                        response_time_ms=0.0
-                                    )
+                                # Save detection result to context for later use
+                                await save_pending_context(user_id, {
+                                    "state": "awaiting_growth_stage",
+                                    "detection_result": detection_result.dict(),
+                                    "plant_type": plant_type or detection_result.plant_type or "",
+                                    "extra_user_info": extra_user_info,
+                                })
 
-                                if should_recommend:
-                                    # ถามระยะปลูกก่อนแนะนำสินค้า
-                                    logger.info(f"🌱 Asking for growth stage before product recommendation")
+                                # Generate diagnosis with growth stage question
+                                flex_messages = await generate_diagnosis_with_stage_question(detection_result)
 
-                                    # Save detection result to context for later use
-                                    await save_pending_context(user_id, {
-                                        "state": "awaiting_growth_stage",
-                                        "detection_result": detection_result.dict(),
-                                        "plant_type": detection_result.plant_type or "",
-                                    })
+                                # Send Flex Messages
+                                await push_line(user_id, flex_messages)
 
-                                    # Generate diagnosis with growth stage question
-                                    flex_messages = await generate_diagnosis_with_stage_question(detection_result)
+                                # Add to memory
+                                await add_to_memory(user_id, "user", f"[ข้อมูล] {extra_user_info}")
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
 
-                                    # Send Flex Messages
-                                    await push_line(user_id, flex_messages)
+                            else:
+                                # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
+                                recommendations = []
 
-                                    # Add to memory
-                                    await add_to_memory(user_id, "user", f"[ข้าม] {text}")
-                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
+                                # Generate Flex Message response without products
+                                flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=extra_user_info)
 
-                                else:
-                                    # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
-                                    logger.info(f"Skipping product recommendation for: {detection_result.disease_name}")
-                                    recommendations = []
+                                # Send Flex Messages via push
+                                await push_line(user_id, flex_messages)
 
-                                    # Generate Flex Message response without products
-                                    flex_messages = await generate_flex_response(detection_result, recommendations)
+                                # Clear context
+                                await delete_pending_context(user_id)
 
-                                    # Send Flex Messages via push
-                                    await push_line(user_id, flex_messages)
+                                # Add to memory
+                                await add_to_memory(user_id, "user", f"[ข้อมูล] {extra_user_info}")
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
 
-                                    # Clear context
-                                    await delete_pending_context(user_id)
-
-                                    # Add to memory
-                                    await add_to_memory(user_id, "user", f"[ข้าม] {text}")
-                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
-
-                            except Exception as e:
-                                logger.error(f"Error in skip analysis: {e}")
-                                await push_line(user_id, "ขออภัยค่า เกิดข้อผิดพลาดในการวิเคราะห์ 😢")
-                        else:
-                            # Analyze with user's additional information
+                        except Exception as e:
+                            logger.error(f"Error in analysis with info: {e}", exc_info=True)
+                            # Try to send error message
                             try:
-                                analyzing_flex = create_analyzing_flex(with_info=True)
-                                await reply_line(reply_token, analyzing_flex)
+                                await push_line(user_id, f"ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢\n\nError: {str(e)[:100]}")
+                            except Exception as e2:
+                                logger.error(f"Failed to send error message: {e2}")
 
-                                # Run detection with extra context
-                                detection_result = await smart_detect_disease(image_bytes, extra_user_info=text)
-
-                                # Check if we should recommend products
-                                # Skip if: Not found, Unknown, Normal, Unclear, Nutrient deficiency, Technical Error
-                                skip_keywords = [
-                                    "ไม่พบ", "ไม่ทราบ", "ปกติ", "ไม่ชัดเจน",
-                                    "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
-                                    "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
-                                    "Deficiency", "deficiency",
-                                    "ใบเหลือง", "ใบซีด", "ใบด่าง",
-                                    "สุขภาพดี", "healthy", "Healthy",
-                                    "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
-                                    "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
-                                ]
-                                should_recommend = True
-                                disease_name_lower = detection_result.disease_name.lower()
-
-                                # Skip if confidence is 0 or very low (< 10%)
-                                # Note: confidence comes as integer percent (0-100), not decimal
-                                try:
-                                    conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
-                                    if conf_value is not None and conf_value < 10:
-                                        should_recommend = False
-                                        logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
-                                except (ValueError, TypeError):
-                                    pass  # If conversion fails, continue with recommendation
-
-                                for kw in skip_keywords:
-                                    if kw.lower() in disease_name_lower:
-                                        should_recommend = False
-                                        logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
-                                        break
-
-                                # Extract pest_type from raw_analysis
-                                pest_type = "ศัตรูพืช"
-                                if detection_result.raw_analysis:
-                                    parts = detection_result.raw_analysis.split(":")
-                                    if len(parts) > 0:
-                                        pest_type = parts[0].strip()
-
-                                # Track analytics
-                                if analytics_tracker:
-                                    await analytics_tracker.track_image_analysis(
-                                        user_id=user_id,
-                                        disease_name=detection_result.disease_name,
-                                        pest_type=pest_type,
-                                        confidence=detection_result.confidence,
-                                        response_time_ms=0.0
-                                    )
-
-                                if should_recommend:
-                                    # ถามระยะปลูกก่อนแนะนำสินค้า
-                                    logger.info(f"🌱 Asking for growth stage before product recommendation")
-
-                                    # Save detection result to context for later use
-                                    await save_pending_context(user_id, {
-                                        "state": "awaiting_growth_stage",
-                                        "detection_result": detection_result.dict(),
-                                        "plant_type": detection_result.plant_type or "",
-                                        "extra_user_info": text,
-                                    })
-
-                                    # Generate diagnosis with growth stage question
-                                    flex_messages = await generate_diagnosis_with_stage_question(detection_result)
-
-                                    # Send Flex Messages
-                                    await push_line(user_id, flex_messages)
-
-                                    # Add to memory
-                                    await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
-                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
-
-                                else:
-                                    # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
-                                    recommendations = []
-
-                                    # Generate Flex Message response without products
-                                    flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=text)
-
-                                    # Send Flex Messages via push
-                                    await push_line(user_id, flex_messages)
-
-                                    # Clear context
-                                    await delete_pending_context(user_id)
-
-                                    # Add to memory
-                                    await add_to_memory(user_id, "user", f"[ข้อมูลเพิ่มเติม] {text}")
-                                    await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
-
-                            except Exception as e:
-                                logger.error(f"Error in analysis with info: {e}", exc_info=True)
-                                # Try to send error message
-                                try:
-                                    await push_line(user_id, f"ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢\n\nError: {str(e)[:100]}")
-                                except Exception as e2:
-                                    logger.error(f"Failed to send error message: {e2}")
                     elif ctx.get("state") == "awaiting_growth_stage":
                         # User selected growth stage - now recommend products with matching score
                         logger.info(f"🌱 User {user_id} selected growth stage: {text}")

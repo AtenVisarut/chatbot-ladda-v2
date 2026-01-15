@@ -1741,14 +1741,15 @@ def create_product_catalog_flex() -> Dict:
 
 def create_initial_questions_flex() -> Dict:
     """
-    สร้าง Flex Message สำหรับถามคำถามเพิ่มเติมหลังรับรูป
+    สร้าง Flex Message สำหรับถามชนิดพืช (ขั้นตอนที่ 1)
+    พร้อม Quick Reply buttons
     """
     return {
         "type": "flex",
-        "altText": "ได้รับรูปแล้วค่ะ กรุณาตอบคำถามเพิ่มเติม",
+        "altText": "ได้รับรูปแล้วค่ะ กรุณาเลือกชนิดพืช",
         "contents": {
             "type": "bubble",
-            "size": "giga",
+            "size": "kilo",
             "header": {
                 "type": "box",
                 "layout": "vertical",
@@ -1770,115 +1771,487 @@ def create_initial_questions_flex() -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "📝 กรุณาพิมพ์ระบุชนิดของพืชที่:",
-                        "size": "md",
+                        "text": "📝 ขั้นตอนที่ 1/3",
+                        "size": "sm",
+                        "color": "#888888"
+                    },
+                    {
+                        "type": "text",
+                        "text": "กรุณาเลือกชนิดพืช",
+                        "size": "lg",
                         "color": "#1a1a1a",
-                        "weight": "bold"
+                        "weight": "bold",
+                        "margin": "sm"
                     },
                     {
-                        "type": "separator",
-                        "margin": "lg"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "margin": "lg",
-                        "spacing": "lg",
-                        "contents": [
-                            {
-                                "type": "box",
-                                "layout": "horizontal",
-                                "contents": [
-                                    {"type": "text", "text": "1.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
-                                    {
-                                        "type": "box",
-                                        "layout": "vertical",
-                                        "margin": "md",
-                                        "contents": [
-                                            {"type": "text", "text": "ชนิดพืช", "weight": "bold", "size": "md", "color": "#1a1a1a"},
-                                            {"type": "text", "text": "เช่น ข้าว/ทุเรียน/ข้าวโพด/มันสำปะหลัง/อ้อย", "size": "sm", "color": "#666666"}
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "horizontal",
-                                "contents": [
-                                    {"type": "text", "text": "2.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
-                                    {
-                                        "type": "box",
-                                        "layout": "vertical",
-                                        "margin": "md",
-                                        "contents": [
-                                            {"type": "text", "text": "ตำแหน่ง", "weight": "bold", "size": "md", "color": "#1a1a1a"},
-                                            {"type": "text", "text": "เช่น ใบ/ลำต้น/ผล/ราก/กาบใบ/รวง", "size": "sm", "color": "#666666"}
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "type": "box",
-                                "layout": "horizontal",
-                                "contents": [
-                                    {"type": "text", "text": "3.", "flex": 0, "size": "lg", "weight": "bold", "color": "#27AE60"},
-                                    {
-                                        "type": "box",
-                                        "layout": "vertical",
-                                        "margin": "md",
-                                        "contents": [
-                                            {"type": "text", "text": "ลักษณะที่เกิด", "weight": "bold", "size": "md", "color": "#1a1a1a"},
-                                            {"type": "text", "text": "เช่น จุดสีน้ำตาล/แผลไหม้/เน่าดำ/ใบเหลือง", "size": "sm", "color": "#666666"}
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "type": "separator",
-                        "margin": "lg"
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
-                        "margin": "lg",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "💬 ตัวอย่าง:",
-                                "size": "sm",
-                                "color": "#3498DB",
-                                "weight": "bold"
-                            },
-                            {
-                                "type": "text",
-                                "text": "\"ข้าว ที่ใบ มีจุดสีน้ำตาล\"",
-                                "size": "md",
-                                "color": "#27AE60",
-                                "margin": "sm",
-                                "weight": "bold"
-                            }
-                        ]
+                        "type": "text",
+                        "text": "กดปุ่มด้านล่างเพื่อเลือก",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md"
                     }
-                ]
-            },
-            "footer": {
+                ],
+                "paddingAll": "15px"
+            }
+        },
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌾 ข้าว",
+                        "text": "ข้าว"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🍈 ทุเรียน",
+                        "text": "ทุเรียน"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌽 ข้าวโพด",
+                        "text": "ข้าวโพด"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🥔 มันสำปะหลัง",
+                        "text": "มันสำปะหลัง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🎋 อ้อย",
+                        "text": "อ้อย"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "📝 อื่นๆ",
+                        "text": "อื่นๆ"
+                    }
+                }
+            ]
+        }
+    }
+
+
+def create_position_question_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับถามตำแหน่งที่พบปัญหา (ขั้นตอนที่ 2)
+    พร้อม Quick Reply buttons - ข้ามได้
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาเลือกตำแหน่งที่พบปัญหา",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
-                        "type": "button",
-                        "style": "secondary",
-                        "height": "sm",
-                        "action": {
-                            "type": "message",
-                            "label": "⏭️ ข้าม - วิเคราะห์เลย",
-                            "text": "ข้าม"
-                        }
+                        "type": "text",
+                        "text": "📍 ตำแหน่งที่พบปัญหา",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
                     }
-                ]
+                ],
+                "backgroundColor": "#3498DB",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📝 ขั้นตอนที่ 2/3",
+                        "size": "sm",
+                        "color": "#888888"
+                    },
+                    {
+                        "type": "text",
+                        "text": "เลือกตำแหน่งบนต้นพืช",
+                        "size": "lg",
+                        "color": "#1a1a1a",
+                        "weight": "bold",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "text",
+                        "text": "หรือกด 'ข้าม' ถ้าไม่แน่ใจ",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md"
+                    }
+                ],
+                "paddingAll": "15px"
             }
+        },
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🍃 ใบ",
+                        "text": "ใบ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌿 ลำต้น",
+                        "text": "ลำต้น"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🍎 ผล",
+                        "text": "ผล"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌱 ราก",
+                        "text": "ราก"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🎋 กาบใบ",
+                        "text": "กาบใบ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌾 รวง",
+                        "text": "รวง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌳 กิ่ง",
+                        "text": "กิ่ง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "✅ ทั้งหมด",
+                        "text": "ทั้งหมด"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "⏭️ ข้าม",
+                        "text": "ข้าม"
+                    }
+                }
+            ]
+        }
+    }
+
+
+def create_symptom_question_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับถามลักษณะที่เกิด (ขั้นตอนที่ 3)
+    พร้อม Quick Reply buttons - ข้ามได้
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาเลือกลักษณะอาการที่พบ",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "🔍 ลักษณะที่เกิด",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    }
+                ],
+                "backgroundColor": "#9B59B6",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📝 ขั้นตอนที่ 3/3",
+                        "size": "sm",
+                        "color": "#888888"
+                    },
+                    {
+                        "type": "text",
+                        "text": "เลือกลักษณะอาการที่พบ",
+                        "size": "lg",
+                        "color": "#1a1a1a",
+                        "weight": "bold",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "text",
+                        "text": "หรือกด 'ข้าม' ถ้าไม่แน่ใจ",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md"
+                    }
+                ],
+                "paddingAll": "15px"
+            }
+        },
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🔴 จุดสี",
+                        "text": "จุดสี"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "💢 ลักษณะแผล",
+                        "text": "ลักษณะแผล"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🍂 สีของใบ",
+                        "text": "สีของใบ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🥀 เหี่ยว/แห้ง",
+                        "text": "เหี่ยว/แห้ง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🐛 แมลง",
+                        "text": "แมลง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "✅ ทั้งหมด",
+                        "text": "ทั้งหมด"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "⏭️ ข้าม",
+                        "text": "ข้าม"
+                    }
+                }
+            ]
+        }
+    }
+
+
+def create_other_plant_prompt_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับขอให้พิมพ์ชื่อพืชเอง (เมื่อกด "อื่นๆ")
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาพิมพ์ชื่อพืชที่ต้องการวิเคราะห์",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "📝 ระบุชนิดพืช",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    }
+                ],
+                "backgroundColor": "#E67E22",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "กรุณาพิมพ์ชื่อพืชที่ต้องการวิเคราะห์",
+                        "size": "md",
+                        "color": "#1a1a1a",
+                        "weight": "bold",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": "เช่น มะม่วง, ลำไย, ยางพารา, ปาล์มน้ำมัน",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md",
+                        "wrap": True
+                    }
+                ],
+                "paddingAll": "15px"
+            }
+        }
+    }
+
+
+def create_plant_type_retry_flex() -> Dict:
+    """
+    สร้าง Flex Message สำหรับขอให้เลือกชนิดพืชใหม่ (เมื่อไม่ตอบหรือตอบไม่ตรง)
+    """
+    return {
+        "type": "flex",
+        "altText": "กรุณาเลือกชนิดพืช",
+        "contents": {
+            "type": "bubble",
+            "size": "kilo",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "⚠️ กรุณาเลือกชนิดพืช",
+                        "color": "#ffffff",
+                        "size": "lg",
+                        "weight": "bold"
+                    }
+                ],
+                "backgroundColor": "#E74C3C",
+                "paddingAll": "15px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "จำเป็นต้องระบุชนิดพืชก่อนวิเคราะห์",
+                        "size": "md",
+                        "color": "#1a1a1a",
+                        "weight": "bold",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": "กดปุ่มด้านล่างเพื่อเลือกชนิดพืช",
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md"
+                    }
+                ],
+                "paddingAll": "15px"
+            }
+        },
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌾 ข้าว",
+                        "text": "ข้าว"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🍈 ทุเรียน",
+                        "text": "ทุเรียน"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🌽 ข้าวโพด",
+                        "text": "ข้าวโพด"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🥔 มันสำปะหลัง",
+                        "text": "มันสำปะหลัง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "🎋 อ้อย",
+                        "text": "อ้อย"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "📝 อื่นๆ",
+                        "text": "อื่นๆ"
+                    }
+                }
+            ]
         }
     }
 
