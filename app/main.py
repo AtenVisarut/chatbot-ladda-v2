@@ -86,6 +86,10 @@ from app.services.agro_risk import (
     create_weather_error_flex,
     create_crop_selection_flex
 )
+from app.services.context_handler import (
+    handle_context_interrupt,
+    handle_new_image_during_flow
+)
 
 # Import utils
 from app.utils.line_helpers import (
@@ -715,6 +719,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     continue
 
                 try:
+                    # === NEW: ตรวจว่ามี context เดิมอยู่ไหม (user ส่งรูปใหม่ระหว่าง flow) ===
+                    existing_ctx = await get_pending_context(user_id)
+                    if existing_ctx and existing_ctx.get("state") in ["awaiting_info", "awaiting_growth_stage"]:
+                        # ถาม user ว่าจะใช้รูปใหม่หรือรูปเดิม
+                        handled = await handle_new_image_during_flow(user_id, message_id, existing_ctx, reply_token)
+                        if handled:
+                            continue
+                    
                     # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
                     # Step 1: Ask for plant type with Quick Reply buttons
                     questions_flex = create_initial_questions_flex()
@@ -801,6 +813,16 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # ============================================================================#
 
                 if ctx:
+                    # === NEW: ตรวจจับ interrupt ก่อนประมวลผล ===
+                    was_handled, new_ctx = await handle_context_interrupt(user_id, text, ctx, reply_token)
+                    if was_handled:
+                        # Context handler จัดการแล้ว ไปทำ event ถัดไป
+                        continue
+                    
+                    # ถ้ามี new_ctx ให้ใช้แทน ctx เดิม
+                    if new_ctx:
+                        ctx = new_ctx
+
                     # ==========================================================================
                     # STEP 1: Awaiting Plant Type Selection
                     # ==========================================================================
@@ -943,7 +965,6 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             ]
                             should_recommend = True
                             disease_name_lower = detection_result.disease_name.lower()
-
                             try:
                                 conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
                                 if conf_value is not None and conf_value < 10:

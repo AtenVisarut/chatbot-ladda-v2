@@ -10,7 +10,7 @@ from app.services.reranker import rerank_products_with_llm, simple_relevance_boo
 logger = logging.getLogger(__name__)
 
 # Configuration for re-ranking
-ENABLE_RERANKING = False  # Set to False to disable re-ranking for faster response
+ENABLE_RERANKING = True  # เปิดใช้ re-ranking เพื่อเพิ่มความแม่นยำในการแนะนำสินค้า
 
 # =============================================================================
 # Mapping โรค/ปัญหา → ประเภทสินค้าที่เหมาะสม (ใช้ระบุ required_category)
@@ -2164,6 +2164,24 @@ async def retrieve_products_with_matching_score(
             logger.info(f"   → {p.get('product_name')}: "
                        f"match={p.get('matching_score', 0):.2f}, "
                        f"final={p.get('final_score', 0):.2f}")
+
+        # 3.5 Re-ranking with LLM (if enabled)
+        if ENABLE_RERANKING and len(scored_products) > 3 and openai_client:
+            logger.info(f"🔄 Re-ranking {len(scored_products)} products with LLM...")
+            try:
+                reranked_products = await rerank_products_with_llm(
+                    query=f"{disease_name} {plant_type or ''} {growth_stage or ''}".strip(),
+                    products=scored_products[:15],  # Top 15 candidates
+                    top_k=6,
+                    openai_client=openai_client,
+                    required_category=required_category,
+                    required_category_th=required_category_th
+                )
+                if reranked_products:
+                    scored_products = reranked_products
+                    logger.info(f"✓ Re-ranked to: {[p.get('product_name', '')[:20] for p in scored_products[:6]]}")
+            except Exception as e:
+                logger.warning(f"Re-ranking failed, using original order: {e}")
 
         # 4. Filter and build recommendations
         # Keep products with reasonable score (>0.15) or top 6

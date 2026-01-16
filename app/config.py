@@ -10,7 +10,7 @@ load_dotenv()
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # For Gemini 2.5 Pro (disease detection)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # For Gemini 3.0 flash (disease detection)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -31,7 +31,7 @@ AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water.vercel.ap
 
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
-PENDING_CONTEXT_TTL = 300  # 5 minutes
+PENDING_CONTEXT_TTL = 1800  # 30 minutes (เพิ่มจาก 5 นาที เพื่อให้ user มีเวลาตอบ)
 MAX_CACHE_SIZE = 1000  # Maximum cache entries
 
 # Rate limiting per user
