@@ -369,13 +369,16 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
             return (True, None)
     
     # === 4. ตรวจจับคำตอบที่ไม่ valid สำหรับ awaiting_growth_stage ===
+    # Relaxed validation: Allow any text answer to pass through to main logic
+    # unless it is an explicit Cancel command (already handled in step 1)
     if state == "awaiting_growth_stage":
-        if not is_valid_growth_stage(text) and not is_skip_command(text):
-            logger.info(f"⚠️ Invalid growth stage from {user_id}: {text}")
-            # ถาม ทำต่อ/ยกเลิก
-            flex = await create_continue_or_cancel_flex("เลือกระยะปลูก")
-            await reply_line(reply_token, flex)
-            return (True, None)
+        # ถ้าเป็นคำสั่งข้าม ให้ผ่านไป
+        if is_skip_command(text):
+            return (False, None)
+            
+        # ถ้าพิมพ์ยาวๆ หรือเป็นประโยค อาจจะเป็น feedback หรือข้อมูลเพิ่มเติม 
+        # ให้ main.py จัดการต่อได้เลย ไม่ต้อง block
+        pass
     
     # === 5. ตรวจจับคำถามทั่วไประหว่าง awaiting_info ===
     if state == "awaiting_info":
