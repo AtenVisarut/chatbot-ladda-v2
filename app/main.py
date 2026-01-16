@@ -82,6 +82,10 @@ from app.services.agro_risk import (
     create_weather_error_flex,
     create_crop_selection_flex
 )
+from app.services.context_handler import (
+    handle_context_interrupt,
+    handle_new_image_during_flow
+)
 
 # Import utils
 from app.utils.line_helpers import (
@@ -711,6 +715,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     continue
 
                 try:
+                    # === NEW: ตรวจว่ามี context เดิมอยู่ไหม (user ส่งรูปใหม่ระหว่าง flow) ===
+                    existing_ctx = await get_pending_context(user_id)
+                    if existing_ctx and existing_ctx.get("state") in ["awaiting_info", "awaiting_growth_stage"]:
+                        # ถาม user ว่าจะใช้รูปใหม่หรือรูปเดิม
+                        handled = await handle_new_image_during_flow(user_id, message_id, existing_ctx, reply_token)
+                        if handled:
+                            continue
+                    
                     # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
                     questions_flex = create_initial_questions_flex()
                     await reply_line(reply_token, questions_flex)
@@ -794,20 +806,24 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # ============================================================================#
 
                 if ctx:
+                    # === NEW: ตรวจจับ interrupt ก่อนประมวลผล ===
+                    was_handled, new_ctx = await handle_context_interrupt(user_id, text, ctx, reply_token)
+                    if was_handled:
+                        # Context handler จัดการแล้ว ไปทำ event ถัดไป
+                        continue
+                    
+                    # ถ้ามี new_ctx ให้ใช้แทน ctx เดิม
+                    if new_ctx:
+                        ctx = new_ctx
+                    
                     # Check if we're waiting for additional info
                     if ctx.get("state") == "awaiting_info":
                         logger.info(f"Processing user response to image questions for {user_id}")
                         
                         # FIX: Download image now using stored message_id
-                        try:
-                            message_id_from_ctx = ctx["message_id"]
-                            logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
-                            image_bytes = await get_image_content_from_line(message_id_from_ctx)
-                        except Exception as e:
-                            logger.error(f"Failed to download image: {e}")
-                            await reply_line(reply_token, "ขออภัยค่ะ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
-                            await delete_pending_context(user_id)
-                            return JSONResponse(content={"status": "error", "message": "Image download failed"})
+                        message_id_from_ctx = ctx["message_id"]
+                        logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
+                        image_bytes = await get_image_content_from_line(message_id_from_ctx)
                         
                         # Check if user wants to skip questions
                         if should_skip_questions(text):
