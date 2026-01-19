@@ -4,7 +4,12 @@ from typing import Optional, Tuple
 
 from app.services.cache import get_pending_context, save_pending_context, delete_pending_context
 from app.utils.line_helpers import reply_line
-from app.utils.flex_messages import create_initial_questions_flex
+from app.utils.flex_messages import (
+    create_initial_questions_flex,
+    create_position_question_flex,
+    create_symptom_question_flex,
+    create_other_plant_prompt_flex
+)
 
 logger = logging.getLogger(__name__)
 
@@ -396,22 +401,46 @@ async def resend_current_question(user_id: str, ctx: dict, reply_token: str) -> 
     """ส่งคำถามปัจจุบันซ้ำ"""
     state = ctx.get("state")
     logger.info(f"🔄 Resending question for state: {state}")
-    
+
     if state == "awaiting_info":
         questions_flex = create_initial_questions_flex()
         await reply_line(reply_token, questions_flex)
         return (True, None)
-        
+
+    # Step 1: รอเลือกชนิดพืช
+    elif state == "awaiting_plant_type":
+        questions_flex = create_initial_questions_flex()
+        await reply_line(reply_token, questions_flex)
+        return (True, None)
+
+    # Step 1.5: รอพิมพ์ชื่อพืชอื่น
+    elif state == "awaiting_other_plant":
+        other_plant_flex = create_other_plant_prompt_flex()
+        await reply_line(reply_token, other_plant_flex)
+        return (True, None)
+
+    # Step 2: รอเลือกตำแหน่ง
+    elif state == "awaiting_position":
+        position_flex = create_position_question_flex()
+        await reply_line(reply_token, position_flex)
+        return (True, None)
+
+    # Step 3: รอเลือกอาการ
+    elif state == "awaiting_symptom":
+        symptom_flex = create_symptom_question_flex()
+        await reply_line(reply_token, symptom_flex)
+        return (True, None)
+
     elif state == "awaiting_growth_stage":
         growth_flex = await create_growth_stage_flex()
         await reply_line(reply_token, growth_flex)
         return (True, None)
-    
+
     elif state == "awaiting_image_choice":
         image_flex = await create_image_choice_flex()
         await reply_line(reply_token, image_flex)
         return (True, None)
-    
+
     # Unknown state - ให้ flow ปกติจัดการ
     return (False, None)
 

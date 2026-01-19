@@ -721,7 +721,15 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 try:
                     # === NEW: ตรวจว่ามี context เดิมอยู่ไหม (user ส่งรูปใหม่ระหว่าง flow) ===
                     existing_ctx = await get_pending_context(user_id)
-                    if existing_ctx and existing_ctx.get("state") in ["awaiting_info", "awaiting_growth_stage"]:
+                    # เช็คทุก state ที่ user อาจส่งรูปใหม่ระหว่าง flow
+                    active_states = [
+                        "awaiting_plant_type",   # Step 1: รอเลือกชนิดพืช
+                        "awaiting_other_plant",  # Step 1.5: รอพิมพ์ชื่อพืชอื่น
+                        "awaiting_position",     # Step 2: รอเลือกตำแหน่ง
+                        "awaiting_symptom",      # Step 3: รอเลือกอาการ
+                        "awaiting_growth_stage"  # รอเลือกระยะปลูก
+                    ]
+                    if existing_ctx and existing_ctx.get("state") in active_states:
                         # ถาม user ว่าจะใช้รูปใหม่หรือรูปเดิม
                         handled = await handle_new_image_during_flow(user_id, message_id, existing_ctx, reply_token)
                         if handled:
