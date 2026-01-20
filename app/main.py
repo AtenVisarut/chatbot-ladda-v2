@@ -5,7 +5,7 @@ import json
 import time
 import os
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Header
+from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -665,21 +665,40 @@ async def liff_assets(filename: str):
 
 @app.post("/webhook")
 async def callback(request: Request, x_line_signature: str = Header(None)):
-    start_time = time.time()
+    """
+    LINE Webhook endpoint - returns 200 immediately to prevent timeout.
+    Actual processing happens in background via asyncio.create_task.
+    """
     if not x_line_signature:
         raise HTTPException(status_code=400, detail="Missing X-Line-Signature header")
-    
+
     body = await request.body()
     body_str = body.decode('utf-8')
-    
+
     # Verify signature
     if not verify_line_signature(body, x_line_signature):
         logger.warning("Invalid signature")
         raise HTTPException(status_code=400, detail="Invalid signature")
-    
+
+    # Parse events
     try:
         events = json.loads(body_str).get("events", [])
-        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse webhook body: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    # FIX: Return 200 IMMEDIATELY to prevent LINE timeout (499)
+    # Process events in background - reply_token valid for ~30 seconds
+    if events:
+        asyncio.create_task(_process_webhook_events(events))
+
+    return JSONResponse(content={"status": "success"})
+
+
+async def _process_webhook_events(events: list):
+    """Process webhook events in background task"""
+    start_time = time.time()
+    try:
         for event in events:
             event_type = event.get("type")
             reply_token = event.get("replyToken")
@@ -781,14 +800,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                     logger.info(f"🟢 User {user_id} requested usage guide")
                     usage_guide = get_usage_guide()
                     await reply_line(reply_token, usage_guide)
-                    return JSONResponse(content={"status": "success"})
+                    continue
 
                 # 0.1 Check for product catalog request
                 if text in ["ดูผลิตภัณฑ์", "ผลิตภัณฑ์", "สินค้า", "products"]:
                     logger.info(f"🟢 User {user_id} requested product catalog")
                     catalog = get_product_catalog_message()
                     await reply_line(reply_token, catalog)
-                    return JSONResponse(content={"status": "success"})
+                    continue
 
                 # 0.2 Check for weather request - ส่ง Text พร้อม Quick Reply ขอ location
                 if text in ["ดูสภาพอากาศ", "สภาพอากาศ", "อากาศ", "weather", "🌤️"]:
@@ -810,14 +829,14 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                         }
                     }
                     await reply_line(reply_token, weather_message)
-                    return JSONResponse(content={"status": "success"})
+                    continue
 
                 # 1. Check if user wants to register - send LIFF link
                 if text in ["ลงทะเบียน", "register", "สมัคร"]:
                     logger.info(f"🟢 User {user_id} wants to register - sending LIFF link")
                     reg_flex = create_liff_registration_flex(LIFF_URL)
                     await reply_line(reply_token, reg_flex)
-                    return JSONResponse(content={"status": "success"})
+                    continue
                 # ============================================================================#
 
                 if ctx:
@@ -942,7 +961,7 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                             logger.error(f"Failed to download image: {e}")
                             await reply_line(reply_token, "ขออภัยค่ะ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
                             await delete_pending_context(user_id)
-                            return JSONResponse(content={"status": "error", "message": "Image download failed"})
+                            continue
 
                         # Analyze with collected information
                         try:
@@ -1487,11 +1506,10 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
                 # Reply with a sticker
                 await reply_line(reply_token, "ขอบคุณค่ะ! 😊", with_sticker=True)
 
-        return JSONResponse(content={"status": "success"})
-        
+        logger.info(f"✅ Background webhook processing completed in {time.time() - start_time:.2f}s")
+
     except Exception as e:
-        logger.error(f"Webhook error: {e}", exc_info=True)
-        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+        logger.error(f"Background webhook error: {e}", exc_info=True)
 
 if __name__ == "__main__":
     # อ่าน Port จาก Environment Variable ที่ Cloud Platform (Fly.io/Vercel) ส่งมา 
