@@ -1268,7 +1268,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=1500,  # ปรับ prompt ให้กระชับแทนการเพิ่ม tokens
+                    max_tokens=2000,  # เพิ่มจาก 1500 + prompt กระชับ เพื่อป้องกัน context ขาด
                     temperature=0.2,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
