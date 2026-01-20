@@ -338,8 +338,10 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
             new_ctx = {
                 "message_id": new_message_id,
                 "timestamp": ctx.get("timestamp"),
-                "state": "awaiting_info",
-                "additional_info": None
+                "state": "awaiting_plant_type",  # FIX: ต้องเป็น awaiting_plant_type ไม่ใช่ awaiting_info
+                "plant_type": None,
+                "position": None,
+                "symptom": None
             }
             await save_pending_context(user_id, new_ctx)
             
