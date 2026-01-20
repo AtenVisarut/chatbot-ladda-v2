@@ -1260,7 +1260,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                             ],
                         }
                     ],
-                    max_tokens=1500,
+                    max_tokens=2500,  # เพิ่มจาก 1500 เพื่อไม่ให้ response ถูกตัด
                     temperature=0.2,
                     extra_headers={
                         "HTTP-Referer": "https://ladda-chatbot.railway.app",
