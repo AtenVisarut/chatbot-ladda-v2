@@ -182,12 +182,22 @@ def extract_search_keywords(disease_name: str) -> List[str]:
 
     Args:
         disease_name: ชื่อโรค เช่น "โรคดอกกระถิน (False Smut)"
+                      หรือ pest_name เช่น "เพลี้ยจักจั่น ไรสี่ขา"
 
     Returns:
         รายการ keywords สำหรับค้นหา
     """
     keywords = []
     disease_lower = disease_name.lower()
+
+    # 0. ถ้ามี space และเป็นชื่อแมลง/ศัตรูพืชหลายตัว → แยกออก
+    # เช่น "เพลี้ยจักจั่น ไรสี่ขา" → ["เพลี้ยจักจั่น", "ไรสี่ขา"]
+    if " " in disease_name and not disease_name.startswith("โรค"):
+        parts = disease_name.split()
+        for part in parts:
+            part = part.strip()
+            if part and len(part) > 2:
+                keywords.append(part)
 
     # 1. ตรวจสอบจาก pattern ที่กำหนดไว้
     for pattern, search_terms in DISEASE_SEARCH_PATTERNS.items():
@@ -249,9 +259,11 @@ async def query_products_by_target_pest(disease_name: str, required_category: st
                 query = supabase_client.table('products').select('*')
                 query = query.ilike('target_pest', f'%{keyword}%')
 
-                # Filter by category if specified
+                # Filter by category if specified (รองรับ synonyms)
                 if required_category:
-                    query = query.eq('product_category', required_category)
+                    # ดึง synonyms ของ category นี้
+                    category_synonyms = CATEGORY_SYNONYMS.get(required_category, [required_category])
+                    query = query.in_('product_category', category_synonyms)
 
                 result = query.limit(10).execute()
 
@@ -550,16 +562,42 @@ def get_required_category(disease_name: str) -> tuple:
     return (None, None)
 
 
+# Category synonyms - ชื่อต่างกันแต่หมายถึงประเภทเดียวกัน
+CATEGORY_SYNONYMS = {
+    "กำจัดแมลง": ["กำจัดแมลง", "ยาฆ่าแมลง", "ยากำจัดแมลง", "insecticide"],
+    "ป้องกันโรค": ["ป้องกันโรค", "ยาป้องกันโรค", "ยาฆ่าเชื้อรา", "fungicide"],
+    "กำจัดวัชพืช": ["กำจัดวัชพืช", "ยาฆ่าหญ้า", "ยากำจัดวัชพืช", "herbicide"],
+    "ปุ๋ยและสารบำรุง": ["ปุ๋ยและสารบำรุง", "ปุ๋ย", "สารบำรุง", "fertilizer"],
+}
+
+
+def normalize_category(category: str) -> str:
+    """
+    แปลง category ให้เป็นชื่อมาตรฐาน
+    เช่น "ยาฆ่าแมลง" → "กำจัดแมลง"
+    """
+    if not category:
+        return "unknown"
+
+    category_lower = category.lower().strip()
+    for standard, synonyms in CATEGORY_SYNONYMS.items():
+        if category_lower in [s.lower() for s in synonyms]:
+            return standard
+
+    return category  # คืนค่าเดิมถ้าไม่พบใน synonyms
+
+
 def get_product_category(product: dict) -> str:
     """
     ระบุประเภทสินค้าจาก field product_category ใน DB
 
-    Returns: "fungicide", "insecticide", "herbicide", "fertilizer" หรือ "unknown"
+    Returns: "ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง" หรือ "unknown"
     """
     # อ่านจาก field product_category ใน DB (แม่นยำ 100%)
     db_category = product.get("product_category")
     if db_category:
-        return db_category
+        # Normalize ให้เป็นชื่อมาตรฐาน
+        return normalize_category(db_category)
 
     # Fallback: ถ้าไม่มีข้อมูลใน DB ให้ return unknown
     return "unknown"
@@ -857,8 +895,11 @@ def get_search_query_for_disease(disease_name: str, pest_type: str = "") -> tupl
     disease_lower = disease_name.lower()
 
     # ตรวจสอบว่าเป็นโรคที่มีพาหะหรือไม่
-    for key, info in VECTOR_DISEASES.items():
+    # เรียง key ยาวที่สุดก่อน เพื่อให้ "cassava witches' broom" match ก่อน "witches' broom"
+    sorted_keys = sorted(VECTOR_DISEASES.keys(), key=len, reverse=True)
+    for key in sorted_keys:
         if key in disease_lower:
+            info = VECTOR_DISEASES[key]
             logger.info(f"🐛 โรคนี้มีแมลงพาหะ: {info['pest']} → ค้นหาทั้งยาฆ่าแมลงและยารักษาโรค")
             # Return both: vector search + disease treatment search
             disease_treatment_query = info.get("disease_query", f"{disease_name} ยารักษา โรคพืช")
