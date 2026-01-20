@@ -645,7 +645,8 @@ def create_disease_result_flex(
     severity: str = "ปานกลาง",
     raw_analysis: str = "",
     pest_type: str = "โรคพืช",
-    pest_vector: str = None
+    pest_vector: str = None,
+    category: str = ""
 ) -> Dict:
     """
     สร้าง Flex Message แสดงผลการวิเคราะห์โรคพืช
@@ -658,7 +659,19 @@ def create_disease_result_flex(
         raw_analysis: ข้อมูลวิเคราะห์ดิบ
         pest_type: ประเภทศัตรูพืช
         pest_vector: แมลงพาหะของโรค (ถ้ามี)
+        category: กลุ่มโรค (fungal/bacterial/viral/insect/nutrient)
     """
+    # แปลง category เป็นภาษาไทย
+    category_map = {
+        "fungal": ("🍄 เชื้อรา", "#8B4513"),
+        "bacterial": ("🦠 แบคทีเรีย", "#E74C3C"),
+        "viral": ("🧬 ไวรัส", "#9B59B6"),
+        "insect": ("🐛 แมลงศัตรูพืช", "#E67E22"),
+        "nutrient": ("🌱 ขาดธาตุอาหาร", "#27AE60"),
+        "healthy": ("✅ แข็งแรง", "#2ECC71"),
+        "unknown": ("❓ ไม่ทราบ", "#95A5A6"),
+    }
+    category_label, category_color = category_map.get(category.lower() if category else "", ("", "#666666"))
     # แปลง confidence เป็น percentage
     try:
         if isinstance(confidence, str):
@@ -836,6 +849,32 @@ def create_disease_result_flex(
                         ]
                     }
                 ] + (
+                    # Category Section - แสดงกลุ่มโรค (ถ้ามี)
+                    [
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "margin": "md",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "🔬 ประเภท:",
+                                    "size": "sm",
+                                    "color": "#888888",
+                                    "flex": 0
+                                },
+                                {
+                                    "type": "text",
+                                    "text": category_label,
+                                    "size": "sm",
+                                    "color": category_color,
+                                    "weight": "bold",
+                                    "margin": "sm"
+                                }
+                            ]
+                        }
+                    ] if category_label else []
+                ) + (
                     # Pest Vector Section - แสดงข้อมูลแมลงพาหะ (ถ้ามี)
                     [
                         {

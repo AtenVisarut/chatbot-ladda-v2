@@ -344,7 +344,8 @@ async def generate_flex_response(
                 severity=safe_severity,
                 raw_analysis=safe_raw,
                 pest_type=pest_type,
-                pest_vector=pest_vector_info
+                pest_vector=pest_vector_info,
+                category=disease_info.category or ""
             )
             messages.append(disease_flex)
             logger.info("  ✓ Disease flex created")
@@ -503,7 +504,8 @@ async def generate_diagnosis_with_stage_question(
                 severity=safe_severity,
                 raw_analysis=safe_raw,
                 pest_type=pest_type,
-                pest_vector=pest_vector_info
+                pest_vector=pest_vector_info,
+                category=disease_info.category or ""
             )
             messages.append(disease_flex)
         except Exception as e:

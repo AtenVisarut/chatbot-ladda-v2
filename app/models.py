@@ -8,6 +8,7 @@ class DiseaseDetectionResult(BaseModel):
     severity: str
     raw_analysis: str
     plant_type: Optional[str] = ""  # ชนิดพืชจากการวินิจฉัย
+    category: Optional[str] = ""  # กลุ่มโรค: fungal/bacterial/viral/insect/nutrient
 
 class ProductRecommendation(BaseModel):
     product_name: str

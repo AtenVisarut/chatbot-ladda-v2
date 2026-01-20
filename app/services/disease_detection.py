@@ -1160,6 +1160,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                 severity="ไม่มี",
                 raw_analysis="พืชแข็งแรงปกติ ไม่พบโรค/แมลง/อาการขาดธาตุ",
                 plant_type=plant_type,
+                category="healthy",
             )
             if cache_key:
                 await set_to_cache("detection_v2", cache_key, result.dict())
@@ -1287,6 +1288,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
                 severity=severity,
                 raw_analysis=f"Quick analysis: {problem_name_th}",
                 plant_type=plant_type,
+                category=str(problem_type) if problem_type else "",
             )
             if cache_key:
                 await set_to_cache("detection_v2", cache_key, result.dict())
@@ -1349,6 +1351,7 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
             severity=str(final_severity),
             raw_analysis=" | ".join(raw_parts),
             plant_type=str(plant_type),
+            category=str(problem_type) if problem_type else "",  # กลุ่มโรค: fungal/bacterial/viral/insect
         )
 
         # Cache result
