@@ -75,7 +75,7 @@ from app.services.memory import (
     save_recommended_products
 )
 from app.services.disease_detection import smart_detect_disease
-from app.services.product_recommendation import retrieve_products_with_matching_score
+from app.services.product_recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
 from app.services.chat import handle_natural_conversation
 from app.services.rich_menu import setup_rich_menu, setup_rich_menu_debug
@@ -998,8 +998,14 @@ async def _process_webhook_events(events: list):
 
                             for kw in skip_keywords:
                                 if kw.lower() in disease_name_lower:
-                                    should_recommend = False
-                                    logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
+                                    # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ (เช่น โรคใบด่างมันสำปะหลัง มีแมลงหวี่ขาวเป็นพาหะ)
+                                    _, pest_name, _ = get_search_query_for_disease(detection_result.disease_name)
+                                    if pest_name:
+                                        # โรคนี้มีพาหะ → ยังแนะนำยาฆ่าแมลงได้
+                                        logger.info(f"🐛 โรคมีพาหะ '{pest_name}' → ยังแนะนำยาฆ่าแมลงได้ (แม้จะ match skip keyword: {kw})")
+                                    else:
+                                        should_recommend = False
+                                        logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
                                     break
 
                             # Extract pest_type from raw_analysis
