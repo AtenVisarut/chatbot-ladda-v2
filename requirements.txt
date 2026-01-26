@@ -27,6 +27,10 @@ python-multipart==0.0.12
 # Rate limiting
 slowapi==0.1.9
 
+# Redis cache (optional - for scale-out support)
+redis>=5.0.0
+upstash-redis>=1.0.0
+
 # Security
 itsdangerous==2.2.0
 

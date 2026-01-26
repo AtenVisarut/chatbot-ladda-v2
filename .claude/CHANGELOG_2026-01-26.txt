@@ -1,0 +1,230 @@
+# Changelog - 26 มกราคม 2026
+
+## สรุปการเปลี่ยนแปลงวันนี้
+
+### 1. เพิ่ม Redis Cache Layer สำหรับ Scale-Out Support
+
+**ไฟล์ใหม่:** `app/services/redis_cache.py`
+
+**วัตถุประสงค์:**
+- รองรับการ scale horizontally (หลาย instances)
+- Rate limiting ทำงานถูกต้องแม้มีหลาย server instances
+- ข้อมูล cache ไม่หายเมื่อ server restart
+
+**ฟังก์ชันหลัก:**
+```python
+# Basic cache
+redis_get(key) -> Any
+redis_set(key, value, ttl) -> bool
+redis_delete(key) -> bool
+
+# Rate limiting
+check_rate_limit_redis(user_id, limit=10, window=60) -> (bool, int)
+get_rate_limit_status_redis(user_id, limit=10) -> dict
+
+# Image cooldown
+check_image_cooldown_redis(user_id, cooldown=10) -> (bool, int)
+
+# Concurrent analysis limiter
+acquire_analysis_slot(max_concurrent=10) -> bool
+release_analysis_slot() -> None
+```
+
+**การเชื่อมต่อ:**
+- รองรับ Upstash REST API (แนะนำสำหรับ serverless)
+- รองรับ Standard Redis URL
+- Auto-fallback เป็น In-Memory Cache ถ้า Redis ไม่พร้อม
+
+---
+
+### 2. อัปเดต Config สำหรับ Redis และ Throttling
+
+**ไฟล์:** `app/config.py`
+
+**เพิ่ม Config ใหม่:**
+```python
+# Cache size (เพิ่มจาก 1000 เป็น 5000)
+MAX_CACHE_SIZE = 5000
+
+# Image analysis throttling
+IMAGE_COOLDOWN = 10  # seconds between image requests per user
+MAX_CONCURRENT_ANALYSIS = 10  # max concurrent image analyses
+
+# Redis configuration
+REDIS_URL = os.getenv("REDIS_URL")
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL")
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+USE_REDIS_CACHE = bool(REDIS_URL or UPSTASH_REDIS_REST_URL)
+```
+
+---
+
+### 3. อัปเดต Rate Limiter ให้รองรับ Redis
+
+**ไฟล์:** `app/utils/rate_limiter.py`
+
+**การทำงาน:**
+```
+┌─────────────────────────────────────────┐
+│  if Redis available:                    │
+│      → use Redis (scale-out support)    │
+│  else:                                  │
+│      → use In-Memory Cache (fallback)   │
+└─────────────────────────────────────────┘
+```
+
+**ฟังก์ชันที่อัปเดต:**
+- `check_user_rate_limit(user_id)` - ใช้ Redis ถ้ามี
+- `check_image_cooldown(user_id, cooldown)` - ใหม่! ป้องกันส่งรูปถี่เกินไป
+- `acquire_analysis_slot()` - ใหม่! จำกัด concurrent analysis
+- `release_analysis_slot()` - ใหม่! ปล่อย slot หลัง analysis เสร็จ
+- `get_rate_limit_status(user_id)` - แสดง backend ที่ใช้
+- `get_cache_backend_info()` - ใหม่! ดูข้อมูล cache backend
+
+---
+
+### 4. เพิ่ม Dependencies
+
+**ไฟล์:** `requirements.txt`
+
+**เพิ่ม:**
+```
+redis>=5.0.0
+upstash-redis>=1.0.0
+```
+
+---
+
+### 5. สร้างไฟล์ทดสอบ
+
+**ไฟล์ใหม่:** `tests/test_redis_cache.py`
+
+**ทดสอบ:**
+- Redis connection
+- Rate limiting (10 requests/60s)
+- Image cooldown (10s default)
+- Concurrent analysis slots
+- Backend selection (Redis vs Memory)
+
+---
+
+## Environment Variables ที่ต้องตั้ง (Railway)
+
+```bash
+# Option 1: Upstash REST API (แนะนำ)
+UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxx
+
+# Option 2: Standard Redis
+REDIS_URL=redis://default:xxx@xxx:6379
+```
+
+---
+
+## ผลการทดสอบ
+
+| ฟังก์ชัน | ผลลัพธ์ |
+|----------|---------|
+| Redis Connection | Connected (Upstash REST API) |
+| Rate Limit (10/60s) | ทำงานถูกต้อง |
+| Image Cooldown (10s) | ทำงานถูกต้อง |
+| Backend Selection | Redis (auto-detected) |
+| Fallback to Memory | พร้อมใช้งาน |
+
+---
+
+## ไฟล์ที่แก้ไข/สร้างใหม่
+
+| ไฟล์ | การเปลี่ยนแปลง |
+|------|----------------|
+| `app/services/redis_cache.py` | สร้างใหม่ - Redis cache layer |
+| `app/config.py` | เพิ่ม Redis config, IMAGE_COOLDOWN, MAX_CONCURRENT_ANALYSIS |
+| `app/utils/rate_limiter.py` | เขียนใหม่ - รองรับ Redis + Memory fallback |
+| `requirements.txt` | เพิ่ม redis, upstash-redis |
+| `tests/test_redis_cache.py` | สร้างใหม่ - ไฟล์ทดสอบ |
+
+---
+
+## Architecture หลังอัปเดต
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Request Flow                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User Request                                               │
+│       ↓                                                     │
+│  ┌─────────────────────┐                                    │
+│  │   Rate Limiter      │                                    │
+│  │   (rate_limiter.py) │                                    │
+│  └──────────┬──────────┘                                    │
+│             ↓                                               │
+│  ┌─────────────────────────────────────────┐                │
+│  │         Cache Backend Selection          │                │
+│  ├─────────────────────────────────────────┤                │
+│  │  Redis Available?                        │                │
+│  │     YES → redis_cache.py (Primary)       │                │
+│  │     NO  → cache.py (In-Memory Fallback)  │                │
+│  └─────────────────────────────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                   Scale-Out Support                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐                │
+│  │ Instance │   │ Instance │   │ Instance │                │
+│  │    1     │   │    2     │   │    3     │                │
+│  └────┬─────┘   └────┬─────┘   └────┬─────┘                │
+│       │              │              │                       │
+│       └──────────────┼──────────────┘                       │
+│                      ↓                                      │
+│             ┌─────────────────┐                             │
+│             │  Upstash Redis  │                             │
+│             │  (Shared State) │                             │
+│             └─────────────────┘                             │
+│                                                             │
+│  - Rate limit ทำงานถูกต้องข้าม instances                    │
+│  - Image cooldown ทำงานถูกต้องข้าม instances                │
+│  - Concurrent analysis limit ทำงานถูกต้อง                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ปัญหาที่แก้ไขได้
+
+| ปัญหาเดิม | หลังแก้ไข |
+|-----------|-----------|
+| Rate limit หายเมื่อ restart | ข้อมูลเก็บใน Redis ไม่หาย |
+| Scale out ทำให้ bypass rate limit | Rate limit ทำงานข้าม instances |
+| ไม่มี image cooldown | มี cooldown 10 วินาทีระหว่างส่งรูป |
+| ไม่จำกัด concurrent analysis | จำกัด 10 concurrent analyses |
+| MAX_CACHE_SIZE แค่ 1000 | เพิ่มเป็น 5000 |
+
+---
+
+## หมายเหตุสำคัญ
+
+### Fallback Mechanism
+- In-Memory Cache (`app/services/cache.py`) ยังคงเก็บไว้
+- ถ้า Redis ล่มหรือ connect ไม่ได้ → ใช้ Memory Cache อัตโนมัติ
+- Dev local ไม่ต้องตั้ง Redis ก็ใช้งานได้
+
+### Upstash Free Tier
+- 10,000 commands/day
+- เพียงพอสำหรับ ~500-1000 users/day
+- ถ้าเกิน quota → fallback เป็น Memory Cache
+
+### Config ที่ปรับได้ผ่าน Environment
+```bash
+IMAGE_COOLDOWN=10              # วินาทีระหว่างส่งรูป
+MAX_CONCURRENT_ANALYSIS=10     # concurrent analyses สูงสุด
+```
+
+---
+
+*Created: 2026-01-26*
+*Status: ทดสอบสำเร็จ, รอ deploy*

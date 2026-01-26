@@ -32,11 +32,22 @@ AGRO_RISK_API_URL = os.getenv("AGRO_RISK_API_URL", "https://thai-water.vercel.ap
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
 PENDING_CONTEXT_TTL = 1800  # 30 minutes (เพิ่มจาก 5 นาที เพื่อให้ user มีเวลาตอบ)
-MAX_CACHE_SIZE = 1000  # Maximum cache entries
+MAX_CACHE_SIZE = 5000  # Maximum cache entries (เพิ่มจาก 1000 เป็น 5000)
 
 # Rate limiting per user
 USER_RATE_LIMIT = 10  # requests per minute
 USER_RATE_WINDOW = 60  # seconds
+
+# Image analysis throttling
+IMAGE_COOLDOWN = int(os.getenv("IMAGE_COOLDOWN", "10"))  # seconds between image requests per user
+MAX_CONCURRENT_ANALYSIS = int(os.getenv("MAX_CONCURRENT_ANALYSIS", "10"))  # max concurrent image analyses
+
+# Redis configuration (for scale-out support)
+# Set REDIS_URL or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
+REDIS_URL = os.getenv("REDIS_URL")
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL")
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+USE_REDIS_CACHE = bool(REDIS_URL or UPSTASH_REDIS_REST_URL)
 
 # Memory configuration
 MAX_MEMORY_MESSAGES = 40  # Keep last 40 messages for context
