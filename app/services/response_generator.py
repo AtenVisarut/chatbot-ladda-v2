@@ -505,7 +505,8 @@ async def generate_diagnosis_with_stage_question(
                 raw_analysis=safe_raw,
                 pest_type=pest_type,
                 pest_vector=pest_vector_info,
-                category=disease_info.category or ""
+                category=disease_info.category or "",
+                show_product_hint=False  # ไม่แสดง "ผลิตภัณฑ์แนะนำด้านล่าง" เพราะต้องถามระยะปลูกก่อน
             )
             messages.append(disease_flex)
         except Exception as e:

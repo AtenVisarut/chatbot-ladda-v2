@@ -646,7 +646,8 @@ def create_disease_result_flex(
     raw_analysis: str = "",
     pest_type: str = "โรคพืช",
     pest_vector: str = None,
-    category: str = ""
+    category: str = "",
+    show_product_hint: bool = True
 ) -> Dict:
     """
     สร้าง Flex Message แสดงผลการวิเคราะห์โรคพืช
@@ -658,6 +659,7 @@ def create_disease_result_flex(
         severity: ระดับความรุนแรง
         raw_analysis: ข้อมูลวิเคราะห์ดิบ
         pest_type: ประเภทศัตรูพืช
+        show_product_hint: แสดงข้อความ "ผลิตภัณฑ์แนะนำด้านล่าง" หรือไม่
         pest_vector: แมลงพาหะของโรค (ถ้ามี)
         category: กลุ่มโรค (fungal/bacterial/viral/insect/nutrient)
     """
@@ -965,16 +967,15 @@ def create_disease_result_flex(
                                 "margin": "sm"
                             }
                         ]
-                    },
-                    {
-                        "type": "text",
-                        "text": "👇 ผลิตภัณฑ์แนะนำด้านล่าง",
-                        "size": "xs",
-                        "color": "#888888",
-                        "align": "center",
-                        "margin": "md"
                     }
-                ]
+                ] + ([{
+                    "type": "text",
+                    "text": "👇 ผลิตภัณฑ์แนะนำด้านล่าง",
+                    "size": "xs",
+                    "color": "#888888",
+                    "align": "center",
+                    "margin": "md"
+                }] if show_product_hint else [])
             }
         }
     }
