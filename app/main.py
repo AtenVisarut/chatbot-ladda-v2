@@ -48,7 +48,6 @@ from app.services.welcome import (
     get_help_menu
 )
 from app.utils.flex_messages import (
-    create_chat_response_flex,
     create_liff_registration_flex,
     create_liff_welcome_flex,
     create_initial_questions_flex,
@@ -77,7 +76,7 @@ from app.services.memory import (
 from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
-from app.services.chat import handle_natural_conversation
+# Q&A disabled - only disease analysis mode
 from app.services.rich_menu import setup_rich_menu, setup_rich_menu_debug
 from app.services.agro_risk import (
     check_weather,
@@ -981,7 +980,7 @@ async def _process_webhook_events(events: list):
                                 "ขาดธาตุ", "ขาดไนโตรเจน", "ขาดฟอสฟอรัส", "ขาดโพแทสเซียม",
                                 "ขาดแมกนีเซียม", "ขาดเหล็ก", "ขาดแคลเซียม", "ขาดโบรอน",
                                 "Deficiency", "deficiency",
-                                "ใบเหลือง", "ใบซีด", "ใบด่าง",
+                                "ใบเหลือง", "ใบซีด", "",
                                 "สุขภาพดี", "healthy", "Healthy",
                                 "Technical Error", "ไม่สามารถระบุได้", "Error", "error",
                                 "ไม่ใช่ภาพ", "ไม่ใช่รูป", "Not Found"
@@ -1187,12 +1186,11 @@ async def _process_webhook_events(events: list):
                             reg_flex = create_liff_registration_flex(LIFF_URL)
                             await reply_line(reply_token, reg_flex)
                         else:
-                            response = await handle_natural_conversation(user_id, text)
-                            chat_flex = create_chat_response_flex(text, response)
-                            await reply_line(reply_token, chat_flex)
+                            # แนะนำให้ส่งรูปวิเคราะห์โรค
+                            await reply_line(reply_token, "กรุณาส่งรูปพืชที่มีอาการ เพื่อวิเคราะห์โรคค่ะ 📷")
 
                 else:
-                    # Normal Chat / Q&A
+                    # Normal text message handling
                     if text.lower() in ["ล้างความจำ", "reset", "clear"]:
                         await clear_memory(user_id)
                         await reply_line(reply_token, "ล้างความจำเรียบร้อยค่ะ เริ่มต้นใหม่ได้เลย! ✨")
@@ -1203,28 +1201,14 @@ async def _process_webhook_events(events: list):
                         await reply_line(reply_token, help_flex)
 
                     else:
-                        # Check if user has completed registration before chat Q&A
+                        # Check registration first
                         if not await is_registration_completed(user_id):
-                            logger.info(f"User {user_id} not registered - blocking chat Q&A")
-                            # Send LIFF registration message
+                            logger.info(f"User {user_id} not registered")
                             reg_flex = create_liff_registration_flex(LIFF_URL)
                             await reply_line(reply_token, reg_flex)
                         else:
-                            # Natural Conversation Handler
-                            response = await handle_natural_conversation(user_id, text)
-
-                            # Use Flex Message for chat response
-                            chat_flex = create_chat_response_flex(text, response)
-                            await reply_line(reply_token, chat_flex)
-
-                            # Track analytics
-                            if analytics_tracker:
-                                response_time = (time.time() - start_time) * 1000
-                                await analytics_tracker.track_question(
-                                    user_id=user_id,
-                                    question=text,
-                                    response_time_ms=response_time
-                                )
+                            # แนะนำให้ส่งรูปวิเคราะห์โรค (ไม่มี Q&A แล้ว)
+                            await reply_line(reply_token, "กรุณาส่งรูปพืชที่มีอาการ เพื่อวิเคราะห์โรคค่ะ 📷")
 
             # 4. Handle Location Message (Weather Check)
             elif event_type == "message" and event.get("message", {}).get("type") == "location":
