@@ -16,10 +16,11 @@ app/
 ├── config.py                    # Configuration
 ├── models.py                    # Data models
 ├── services/
-│   ├── disease_detection.py     # วินิจฉัยโรคด้วย Gemini Vision
+│   ├── disease_detection.py     # วินิจฉัยโรค (v1: hardcode, v2: RAG)
+│   ├── disease_search.py        # RAG + Vector Search สำหรับค้นหาโรค
 │   ├── product_recommendation.py # แนะนำสินค้า (line 1892: retrieve_products_with_matching_score)
 │   ├── response_generator.py    # สร้าง Flex Message
-│   ├── chat.py                  # Natural language Q&A
+│   ├── knowledge_base.py        # Knowledge RAG for Q&A
 │   ├── cache.py                 # In-Memory Cache (L1) + Supabase (L2)
 │   ├── redis_cache.py           # Redis Cache สำหรับ scale-out (2026-01-26)
 │   └── memory.py                # Conversation memory
@@ -35,6 +36,29 @@ liff/
 └── diseases-sugarcane.html      # โรคอ้อย
 ```
 
+## Disease Detection Modes (Updated 2026-01-27)
+
+### Mode Selection: `USE_RAG_DETECTION` env var
+- `USE_RAG_DETECTION=0` → v1 (Hardcoded Database)
+- `USE_RAG_DETECTION=1` → v2 (RAG + Vector Search) **← Production ใช้อยู่**
+
+### v2 Flow (RAG Mode) - 3 Steps:
+```
+Step 1: Quick Vision (Gemini 3 Flash)
+    ↓ ได้ plant_type, problem_name_th, keywords
+Step 2: Vector Search (Supabase)
+    ↓ search_diseases() → ค้นหาใน table diseases
+    ↓ build_context_from_diseases() → สร้าง RAG context
+Step 3: Final Analysis (Gemini 3 Flash + RAG)
+    ↓ เปรียบเทียบภาพกับข้อมูล DB
+    ↓ ได้ผลพร้อม matched_disease_from_db
+```
+
+### ข้อดีของ v2:
+- Token cost ลด 70-80%
+- อัพเดทโรคได้ผ่าน Database โดยไม่ต้อง deploy
+- ความเร็ว ~6-8s (v1 ~10s)
+
 ## Disease Detection Flow (3-Step Questions)
 
 1. **User ส่งรูปพืช** → Check registration
@@ -44,7 +68,7 @@ liff/
    - Quick Reply: ใบ | ลำต้น | ผล | ราก | กาบใบ | รวง | กิ่ง | ข้าม
 4. **Step 3**: ถามลักษณะ (ข้ามได้) - state: `awaiting_symptom`
    - Quick Reply: จุดสี | ลักษณะแผล | สีของใบ | เหี่ยว/แห้ง | แมลง | ข้าม
-5. **Download image** → `smart_detect_disease()` → Gemini Vision
+5. **Download image** → `smart_detect_disease()` → Gemini Vision + RAG
 6. **Ask growth stage** - state: `awaiting_growth_stage`
 7. **Product recommendation** → `retrieve_products_with_matching_score()`
 
@@ -129,5 +153,5 @@ REDIS_URL=redis://default:xxx@xxx:6379
 
 ---
 *Created: 2026-01-21*
-*Updated: 2026-01-26 (Redis cache, rate limiting improvements)*
-*Source: flow chatbot.md v2.7*
+*Updated: 2026-01-27 (RAG detection mode documentation)*
+*Source: flow chatbot.md v2.8*

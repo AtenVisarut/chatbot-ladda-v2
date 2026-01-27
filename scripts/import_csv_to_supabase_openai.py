@@ -1,10 +1,14 @@
 import os
+import sys
 import csv
 import asyncio
 from typing import List, Dict
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from openai import AsyncOpenAI
+
+# Fix Windows console encoding
+sys.stdout.reconfigure(encoding='utf-8')
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +25,7 @@ if not SUPABASE_URL or not SUPABASE_KEY or not OPENAI_API_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-CSV_FILE = "Data ICPL product for iDA.csv"
+CSV_FILE = r"C:\chatbot ladda ตัวหลัก 2.5 มีการถามตอบขอระยะการปลูก\product.csv"
 
 async def get_embedding(text: str) -> List[float]:
     """Generate embedding using OpenAI"""
@@ -49,7 +53,8 @@ def read_csv(file_path: str) -> List[Dict]:
                     print(f"Debug - First row keys: {list(clean_row.keys())}")
                     print(f"Debug - First row sample values:")
                     for key in list(clean_row.keys())[:10]:
-                        print(f"  '{key}': '{clean_row[key][:50] if clean_row[key] else 'EMPTY'}'")
+                        val = clean_row[key][:50] if clean_row[key] else 'EMPTY'
+                        print(f"  '{key}': '{val}'")
                 products.append(clean_row)
     except Exception as e:
         print(f"Error reading CSV: {e}")
@@ -68,12 +73,12 @@ async def process_product(product: Dict):
         Applicable Crops: {product.get('ใช้ได้กับพืช', '')}
         Usage: {product.get('วิธีใช้', '')}
         """
-        
+
         # Generate embedding
         embedding = await get_embedding(text_to_embed)
-        
+
         if not embedding:
-            print(f"Skipping {product.get('ชื่อสินค้า (ชื่อการค้า)')}: No embedding generated")
+            print(f"[SKIP] {product.get('ชื่อสินค้า (ชื่อการค้า)')}: No embedding generated")
             return
 
         # Prepare data for Supabase
@@ -91,17 +96,22 @@ async def process_product(product: Dict):
 
         # Insert into Supabase
         supabase.table("products").insert(data).execute()
-        print(f"✅ Imported: {product.get('ชื่อสินค้า (ชื่อการค้า)')}")
+        print(f"[OK] Imported: {product.get('ชื่อสินค้า (ชื่อการค้า)')}")
 
     except Exception as e:
-        print(f"❌ Error processing {product.get('ชื่อสินค้า (ชื่อการค้า)')}: {e}")
+        print(f"[ERROR] {product.get('ชื่อสินค้า (ชื่อการค้า)')}: {e}")
 
 async def main():
-    print(f"Starting import from {CSV_FILE}...")
-    
+    print(f"Starting import from: {os.path.basename(CSV_FILE)}")
+    print(f"Full path: {CSV_FILE}")
+
     products = read_csv(CSV_FILE)
     print(f"Found {len(products)} products in CSV.")
-    
+
+    if len(products) == 0:
+        print("No products to import. Check if CSV file exists and has correct format.")
+        return
+
     # Process in batches to avoid rate limits
     batch_size = 5
     for i in range(0, len(products), batch_size):
@@ -110,7 +120,7 @@ async def main():
         print(f"Processed batch {i//batch_size + 1}/{(len(products)-1)//batch_size + 1}")
         await asyncio.sleep(1)  # Small delay to be nice to API
 
-    print("\nImport completed! 🎉")
+    print("\nImport completed!")
 
 if __name__ == "__main__":
     asyncio.run(main())

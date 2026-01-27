@@ -1,0 +1,51 @@
+# Changelog - 27 January 2026
+
+## Summary
+- Code review และตรวจสอบ flow การวินิจฉัยโรค
+- ยืนยันว่าระบบใช้ RAG mode (v2) อยู่แล้ว
+- อัพเดท documentation
+
+## Changes Made
+
+### 1. Code Review (Manual)
+เนื่องจาก gh CLI ไม่พร้อมใช้งาน ทำ code review แบบ manual
+
+**Files Reviewed:**
+- `liff/diseases-rice.html` - เปลี่ยนผลิตภัณฑ์โรคเมล็ดด่าง + เพิ่ม videoUrl
+- `liff/diseases-sugarcane.html` - เพิ่ม productImage ให้หลายโรค + แก้ไขชื่อผลิตภัณฑ์
+- `scripts/import_csv_to_supabase_openai.py` - เพิ่ม Windows UTF-8 encoding fix
+
+**Status:** All changes look safe, no security issues
+
+### 2. RAG Detection Mode Verification
+ตรวจสอบ flow การวินิจฉัยโรคใน `app/services/disease_detection.py`
+
+**พบว่า:**
+- ระบบมี 2 modes: v1 (hardcode) และ v2 (RAG)
+- Production ตั้ง `USE_RAG_DETECTION=1` → ใช้ v2 อยู่แล้ว
+
+**v2 Flow (RAG Mode):**
+```
+Step 1: Quick Vision (Gemini 3 Flash) → ระบุชื่อโรค/keywords
+Step 2: Vector Search (Supabase) → search_diseases() + build_context_from_diseases()
+Step 3: Final Analysis (Gemini + RAG) → เปรียบเทียบภาพกับข้อมูล DB
+```
+
+### 3. Deleted Files
+- `app/services/diagnosis_verifier.py` - ลบออกเพราะซ้ำซ้อนกับ v2 flow
+
+### 4. Documentation Updated
+- `.claude/MEMORY_CHATBOT_FLOW.md` - เพิ่ม section Disease Detection Modes (v1/v2)
+
+## Files Changed Summary
+- Modified: `.claude/MEMORY_CHATBOT_FLOW.md`
+- Modified: `liff/diseases-rice.html` (product info update)
+- Modified: `liff/diseases-sugarcane.html` (product images)
+- Modified: `scripts/import_csv_to_supabase_openai.py` (encoding fix)
+- Deleted: Various old scripts and files
+
+## Environment Variables
+- `USE_RAG_DETECTION=1` - เปิดใช้ RAG mode (ตั้งใน Railway แล้ว)
+
+---
+Session: 2026-01-27 afternoon
