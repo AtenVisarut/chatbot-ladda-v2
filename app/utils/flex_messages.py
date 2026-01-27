@@ -1330,128 +1330,186 @@ def create_simple_text_flex(title: str, message: str, button_label: str = None, 
 
 def create_help_menu_flex() -> Dict:
     """
-    สร้าง Flex Message สำหรับเมนูช่วยเหลือ
+    สร้าง Flex Message สำหรับเมนูช่วยเหลือ - แบบเกษตรกรเข้าใจง่าย
     """
     return {
         "type": "flex",
-        "altText": "เมนูช่วยเหลือ",
+        "altText": "วิธีใช้งาน - ตรวจโรคพืช",
         "contents": {
             "type": "bubble",
-            "size": "kilo",
+            "size": "mega",
             "header": {
                 "type": "box",
                 "layout": "vertical",
                 "contents": [
                     {
                         "type": "text",
-                        "text": "📋 เมนูช่วยเหลือ",
+                        "text": "🌾 วิธีใช้งานตรวจโรคพืช",
                         "color": "#ffffff",
                         "size": "lg",
                         "weight": "bold",
                         "align": "center"
+                    },
+                    {
+                        "type": "text",
+                        "text": "ง่ายๆ แค่ 4 ขั้นตอน",
+                        "color": "#E8F5E9",
+                        "size": "sm",
+                        "align": "center",
+                        "margin": "sm"
                     }
                 ],
-                "backgroundColor": "#3498DB",
+                "backgroundColor": "#2E7D32",
                 "paddingAll": "15px"
             },
             "body": {
                 "type": "box",
                 "layout": "vertical",
-                "spacing": "md",
+                "spacing": "lg",
+                "paddingAll": "15px",
                 "contents": [
+                    # ขั้นตอนที่ 1
                     {
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "text", "text": "📷", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
                                 "layout": "vertical",
                                 "contents": [
-                                    {"type": "text", "text": "ตรวจโรคพืช", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "ส่งรูปใบพืชที่มีอาการ", "size": "xs", "color": "#888888"}
+                                    {"type": "text", "text": "1", "color": "#ffffff", "size": "md", "weight": "bold", "align": "center"}
                                 ],
-                                "margin": "md"
+                                "width": "28px",
+                                "height": "28px",
+                                "backgroundColor": "#2E7D32",
+                                "cornerRadius": "14px",
+                                "justifyContent": "center",
+                                "alignItems": "center"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ถ่ายรูปพืชที่เป็นโรค", "weight": "bold", "size": "sm", "color": "#2E7D32"},
+                                    {"type": "text", "text": "ถ่ายใกล้ๆ ให้เห็นอาการชัดเจน", "size": "xs", "color": "#666666", "wrap": True}
+                                ],
+                                "margin": "md",
+                                "flex": 1
                             }
-                        ]
+                        ],
+                        "alignItems": "center"
                     },
+                    # ขั้นตอนที่ 2
                     {
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "text", "text": "📚", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
                                 "layout": "vertical",
                                 "contents": [
-                                    {"type": "text", "text": "คู่มือโรคพืช", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "ข้อมูลโรค อาการ ยาแนะนำ", "size": "xs", "color": "#888888"}
+                                    {"type": "text", "text": "2", "color": "#ffffff", "size": "md", "weight": "bold", "align": "center"}
                                 ],
-                                "margin": "md"
+                                "width": "28px",
+                                "height": "28px",
+                                "backgroundColor": "#2E7D32",
+                                "cornerRadius": "14px",
+                                "justifyContent": "center",
+                                "alignItems": "center"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ส่งรูปมาทางแชท", "weight": "bold", "size": "sm", "color": "#2E7D32"},
+                                    {"type": "text", "text": "กดปุ่มกล้องหรือรูปภาพ แล้วส่ง", "size": "xs", "color": "#666666", "wrap": True}
+                                ],
+                                "margin": "md",
+                                "flex": 1
                             }
-                        ]
+                        ],
+                        "alignItems": "center"
                     },
+                    # ขั้นตอนที่ 3
                     {
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "text", "text": "🌤️", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
                                 "layout": "vertical",
                                 "contents": [
-                                    {"type": "text", "text": "ดูสภาพอากาศ", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "เช็คสภาพอากาศและความเสี่ยง", "size": "xs", "color": "#888888"}
+                                    {"type": "text", "text": "3", "color": "#ffffff", "size": "md", "weight": "bold", "align": "center"}
                                 ],
-                                "margin": "md"
+                                "width": "28px",
+                                "height": "28px",
+                                "backgroundColor": "#2E7D32",
+                                "cornerRadius": "14px",
+                                "justifyContent": "center",
+                                "alignItems": "center"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "ตอบคำถามสั้นๆ", "weight": "bold", "size": "sm", "color": "#2E7D32"},
+                                    {"type": "text", "text": "ชนิดพืช, ตำแหน่งที่เป็น, อายุพืช", "size": "xs", "color": "#666666", "wrap": True}
+                                ],
+                                "margin": "md",
+                                "flex": 1
                             }
-                        ]
+                        ],
+                        "alignItems": "center"
                     },
+                    # ขั้นตอนที่ 4
                     {
                         "type": "box",
                         "layout": "horizontal",
                         "contents": [
-                            {"type": "text", "text": "💬", "size": "xl", "flex": 0},
                             {
                                 "type": "box",
                                 "layout": "vertical",
                                 "contents": [
-                                    {"type": "text", "text": "ถามข้อมูล", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "พิมพ์คำถามเกี่ยวกับโรค/ผลิตภัณฑ์", "size": "xs", "color": "#888888"}
+                                    {"type": "text", "text": "4", "color": "#ffffff", "size": "md", "weight": "bold", "align": "center"}
                                 ],
-                                "margin": "md"
+                                "width": "28px",
+                                "height": "28px",
+                                "backgroundColor": "#2E7D32",
+                                "cornerRadius": "14px",
+                                "justifyContent": "center",
+                                "alignItems": "center"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": "รับผลวิเคราะห์และยาแนะนำ", "weight": "bold", "size": "sm", "color": "#2E7D32"},
+                                    {"type": "text", "text": "ระบบจะบอกว่าเป็นโรคอะไร พร้อมแนะนำยา", "size": "xs", "color": "#666666", "wrap": True}
+                                ],
+                                "margin": "md",
+                                "flex": 1
                             }
-                        ]
+                        ],
+                        "alignItems": "center"
                     },
+                    # เส้นแบ่ง
+                    {"type": "separator", "margin": "lg"},
+                    # เคล็ดลับถ่ายรูป
                     {
                         "type": "box",
-                        "layout": "horizontal",
+                        "layout": "vertical",
+                        "margin": "lg",
                         "contents": [
-                            {"type": "text", "text": "📝", "size": "xl", "flex": 0},
+                            {"type": "text", "text": "💡 เคล็ดลับถ่ายรูปให้ชัด", "weight": "bold", "size": "sm", "color": "#E65100"},
                             {
                                 "type": "box",
                                 "layout": "vertical",
+                                "margin": "sm",
                                 "contents": [
-                                    {"type": "text", "text": "ลงทะเบียน", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "รับบริการเต็มรูปแบบ", "size": "xs", "color": "#888888"}
-                                ],
-                                "margin": "md"
-                            }
-                        ]
-                    },
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "contents": [
-                            {"type": "text", "text": "🔄", "size": "xl", "flex": 0},
-                            {
-                                "type": "box",
-                                "layout": "vertical",
-                                "contents": [
-                                    {"type": "text", "text": "ล้างความจำ", "weight": "bold", "size": "sm"},
-                                    {"type": "text", "text": "พิมพ์ 'reset' เพื่อเริ่มใหม่", "size": "xs", "color": "#888888"}
-                                ],
-                                "margin": "md"
+                                    {"type": "text", "text": "• ถ่ายในที่แสงสว่าง ไม่มืดหรือจ้าเกินไป", "size": "xs", "color": "#666666", "wrap": True},
+                                    {"type": "text", "text": "• ถ่ายใกล้ๆ ให้เห็นอาการโรคชัดเจน", "size": "xs", "color": "#666666", "wrap": True},
+                                    {"type": "text", "text": "• ถ่ายส่วนที่เป็นโรค เช่น ใบ ลำต้น ผล", "size": "xs", "color": "#666666", "wrap": True}
+                                ]
                             }
                         ]
                     }
@@ -1468,7 +1526,7 @@ def create_help_menu_flex() -> Dict:
                         "height": "sm",
                         "action": {
                             "type": "uri",
-                            "label": "📚 คู่มือโรคพืช",
+                            "label": "📚 ดูคู่มือโรคพืชทั้งหมด",
                             "uri": LIFF_DISEASES_URL
                         },
                         "color": "#2E7D32"
@@ -1480,39 +1538,27 @@ def create_help_menu_flex() -> Dict:
                         "contents": [
                             {
                                 "type": "button",
-                                "style": "primary",
+                                "style": "secondary",
                                 "height": "sm",
                                 "action": {
                                     "type": "message",
-                                    "label": "🌤️ สภาพอากาศ",
-                                    "text": "ดูสภาพอากาศ"
+                                    "label": "🔄 เริ่มใหม่",
+                                    "text": "reset"
                                 },
-                                "color": "#3498DB",
                                 "flex": 1
                             },
                             {
                                 "type": "button",
-                                "style": "primary",
+                                "style": "secondary",
                                 "height": "sm",
                                 "action": {
                                     "type": "message",
-                                    "label": "📝 ลงทะเบียน",
-                                    "text": "ลงทะเบียน"
+                                    "label": "🌤️ ดูอากาศ",
+                                    "text": "ดูสภาพอากาศ"
                                 },
-                                "color": "#27AE60",
                                 "flex": 1
                             }
                         ]
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "height": "sm",
-                        "action": {
-                            "type": "message",
-                            "label": "📖 วิธีใช้",
-                            "text": "วิธีใช้งาน"
-                        }
                     }
                 ]
             }
