@@ -29,6 +29,32 @@ class DiseaseMatch:
     similarity: float
 
 
+def _parse_list_field(data) -> List[str]:
+    """
+    Parse a field that could be list of str, list of dict, or JSON string.
+    Extracts 'th' or 'en' from dicts, converts to list of strings.
+    """
+    if data is None:
+        return []
+    if isinstance(data, str):
+        try:
+            data = eval(data)
+        except:
+            return [data]
+    if not isinstance(data, list):
+        return []
+    # Handle list of dicts: extract 'th' or 'en' value
+    result = []
+    for item in data:
+        if isinstance(item, dict):
+            result.append(item.get('th', item.get('en', str(item))))
+        elif isinstance(item, str):
+            result.append(item)
+        else:
+            result.append(str(item))
+    return result
+
+
 async def generate_search_embedding(text: str) -> List[float]:
     """Generate embedding for search query"""
     if not openai_client:
@@ -205,8 +231,8 @@ async def _keyword_search_fallback(
                     name_en=d['name_en'],
                     category=d['category'],
                     pathogen=d.get('pathogen', ''),
-                    symptoms=d.get('symptoms', []),
-                    key_features=d.get('key_features', []),
+                    symptoms=_parse_list_field(d.get('symptoms', [])),
+                    key_features=_parse_list_field(d.get('key_features', [])),
                     distinguish_from='',
                     severity_indicators={},
                     similarity=d.get('rank_score', 0.5)
@@ -231,25 +257,9 @@ def _parse_search_results(data: List[Dict], use_hybrid_score: bool) -> List[Dise
         else:
             similarity = d.get('similarity', 0)
 
-        # Parse symptoms (could be list or JSON)
-        symptoms = d.get('symptoms', [])
-        if isinstance(symptoms, str):
-            try:
-                symptoms = eval(symptoms)
-            except:
-                symptoms = [symptoms]
-        if not isinstance(symptoms, list):
-            symptoms = []
-
-        # Parse key_features
-        key_features = d.get('key_features', [])
-        if isinstance(key_features, str):
-            try:
-                key_features = eval(key_features)
-            except:
-                key_features = [key_features]
-        if not isinstance(key_features, list):
-            key_features = []
+        # Parse symptoms and key_features using helper function
+        symptoms = _parse_list_field(d.get('symptoms', []))
+        key_features = _parse_list_field(d.get('key_features', []))
 
         # Parse severity_indicators
         severity_indicators = d.get('severity_indicators', {})
@@ -441,8 +451,8 @@ async def get_disease_by_key(disease_key: str) -> Optional[DiseaseMatch]:
                 name_en=d['name_en'],
                 category=d['category'],
                 pathogen=d.get('pathogen', ''),
-                symptoms=d.get('symptoms', []),
-                key_features=d.get('key_features', []),
+                symptoms=_parse_list_field(d.get('symptoms', [])),
+                key_features=_parse_list_field(d.get('key_features', [])),
                 distinguish_from=d.get('distinguish_from', ''),
                 severity_indicators=d.get('severity_indicators', {}),
                 similarity=1.0
