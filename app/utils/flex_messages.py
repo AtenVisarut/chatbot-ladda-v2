@@ -1902,7 +1902,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌾 ข้าว",
+                        "label": "ข้าว",
                         "text": "ข้าว"
                     }
                 },
@@ -1910,7 +1910,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🍈 ทุเรียน",
+                        "label": "ทุเรียน",
                         "text": "ทุเรียน"
                     }
                 },
@@ -1918,7 +1918,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌽 ข้าวโพด",
+                        "label": "ข้าวโพด",
                         "text": "ข้าวโพด"
                     }
                 },
@@ -1926,7 +1926,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🥔 มันสำปะหลัง",
+                        "label": "มันสำปะหลัง",
                         "text": "มันสำปะหลัง"
                     }
                 },
@@ -1934,7 +1934,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🎋 อ้อย",
+                        "label": "อ้อย",
                         "text": "อ้อย"
                     }
                 },
@@ -1942,7 +1942,7 @@ def create_initial_questions_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "📝 อื่นๆ",
+                        "label": "อื่นๆ",
                         "text": "อื่นๆ"
                     }
                 }
@@ -2012,7 +2012,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🍃 ใบ",
+                        "label": "ใบ",
                         "text": "ใบ"
                     }
                 },
@@ -2020,7 +2020,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌿 ลำต้น",
+                        "label": "ลำต้น",
                         "text": "ลำต้น"
                     }
                 },
@@ -2028,7 +2028,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🍎 ผล",
+                        "label": "ผล",
                         "text": "ผล"
                     }
                 },
@@ -2036,7 +2036,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌱 ราก",
+                        "label": "ราก",
                         "text": "ราก"
                     }
                 },
@@ -2044,7 +2044,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🎋 กาบใบ",
+                        "label": "กาบใบ",
                         "text": "กาบใบ"
                     }
                 },
@@ -2052,7 +2052,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌾 รวง",
+                        "label": "รวง",
                         "text": "รวง"
                     }
                 },
@@ -2060,7 +2060,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌳 กิ่ง",
+                        "label": "กิ่ง",
                         "text": "กิ่ง"
                     }
                 },
@@ -2068,7 +2068,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "✅ ทั้งหมด",
+                        "label": "ทั้งหมด",
                         "text": "ทั้งหมด"
                     }
                 },
@@ -2076,7 +2076,7 @@ def create_position_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "⏭️ ข้าม",
+                        "label": "ข้าม",
                         "text": "ข้าม"
                     }
                 }
@@ -2146,7 +2146,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🔴 จุดสี",
+                        "label": "จุดสี",
                         "text": "จุดสี"
                     }
                 },
@@ -2154,7 +2154,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "💢 ลักษณะแผล",
+                        "label": "ลักษณะแผล",
                         "text": "ลักษณะแผล"
                     }
                 },
@@ -2162,7 +2162,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🍂 สีของใบ",
+                        "label": "สีของใบ",
                         "text": "สีของใบ"
                     }
                 },
@@ -2170,7 +2170,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🥀 เหี่ยว/แห้ง",
+                        "label": "เหี่ยว/แห้ง",
                         "text": "เหี่ยว/แห้ง"
                     }
                 },
@@ -2178,7 +2178,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🐛 แมลง",
+                        "label": "แมลง",
                         "text": "แมลง"
                     }
                 },
@@ -2186,7 +2186,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "✅ ทั้งหมด",
+                        "label": "ทั้งหมด",
                         "text": "ทั้งหมด"
                     }
                 },
@@ -2194,7 +2194,7 @@ def create_symptom_question_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "⏭️ ข้าม",
+                        "label": "ข้าม",
                         "text": "ข้าม"
                     }
                 }
@@ -2309,7 +2309,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌾 ข้าว",
+                        "label": "ข้าว",
                         "text": "ข้าว"
                     }
                 },
@@ -2317,7 +2317,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🍈 ทุเรียน",
+                        "label": "ทุเรียน",
                         "text": "ทุเรียน"
                     }
                 },
@@ -2325,7 +2325,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🌽 ข้าวโพด",
+                        "label": "ข้าวโพด",
                         "text": "ข้าวโพด"
                     }
                 },
@@ -2333,7 +2333,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🥔 มันสำปะหลัง",
+                        "label": "มันสำปะหลัง",
                         "text": "มันสำปะหลัง"
                     }
                 },
@@ -2341,7 +2341,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "🎋 อ้อย",
+                        "label": "อ้อย",
                         "text": "อ้อย"
                     }
                 },
@@ -2349,7 +2349,7 @@ def create_plant_type_retry_flex() -> Dict:
                     "type": "action",
                     "action": {
                         "type": "message",
-                        "label": "📝 อื่นๆ",
+                        "label": "อื่นๆ",
                         "text": "อื่นๆ"
                     }
                 }
