@@ -2048,11 +2048,15 @@ async def retrieve_products_with_matching_score(
         # 🆕 STEP 1: Direct Query ก่อน (แม่นยำกว่า Hybrid Search)
         all_results = []
 
-        # 1.1 Direct Query จาก target_pest
+        # 1.1 Direct Query จาก target_pest (ให้ score boost เพราะแม่นยำกว่า)
         logger.info(f"📦 Step 1: Direct Query by target_pest for: {disease_name}")
         direct_results = await query_products_by_target_pest(disease_name)
 
         if direct_results:
+            # Mark as direct match และให้ score boost
+            for p in direct_results:
+                p['_direct_match'] = True
+                p['_disease_match'] = True
             all_results.extend(direct_results)
             logger.info(f"   → Direct Query พบ {len(direct_results)} products")
 
@@ -2061,6 +2065,9 @@ async def retrieve_products_with_matching_score(
             logger.info(f"📦 Direct Query for pest: {pest_name}")
             pest_results = await query_products_by_target_pest(pest_name, required_category="กำจัดแมลง")
             if pest_results:
+                for p in pest_results:
+                    p['_direct_match'] = True
+                    p['_pest_match'] = True
                 all_results.extend(pest_results)
                 logger.info(f"   → Direct Query (pest) พบ {len(pest_results)} products")
 
@@ -2180,11 +2187,30 @@ async def retrieve_products_with_matching_score(
             # Combine hybrid score with matching score
             hybrid_score = product.get("hybrid_score", product.get("similarity", 0))
 
-            # Final score: 50% matching + 50% hybrid (search relevance)
-            final_score = (match_score * 0.5) + (hybrid_score * 0.5)
+            # 🆕 Bonus สำหรับ Direct Query results (แม่นยำกว่า Hybrid Search)
+            direct_match_bonus = 0.0
+            if product.get('_direct_match'):
+                direct_match_bonus = 0.2  # +20% สำหรับ direct match
+                if product.get('_disease_match'):
+                    direct_match_bonus = 0.25  # +25% ถ้า match โรคโดยตรง
+
+            # 🆕 Verify disease/pest ตรงกับ target_pest จริงหรือไม่
+            target_pest = (product.get("target_pest") or "").lower()
+            disease_lower = disease_name.lower()
+            disease_in_target = any(kw in target_pest for kw in disease_lower.split() if len(kw) > 2)
+
+            # ถ้าไม่ตรงเลย → ลด score
+            relevance_penalty = 0.0
+            if not disease_in_target and not product.get('_direct_match'):
+                relevance_penalty = 0.15  # -15% ถ้าไม่ตรงและไม่ใช่ direct match
+
+            # Final score: 50% matching + 50% hybrid + bonus - penalty
+            final_score = (match_score * 0.5) + (hybrid_score * 0.5) + direct_match_bonus - relevance_penalty
+            final_score = max(0, min(1, final_score))  # Clamp to 0-1
 
             product["matching_score"] = match_score
             product["final_score"] = final_score
+            product["direct_match_bonus"] = direct_match_bonus
 
             scored_products.append(product)
 
@@ -2217,15 +2243,24 @@ async def retrieve_products_with_matching_score(
                 logger.warning(f"Re-ranking failed, using original order: {e}")
 
         # 4. Filter and build recommendations
-        # Keep products with reasonable score (>0.15) or top 6
-        min_score = 0.15
+        # 🆕 เพิ่ม min_score จาก 0.15 → 0.35 (เข้มงวดขึ้น)
+        min_score = 0.35
         filtered_products = [p for p in scored_products if p.get("final_score", 0) >= min_score]
 
-        if len(filtered_products) < 3:
-            # If too few pass threshold, take top 6 anyway
-            filtered_products = scored_products[:6]
-        else:
-            filtered_products = filtered_products[:6]
+        # 🆕 ถ้าไม่มีตัวไหนผ่าน threshold → ลอง lower threshold สำหรับ direct match เท่านั้น
+        if len(filtered_products) < 2:
+            # ลอง min_score ต่ำลงแต่เฉพาะ direct match products
+            lower_threshold = 0.25
+            filtered_products = [
+                p for p in scored_products
+                if p.get("final_score", 0) >= lower_threshold and p.get('_direct_match')
+            ]
+            if filtered_products:
+                logger.info(f"   → Using lower threshold ({lower_threshold}) for direct matches only")
+
+        # 🆕 ไม่บังคับ 6 ตัว - ถ้าไม่ตรงก็ไม่แนะนำ
+        # จำกัดแค่ top 5 ที่ตรงจริงๆ
+        filtered_products = filtered_products[:5]
 
         if not filtered_products:
             logger.warning("⚠️ No products found with matching score")
