@@ -53,8 +53,7 @@ from app.utils.flex_messages import (
     create_initial_questions_flex,
     create_analyzing_flex,
     create_product_carousel_flex,
-    create_position_question_flex,
-    create_symptom_question_flex,
+    create_growth_stage_question_flex,
     create_other_plant_prompt_flex,
     create_plant_type_retry_flex
 )
@@ -739,13 +738,11 @@ async def _process_webhook_events(events: list):
                 try:
                     # === NEW: ตรวจว่ามี context เดิมอยู่ไหม (user ส่งรูปใหม่ระหว่าง flow) ===
                     existing_ctx = await get_pending_context(user_id)
-                    # เช็คทุก state ที่ user อาจส่งรูปใหม่ระหว่าง flow
+                    # เช็คทุก state ที่ user อาจส่งรูปใหม่ระหว่าง flow (2-step flow)
                     active_states = [
                         "awaiting_plant_type",   # Step 1: รอเลือกชนิดพืช
                         "awaiting_other_plant",  # Step 1.5: รอพิมพ์ชื่อพืชอื่น
-                        "awaiting_position",     # Step 2: รอเลือกตำแหน่ง
-                        "awaiting_symptom",      # Step 3: รอเลือกอาการ
-                        "awaiting_growth_stage"  # รอเลือกระยะปลูก
+                        "awaiting_growth_stage"  # Step 2: รอเลือกระยะปลูก
                     ]
                     if existing_ctx and existing_ctx.get("state") in active_states:
                         # ถาม user ว่าจะใช้รูปใหม่หรือรูปเดิม
@@ -754,10 +751,10 @@ async def _process_webhook_events(events: list):
                             continue
                     
                     # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
-                    # Step 1: Ask for plant type with Quick Reply buttons
+                    # Step 1: Ask for plant type with Quick Reply buttons (2-step flow)
                     questions_flex = create_initial_questions_flex()
                     await reply_line(reply_token, questions_flex)
-                    logger.info(f"Replied immediately to user {user_id} - asking plant type (Step 1/3)")
+                    logger.info(f"Replied immediately to user {user_id} - asking plant type (Step 1/2)")
 
                     # FIX: Store only message_id (50 bytes) instead of image_bytes (5-7 MB)
                     # This reduces cache save time from 55 seconds to < 1 second
@@ -772,7 +769,7 @@ async def _process_webhook_events(events: list):
 
                     # Add to memory
                     await add_to_memory(user_id, "user", "[ส่งรูปภาพพืช]")
-                    await add_to_memory(user_id, "assistant", "[ถามชนิดพืช - ขั้นตอน 1/3]")
+                    await add_to_memory(user_id, "assistant", "[ถามชนิดพืช - ขั้นตอน 1/2]")
 
                     logger.info(f"Asked plant type for user {user_id}, waiting for selection")
                     
@@ -849,10 +846,10 @@ async def _process_webhook_events(events: list):
                     if new_ctx:
                         ctx = new_ctx
                     if ctx.get("state") == "awaiting_plant_type":
-                        logger.info(f"Step 1/3: User {user_id} selecting plant type: {text}")
+                        logger.info(f"Step 1/2: User {user_id} selecting plant type: {text}")
 
                         # Valid plant types
-                        valid_plants = ["ข้าว", "ทุเรียน", "ข้าวโพด", "มันสำปะหลัง", "อ้อย"]
+                        valid_plants = ["ข้าว", "ทุเรียน", "ข้าวโพด", "มันสำปะหลัง", "อ้อย",]
 
                         if text == "อื่นๆ":
                             # User wants to type custom plant name
@@ -867,17 +864,17 @@ async def _process_webhook_events(events: list):
                             logger.info(f"Asking user {user_id} to type custom plant name")
 
                         elif text in valid_plants:
-                            # Valid plant selected - go to Step 2
-                            position_flex = create_position_question_flex()
-                            await reply_line(reply_token, position_flex)
+                            # Valid plant selected - go directly to Step 2 (growth stage)
+                            growth_stage_flex = create_growth_stage_question_flex(text)
+                            await reply_line(reply_token, growth_stage_flex)
 
-                            # Update context with plant type
+                            # Update context with plant type - skip position/symptom
                             await save_pending_context(user_id, {
                                 **ctx,
-                                "state": "awaiting_position",
+                                "state": "awaiting_growth_stage",
                                 "plant_type": text
                             })
-                            logger.info(f"Plant type '{text}' selected, asking position (Step 2/3)")
+                            logger.info(f"Plant type '{text}' selected, asking growth stage (Step 2/2)")
 
                         else:
                             # Invalid response - ask again
@@ -891,67 +888,29 @@ async def _process_webhook_events(events: list):
                     elif ctx.get("state") == "awaiting_other_plant":
                         logger.info(f"Step 1.5: User {user_id} typing custom plant: {text}")
 
-                        # Accept any text as plant name, go to Step 2
-                        position_flex = create_position_question_flex()
-                        await reply_line(reply_token, position_flex)
+                        # Accept any text as plant name, go directly to Step 2 (growth stage)
+                        growth_stage_flex = create_growth_stage_question_flex(text)
+                        await reply_line(reply_token, growth_stage_flex)
 
-                        # Update context with custom plant type
+                        # Update context with custom plant type - skip position/symptom
                         await save_pending_context(user_id, {
                             **ctx,
-                            "state": "awaiting_position",
+                            "state": "awaiting_growth_stage",
                             "plant_type": text
                         })
-                        logger.info(f"Custom plant '{text}' accepted, asking position (Step 2/3)")
+                        logger.info(f"Custom plant '{text}' accepted, asking growth stage (Step 2/2)")
 
-                    # ==========================================================================
-                    # STEP 2: Awaiting Position Selection
-                    # ==========================================================================
-                    elif ctx.get("state") == "awaiting_position":
-                        logger.info(f"Step 2/3: User {user_id} selecting position: {text}")
+                    elif ctx.get("state") == "awaiting_growth_stage":
+                        # Step 2/2: User selected growth stage - analyze image and recommend products
+                        logger.info(f"Step 2/2: User {user_id} selected growth stage: {text}")
 
-                        # Valid positions
-                        valid_positions = ["ใบ", "ลำต้น", "ผล", "ราก", "กาบใบ", "รวง", "กิ่ง", "ทั้งหมด", "ข้าม"]
-
-                        position_value = text if text != "ข้าม" else None
-
-                        # Go to Step 3
-                        symptom_flex = create_symptom_question_flex()
-                        await reply_line(reply_token, symptom_flex)
-
-                        # Update context with position
-                        await save_pending_context(user_id, {
-                            **ctx,
-                            "state": "awaiting_symptom",
-                            "position": position_value
-                        })
-                        logger.info(f"Position '{position_value}' selected, asking symptom (Step 3/3)")
-
-                    # ==========================================================================
-                    # STEP 3: Awaiting Symptom Selection - Then Analyze
-                    # ==========================================================================
-                    elif ctx.get("state") == "awaiting_symptom":
-                        logger.info(f"Step 3/3: User {user_id} selecting symptom: {text}")
-
-                        symptom_value = text if text != "ข้าม" else None
-
-                        # Build extra_user_info from collected data
                         plant_type = ctx.get("plant_type", "")
-                        position = ctx.get("position", "")
+                        growth_stage = text
 
-                        # Combine info for AI analysis
-                        info_parts = []
-                        if plant_type:
-                            info_parts.append(f"พืช: {plant_type}")
-                        if position:
-                            info_parts.append(f"ตำแหน่ง: {position}")
-                        if symptom_value:
-                            info_parts.append(f"ลักษณะ: {symptom_value}")
+                        # Build extra_user_info for AI analysis
+                        extra_user_info = f"พืช: {plant_type}" if plant_type else None
 
-                        extra_user_info = ", ".join(info_parts) if info_parts else None
-
-                        logger.info(f"All steps complete. Analyzing with info: {extra_user_info}")
-
-                        # Download image and analyze
+                        # 1. Download image
                         try:
                             message_id_from_ctx = ctx["message_id"]
                             logger.info(f"Downloading image for analysis: {message_id_from_ctx}")
@@ -962,12 +921,12 @@ async def _process_webhook_events(events: list):
                             await delete_pending_context(user_id)
                             continue
 
-                        # Analyze with collected information
                         try:
+                            # Send analyzing message
                             analyzing_flex = create_analyzing_flex(with_info=bool(extra_user_info))
                             await reply_line(reply_token, analyzing_flex)
 
-                            # Run detection with extra context
+                            # 2. Run disease detection (no position/symptom)
                             detection_result = await smart_detect_disease(image_bytes, extra_user_info=extra_user_info)
 
                             # Override plant_type if user specified
@@ -987,21 +946,20 @@ async def _process_webhook_events(events: list):
                             ]
                             should_recommend = True
                             disease_name_lower = detection_result.disease_name.lower()
+
                             try:
                                 conf_value = float(detection_result.confidence) if detection_result.confidence is not None else None
                                 if conf_value is not None and conf_value < 10:
                                     should_recommend = False
                                     logger.info(f"⏭️ Skipping product recommendation - confidence too low: {conf_value}%")
                             except (ValueError, TypeError):
-                                pass  # If conversion fails, continue with recommendation
+                                pass
 
                             for kw in skip_keywords:
                                 if kw.lower() in disease_name_lower:
-                                    # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่ (เช่น โรคใบด่างมันสำปะหลัง มีแมลงหวี่ขาวเป็นพาหะ)
                                     _, pest_name, _ = get_search_query_for_disease(detection_result.disease_name)
                                     if pest_name:
-                                        # โรคนี้มีพาหะ → ยังแนะนำยาฆ่าแมลงได้
-                                        logger.info(f"🐛 โรคมีพาหะ '{pest_name}' → ยังแนะนำยาฆ่าแมลงได้ (แม้จะ match skip keyword: {kw})")
+                                        logger.info(f"🐛 โรคมีพาหะ '{pest_name}' → ยังแนะนำยาฆ่าแมลงได้")
                                     else:
                                         should_recommend = False
                                         logger.info(f"⏭️ Skipping product recommendation - matched skip keyword: {kw}")
@@ -1025,150 +983,103 @@ async def _process_webhook_events(events: list):
                                 )
 
                             if should_recommend:
-                                # ถามระยะปลูกก่อนแนะนำสินค้า
-                                logger.info(f"🌱 Asking for growth stage before product recommendation")
-
-                                # Save detection result to context for later use
-                                await save_pending_context(user_id, {
-                                    "state": "awaiting_growth_stage",
-                                    "detection_result": detection_result.dict(),
-                                    "plant_type": plant_type or detection_result.plant_type or "",
-                                    "extra_user_info": extra_user_info,
-                                })
-
-                                # Generate diagnosis with growth stage question
-                                flex_messages = await generate_diagnosis_with_stage_question(detection_result)
-
-                                # Send Flex Messages
-                                await push_line(user_id, flex_messages)
-
-                                # Add to memory
-                                await add_to_memory(user_id, "user", f"[ข้อมูล] {extra_user_info}")
-                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} - รอเลือกระยะปลูก")
-
-                            else:
-                                # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, etc.)
-                                recommendations = []
-
-                                # Generate Flex Message response without products
-                                flex_messages = await generate_flex_response(detection_result, recommendations, extra_user_info=extra_user_info)
-
-                                # Send Flex Messages via push
-                                await push_line(user_id, flex_messages)
-
-                                # Clear context
-                                await delete_pending_context(user_id)
-
-                                # Add to memory
-                                await add_to_memory(user_id, "user", f"[ข้อมูล] {extra_user_info}")
-                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
-
-                        except Exception as e:
-                            logger.error(f"Error in analysis with info: {e}", exc_info=True)
-                            # Try to send error message
-                            try:
-                                await push_line(user_id, f"ขออภัยค่ะ เกิดข้อผิดพลาดในการวิเคราะห์ 😢\n\nError: {str(e)[:100]}")
-                            except Exception as e2:
-                                logger.error(f"Failed to send error message: {e2}")
-
-                    elif ctx.get("state") == "awaiting_growth_stage":
-                        # User selected growth stage - now recommend products with matching score
-                        logger.info(f"🌱 User {user_id} selected growth stage: {text}")
-
-                        try:
-                            # Get stored detection result
-                            detection_dict = ctx.get("detection_result", {})
-                            plant_type = ctx.get("plant_type", "")
-                            growth_stage = text  # User's response (e.g., "ระยะแตกกอ 20-50 วัน")
-
-                            # Recreate DiseaseDetectionResult from stored dict
-                            from app.models import DiseaseDetectionResult
-                            detection_result = DiseaseDetectionResult(**detection_dict)
-
-                            # Get product recommendations with matching score
-                            recommendations = await retrieve_products_with_matching_score(
-                                detection_result=detection_result,
-                                plant_type=plant_type,
-                                growth_stage=growth_stage
-                            )
-
-                            # Track analytics
-                            if analytics_tracker and recommendations:
-                                product_names = [p.product_name for p in recommendations]
-                                await analytics_tracker.track_product_recommendation(
-                                    user_id=user_id,
-                                    disease_name=detection_result.disease_name,
-                                    products=product_names
+                                # 3. Get product recommendations with matching score
+                                recommendations = await retrieve_products_with_matching_score(
+                                    detection_result=detection_result,
+                                    plant_type=plant_type,
+                                    growth_stage=growth_stage
                                 )
 
-                            # Generate product carousel with context
-                            if recommendations:
-                                product_list = []
-                                for p in recommendations[:5]:
-                                    product_list.append({
-                                        "product_name": (p.product_name or "ไม่ระบุ")[:100],
-                                        "active_ingredient": (p.active_ingredient or "-")[:100],
-                                        "target_pest": (p.target_pest or "-")[:200],
-                                        "applicable_crops": (p.applicable_crops or "-")[:150],
-                                        "usage_period": (p.usage_period or "-")[:100],
-                                        "how_to_use": (p.how_to_use or "-")[:200],
-                                        "usage_rate": (p.usage_rate or "-")[:100],
-                                        "link_product": (p.link_product or "")[:500] if p.link_product and str(p.link_product).startswith("http") else "",
-                                        "image_url": (p.image_url or "") if hasattr(p, 'image_url') else "",
-                                        "similarity": p.score if hasattr(p, 'score') else 0.8
-                                    })
+                                # Track product recommendations
+                                if analytics_tracker and recommendations:
+                                    product_names = [p.product_name for p in recommendations]
+                                    await analytics_tracker.track_product_recommendation(
+                                        user_id=user_id,
+                                        disease_name=detection_result.disease_name,
+                                        products=product_names
+                                    )
 
-                                product_flex = create_product_carousel_flex(product_list)
+                                # 4. Send combined results (diagnosis + products)
+                                # First send diagnosis
+                                flex_messages = await generate_flex_response(detection_result, [], extra_user_info=extra_user_info)
+                                await push_line(user_id, flex_messages)
 
-                                # Send header text + product carousel + weather suggestion
-                                header_text = f"✅ แนะนำสำหรับ {plant_type} {growth_stage}\n\n💊 ผลิตภัณฑ์ที่เหมาะสม:"
+                                # Then send product recommendations if any
+                                if recommendations:
+                                    product_list = []
+                                    for p in recommendations[:5]:
+                                        product_list.append({
+                                            "product_name": (p.product_name or "ไม่ระบุ")[:100],
+                                            "active_ingredient": (p.active_ingredient or "-")[:100],
+                                            "target_pest": (p.target_pest or "-")[:200],
+                                            "applicable_crops": (p.applicable_crops or "-")[:150],
+                                            "usage_period": (p.usage_period or "-")[:100],
+                                            "how_to_use": (p.how_to_use or "-")[:200],
+                                            "usage_rate": (p.usage_rate or "-")[:100],
+                                            "link_product": (p.link_product or "")[:500] if p.link_product and str(p.link_product).startswith("http") else "",
+                                            "image_url": (p.image_url or "") if hasattr(p, 'image_url') else "",
+                                            "similarity": p.score if hasattr(p, 'score') else 0.8
+                                        })
 
-                                # สร้างข้อความถามเรื่องสภาพอากาศพร้อม Quick Reply
-                                weather_suggestion = {
-                                    "type": "text",
-                                    "text": "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ?\n\nเพื่อประเมินความเสี่ยงจากสภาพอากาศที่อาจส่งผลต่อพืชของคุณ",
-                                    "quickReply": {
-                                        "items": [
-                                            {
-                                                "type": "action",
-                                                "action": {
-                                                    "type": "location",
-                                                    "label": "📍 ดูสภาพอากาศ"
+                                    product_flex = create_product_carousel_flex(product_list)
+
+                                    # Send header text + product carousel + weather suggestion
+                                    header_text = f"💊 ผลิตภัณฑ์แนะนำสำหรับ {plant_type} {growth_stage}:"
+
+                                    weather_suggestion = {
+                                        "type": "text",
+                                        "text": "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ?",
+                                        "quickReply": {
+                                            "items": [
+                                                {
+                                                    "type": "action",
+                                                    "action": {
+                                                        "type": "location",
+                                                        "label": "📍 ดูสภาพอากาศ"
+                                                    }
+                                                },
+                                                {
+                                                    "type": "action",
+                                                    "action": {
+                                                        "type": "message",
+                                                        "label": "❌ ไม่ต้องการ",
+                                                        "text": "ไม่ต้องการ"
+                                                    }
                                                 }
-                                            },
-                                            {
-                                                "type": "action",
-                                                "action": {
-                                                    "type": "message",
-                                                    "label": "❌ ไม่ต้องการ",
-                                                    "text": "ไม่ต้องการ"
-                                                }
-                                            }
-                                        ]
+                                            ]
+                                        }
                                     }
-                                }
 
-                                await reply_line(reply_token, [
-                                    {"type": "text", "text": header_text},
-                                    product_flex,
-                                    weather_suggestion
-                                ])
+                                    await push_line(user_id, [
+                                        {"type": "text", "text": header_text},
+                                        product_flex,
+                                        weather_suggestion
+                                    ])
 
-                                # Save recommended products to memory
-                                await save_recommended_products(
-                                    user_id,
-                                    recommendations,
-                                    disease_name=detection_result.disease_name
-                                )
+                                    # Save recommended products to memory
+                                    await save_recommended_products(
+                                        user_id,
+                                        recommendations,
+                                        disease_name=detection_result.disease_name
+                                    )
+                                else:
+                                    await push_line(user_id, "ขออภัยค่ะ ไม่พบผลิตภัณฑ์ที่เหมาะสมสำหรับระยะนี้ 😢")
+
+                                # Add to memory
+                                await add_to_memory(user_id, "user", f"[พืช] {plant_type} [ระยะ] {growth_stage}")
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name} [แนะนำ] {len(recommendations)} รายการ")
+
                             else:
-                                await reply_line(reply_token, "ขออภัยค่ะ ไม่พบผลิตภัณฑ์ที่เหมาะสมสำหรับระยะนี้ 😢")
+                                # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, สุขภาพดี)
+                                flex_messages = await generate_flex_response(detection_result, [], extra_user_info=extra_user_info)
+                                await push_line(user_id, flex_messages)
+
+                                # Add to memory
+                                await add_to_memory(user_id, "user", f"[พืช] {plant_type} [ระยะ] {growth_stage}")
+                                await add_to_memory(user_id, "assistant", f"[ผลวิเคราะห์] {detection_result.disease_name}")
 
                             # Clear context
                             await delete_pending_context(user_id)
-
-                            # Add to memory
-                            await add_to_memory(user_id, "user", f"[ระยะปลูก] {text}")
-                            await add_to_memory(user_id, "assistant", f"[แนะนำสินค้า] {len(recommendations)} รายการ")
 
                         except Exception as e:
                             logger.error(f"Error processing growth stage response: {e}", exc_info=True)

@@ -1826,10 +1826,11 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
     """
     คำนวณ Matching Score ระหว่าง product กับข้อมูล user
 
-    Weights:
-    - 40% - โรค/แมลง ตรงกับ target_pest
-    - 30% - พืช ตรงกับ applicable_crops
-    - 30% - ระยะ ตรงกับ usage_period
+    Weights (Updated for 2-step flow):
+    - 50% - โรค/แมลง ตรงกับ target_pest
+    - 50% - ระยะปลูก ตรงกับ usage_period
+
+    Note: plant_type ใช้เป็น filter ก่อนหน้านี้แล้ว ไม่นับ score ซ้ำ
 
     Returns: score 0.0 - 1.0
     """
@@ -1874,61 +1875,11 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
                 disease_score = max(disease_score, 0.5)
                 break
 
-    score += disease_score * 0.4
+    score += disease_score * 0.5
 
-    # 2. Plant/Crop Match (30%)
-    plant_score = 0.0
-
-    if plant_lower:
-        # Direct plant match
-        if plant_lower in applicable_crops:
-            plant_score = 1.0
-        else:
-            # Check plant synonyms/variants
-            plant_synonyms = {
-                # พืชไร่
-                "ข้าว": ["ข้าว", "rice", "นาข้าว", "นา"],
-                "ข้าวโพด": ["ข้าวโพด", "corn", "maize", "โพด"],
-                "มันสำปะหลัง": ["มัน", "cassava", "มันสำปะหลัง", "มันเส้น"],
-                "อ้อย": ["อ้อย", "sugarcane", "ไร่อ้อย"],
-                # ไม้ผล
-                "มะม่วง": ["มะม่วง", "mango"],
-                "ทุเรียน": ["ทุเรียน", "durian"],
-                "ลำไย": ["ลำไย", "longan", "ลิ้นจี่"],
-                "ส้ม": ["ส้ม", "มะนาว", "citrus", "ส้มโอ", "มะกรูด", "ส้มเขียวหวาน"],
-                "ลิ้นจี่": ["ลิ้นจี่", "lychee", "litchi"],
-                "มังคุด": ["มังคุด", "mangosteen"],
-                "เงาะ": ["เงาะ", "rambutan"],
-                "กล้วย": ["กล้วย", "banana"],
-                # พืชยืนต้น/อุตสาหกรรม
-                "ยางพารา": ["ยาง", "rubber", "ยางพารา", "สวนยาง"],
-                "ปาล์ม": ["ปาล์ม", "palm", "ปาล์มน้ำมัน"],
-                "กาแฟ": ["กาแฟ", "coffee"],
-                # พืชผัก
-                "ผัก": ["ผัก", "vegetable", "ผักกาด", "คะน้า", "กะหล่ำ", "กวางตุ้ง"],
-                "พริก": ["พริก", "chili", "pepper", "พริกขี้หนู"],
-                "มะเขือเทศ": ["มะเขือเทศ", "tomato"],
-                "มะเขือ": ["มะเขือ", "eggplant", "มะเขือยาว", "มะเขือม่วง"],
-                "แตง": ["แตง", "แตงกวา", "แตงโม", "cucumber", "melon"],
-                "ถั่ว": ["ถั่ว", "bean", "ถั่วเขียว", "ถั่วลิสง", "ถั่วฝักยาว"],
-            }
-
-            for main_plant, synonyms in plant_synonyms.items():
-                if any(s in plant_lower for s in synonyms):
-                    if any(s in applicable_crops for s in synonyms):
-                        plant_score = 0.9
-                        break
-                    elif main_plant in applicable_crops:
-                        plant_score = 0.8
-                        break
-
-            # Generic crop match
-            if plant_score == 0 and ("พืช" in applicable_crops or "ทุกชนิด" in applicable_crops):
-                plant_score = 0.3
-
-    score += plant_score * 0.3
-
-    # 3. Growth Stage Match (30%)
+    # 2. Usage Period/Growth Stage Match (50%) - Updated for 2-step flow
+    # Note: plant_type ถูกใช้เป็น filter ใน retrieve_products_with_matching_score แล้ว
+    # ไม่นับ score ซ้ำ เพื่อให้ usage_period มีน้ำหนักมากขึ้น
     stage_score = 0.0
 
     if stage_lower:
@@ -1941,6 +1892,7 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
             "เจริญเติบโต": ["เจริญเติบโต", "vegetative", "โตเต็มที่", "บำรุงต้น"],
             "ย่างปล้อง": ["ย่างปล้อง", "elongation", "ลำต้นโต"],
             "สะสมแป้ง": ["สะสมแป้ง", "สะสมน้ำตาล", "starch", "สะสมอาหาร"],
+            "สร้างหัว": ["สร้างหัว", "หัว", "tuber", "ลงหัว"],
             # ระยะออกดอก/ผล
             "ตั้งท้อง": ["ตั้งท้อง", "booting", "ท้อง"],
             "ออกรวง": ["ออกรวง", "heading", "รวง"],
@@ -1949,6 +1901,7 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
             "ติดผล": ["ติดผล", "ผลอ่อน", "fruiting", "ติดลูก", "ติดฝัก"],
             "ผลโต": ["ผลโต", "ขยายผล", "fruit development"],
             "ออกทลาย": ["ออกทลาย", "ทลาย", "ให้ผลผลิต"],
+            "แตกใบอ่อน": ["แตกใบอ่อน", "ใบอ่อน", "flush", "แตกใบ"],
             # ระยะเก็บเกี่ยว
             "เก็บเกี่ยว": ["เก็บเกี่ยว", "harvest", "สุก", "เก็บผล"],
             # ระยะพิเศษ
@@ -1990,7 +1943,7 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
                 except:
                     pass
 
-    score += stage_score * 0.3
+    score += stage_score * 0.5
 
     return score
 
