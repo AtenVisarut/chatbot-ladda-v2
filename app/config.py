@@ -35,7 +35,7 @@ PENDING_CONTEXT_TTL = 1800  # 30 minutes (เพิ่มจาก 5 นาท�
 MAX_CACHE_SIZE = 5000  # Maximum cache entries (เพิ่มจาก 1000 เป็น 5000)
 
 # Rate limiting per user
-USER_RATE_LIMIT = 10  # requests per minute
+USER_RATE_LIMIT = 20  # requests per minute
 USER_RATE_WINDOW = 60  # seconds
 
 # Image analysis throttling
