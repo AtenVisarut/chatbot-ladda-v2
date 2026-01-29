@@ -75,7 +75,8 @@ from app.services.memory import (
 from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
 from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
-# Q&A disabled - only disease analysis mode
+# Q&A Chat Service - Vector Search from products, diseases, knowledge tables
+from app.services.chat import handle_natural_conversation
 from app.services.rich_menu import setup_rich_menu, setup_rich_menu_debug
 from app.services.agro_risk import (
     check_weather,
@@ -1097,8 +1098,9 @@ async def _process_webhook_events(events: list):
                             reg_flex = create_liff_registration_flex(LIFF_URL)
                             await reply_line(reply_token, reg_flex)
                         else:
-                            # แนะนำให้ส่งรูปวิเคราะห์โรค
-                            await reply_line(reply_token, "กรุณาส่งรูปพืชที่มีอาการ เพื่อวิเคราะห์โรคค่ะ 📷")
+                            # Q&A Chat - Vector Search from products, diseases, knowledge
+                            answer = await handle_natural_conversation(user_id, text)
+                            await reply_line(reply_token, answer)
 
                 else:
                     # Normal text message handling
@@ -1118,8 +1120,9 @@ async def _process_webhook_events(events: list):
                             reg_flex = create_liff_registration_flex(LIFF_URL)
                             await reply_line(reply_token, reg_flex)
                         else:
-                            # แนะนำให้ส่งรูปวิเคราะห์โรค (ไม่มี Q&A แล้ว)
-                            await reply_line(reply_token, "กรุณาส่งรูปพืชที่มีอาการ เพื่อวิเคราะห์โรคค่ะ 📷")
+                            # Q&A Chat - Vector Search from products, diseases, knowledge
+                            answer = await handle_natural_conversation(user_id, text)
+                            await reply_line(reply_token, answer)
 
             # 4. Handle Location Message (Weather Check)
             elif event_type == "message" and event.get("message", {}).get("type") == "location":
