@@ -958,7 +958,26 @@ async def hybrid_search_products(query: str, match_count: int = 15,
                 for p in result.data[:3]:
                     logger.info(f"   → {p.get('product_name')}: hybrid={p.get('hybrid_score', 0):.3f} "
                                f"(vec={p.get('vector_score', 0):.3f}, kw={p.get('keyword_score', 0):.3f})")
-                return result.data
+
+                # Enrich with image_url if missing (RPC doesn't return it)
+                products = result.data
+                if products and 'image_url' not in products[0]:
+                    product_ids = [p.get('id') for p in products if p.get('id')]
+                    if product_ids:
+                        try:
+                            img_result = supabase_client.table('products')\
+                                .select('id, image_url')\
+                                .in_('id', product_ids)\
+                                .execute()
+                            if img_result.data:
+                                img_map = {r['id']: r['image_url'] for r in img_result.data}
+                                for p in products:
+                                    p['image_url'] = img_map.get(p.get('id'), '')
+                                logger.info(f"✓ Enriched {len(img_map)} products with image_url")
+                        except Exception as img_err:
+                            logger.warning(f"Failed to fetch image_url: {img_err}")
+
+                return products
 
         except Exception as e:
             logger.warning(f"hybrid_search_products RPC failed: {e}, falling back to manual hybrid search")
@@ -1039,7 +1058,27 @@ async def manual_hybrid_search(query: str, query_embedding: List[float],
         )
 
         logger.info(f"✓ Manual hybrid search combined: {len(combined)} products")
-        return combined[:match_count]
+
+        # Enrich with image_url if missing
+        final_results = combined[:match_count]
+        if final_results and not final_results[0].get('image_url'):
+            product_ids = [p.get('id') for p in final_results if p.get('id')]
+            if product_ids:
+                try:
+                    img_result = supabase_client.table('products')\
+                        .select('id, image_url')\
+                        .in_('id', product_ids)\
+                        .execute()
+                    if img_result.data:
+                        img_map = {r['id']: r['image_url'] for r in img_result.data}
+                        for p in final_results:
+                            if not p.get('image_url'):
+                                p['image_url'] = img_map.get(p.get('id'), '')
+                        logger.info(f"✓ Enriched {len(img_map)} products with image_url")
+                except Exception as img_err:
+                    logger.warning(f"Failed to fetch image_url: {img_err}")
+
+        return final_results
 
     except Exception as e:
         logger.error(f"Manual hybrid search failed: {e}", exc_info=True)
