@@ -854,30 +854,57 @@ def filter_products_strict(
     if not products:
         return []
 
-    # Extract keywords from disease name
+    # ==========================================================================
+    # PLANT EXCLUSION MAP - ป้องกัน substring matching ผิดพลาด
+    # เช่น "ข้าว" ไม่ควร match "ข้าวโพด"
+    # ==========================================================================
+    PLANT_EXCLUSIONS = {
+        "ข้าว": ["ข้าวโพด"],  # ถ้าหาข้าว → ต้องไม่ใช่ข้าวโพด
+        "rice": ["corn", "maize"],
+    }
+
+    # ==========================================================================
+    # DISEASE-SPECIFIC KEYWORDS - keywords เฉพาะโรค
+    # โรคไหม้ข้าว (Blast) ต้องใช้ keywords เฉพาะ ไม่ใช่แค่ "ไหม้" (ซึ่ง match ใบไหม้ทั่วไป)
+    # ==========================================================================
+    DISEASE_SPECIFIC_KEYWORDS = {
+        "โรคไหม้คอรวง": ["blast", "pyricularia", "โรคไหม้ข้าว", "neck blast", "panicle blast"],
+        "โรคไหม้ข้าว": ["blast", "pyricularia", "rice blast", "leaf blast"],
+        "rice blast": ["blast", "pyricularia", "โรคไหม้"],
+        "neck blast": ["blast", "pyricularia", "โรคไหม้คอรวง"],
+        "leaf blast": ["blast", "pyricularia", "โรคไหม้ใบ"],
+        "โรครากเน่าโคนเน่า": ["phytophthora", "รากเน่า", "โคนเน่า", "root rot"],
+        "phytophthora": ["phytophthora", "รากเน่า", "โคนเน่า"],
+    }
+
     disease_lower = disease_name.lower()
+
+    # Get disease-specific keywords if available
     disease_keywords = []
+    for disease_key, keywords in DISEASE_SPECIFIC_KEYWORDS.items():
+        if disease_key.lower() in disease_lower or disease_lower in disease_key.lower():
+            disease_keywords = [kw.lower() for kw in keywords]
+            logger.info(f"   🎯 Using specific keywords for '{disease_key}': {disease_keywords}")
+            break
 
-    # Common disease keywords to extract
-    disease_patterns = [
-        "ไหม้", "เน่า", "จุด", "ราน้ำค้าง", "ราแป้ง", "ราสนิม",
-        "แอนแทรคโนส", "anthracnose", "blast", "rot", "blight",
-        "phytophthora", "pythium", "fusarium", "cercospora",
-        "เพลี้ย", "หนอน", "ด้วง", "ไร", "เชื้อรา"
-    ]
+    # Fallback to generic keywords if no specific match
+    if not disease_keywords:
+        disease_patterns = [
+            "เน่า", "จุด", "ราน้ำค้าง", "ราแป้ง", "ราสนิม",
+            "แอนแทรคโนส", "anthracnose", "rot", "blight",
+            "phytophthora", "pythium", "fusarium", "cercospora",
+            "เพลี้ย", "หนอน", "ด้วง", "ไร"
+        ]
+        for pattern in disease_patterns:
+            if pattern.lower() in disease_lower:
+                disease_keywords.append(pattern.lower())
 
-    for pattern in disease_patterns:
-        if pattern.lower() in disease_lower:
-            disease_keywords.append(pattern.lower())
+        # Add main disease name words
+        for word in disease_name.split():
+            if len(word) > 2:
+                disease_keywords.append(word.lower())
 
-    # Add main disease name words
-    for word in disease_name.split():
-        if len(word) > 2:
-            disease_keywords.append(word.lower())
-
-    # Remove duplicates
     disease_keywords = list(set(disease_keywords))
-
     logger.info(f"🔍 Strict filter - Plant: {plant_type}, Disease keywords: {disease_keywords[:5]}")
 
     # Get plant keywords
@@ -888,6 +915,9 @@ def filter_products_strict(
             plant_keywords = [s.lower() for s in synonyms]
             break
 
+    # Get exclusion list for this plant
+    plant_exclusions = PLANT_EXCLUSIONS.get(plant_lower, [])
+
     strict_matched = []
     plant_only_matched = []
 
@@ -896,13 +926,22 @@ def filter_products_strict(
         target_pest = (product.get("target_pest") or "").lower()
         product_name = product.get("product_name", "")
 
-        # Check plant match
+        # Check plant match with EXCLUSION check
         plant_match = False
         if plant_type:
             for kw in plant_keywords:
                 if kw in applicable_crops:
-                    plant_match = True
-                    break
+                    # Check exclusions - ถ้ามีคำที่ต้อง exclude → ไม่ match
+                    is_excluded = False
+                    for excl in plant_exclusions:
+                        if excl.lower() in applicable_crops:
+                            is_excluded = True
+                            logger.debug(f"   ❌ EXCLUDED: {product_name} - มี '{excl}' ใน applicable_crops")
+                            break
+                    if not is_excluded:
+                        plant_match = True
+                        break
+
             # Also check for general products
             if not plant_match and ("พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops):
                 plant_match = True
