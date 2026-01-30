@@ -232,94 +232,6 @@ def extract_search_keywords(disease_name: str) -> List[str]:
     return keywords
 
 
-async def get_recommended_products_from_diseases_table(disease_name: str) -> List[str]:
-    """
-    ดึงรายชื่อ recommended_products จากตาราง diseases
-
-    Args:
-        disease_name: ชื่อโรค (ไทย หรือ อังกฤษ)
-
-    Returns:
-        List ของชื่อผลิตภัณฑ์ที่แนะนำ หรือ [] ถ้าไม่พบ
-    """
-    if not supabase_client:
-        return []
-
-    try:
-        # ค้นหาจาก disease_name_th หรือ disease_name_en
-        disease_lower = disease_name.lower()
-
-        # Query diseases table
-        result = supabase_client.table('diseases').select('recommended_products, disease_name_th, disease_name_en').execute()
-
-        if not result.data:
-            return []
-
-        # ค้นหา disease ที่ตรง
-        for disease in result.data:
-            name_th = (disease.get('disease_name_th') or '').lower()
-            name_en = (disease.get('disease_name_en') or '').lower()
-
-            # ตรวจสอบทั้งชื่อไทยและอังกฤษ
-            if disease_lower in name_th or disease_lower in name_en or name_th in disease_lower or name_en in disease_lower:
-                recommended = disease.get('recommended_products')
-                if recommended and isinstance(recommended, list) and len(recommended) > 0:
-                    logger.info(f"✅ Found recommended_products for '{disease_name}': {recommended}")
-                    return recommended
-
-        logger.debug(f"⚠️ No recommended_products found for: {disease_name}")
-        return []
-
-    except Exception as e:
-        logger.error(f"Error in get_recommended_products_from_diseases_table: {e}")
-        return []
-
-
-async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
-    """
-    ดึงข้อมูลสินค้าจาก products table โดยใช้ชื่อสินค้า
-
-    Args:
-        product_names: รายชื่อสินค้าที่ต้องการ
-
-    Returns:
-        List ของ product dict
-    """
-    if not supabase_client or not product_names:
-        return []
-
-    try:
-        products = []
-        seen_ids = set()
-
-        for name in product_names:
-            try:
-                # ค้นหาสินค้าจากชื่อ (exact match)
-                result = supabase_client.table('products').select('*').eq('product_name', name).limit(1).execute()
-
-                if result.data:
-                    p = result.data[0]
-                    if p['id'] not in seen_ids:
-                        seen_ids.add(p['id'])
-                        p['_recommended_match'] = True  # Mark as recommended from diseases table
-                        products.append(p)
-
-            except Exception as e:
-                logger.debug(f"Error fetching product '{name}': {e}")
-                continue
-
-        if products:
-            logger.info(f"✅ Fetched {len(products)} products by name from diseases.recommended_products")
-            for p in products:
-                logger.debug(f"   → {p.get('product_name')}")
-
-        return products
-
-    except Exception as e:
-        logger.error(f"Error in fetch_products_by_names: {e}")
-        return []
-
-
 async def query_products_by_target_pest(disease_name: str, required_category: str = None) -> List[Dict]:
     """
     ค้นหาสินค้าจาก DB โดยตรง โดย match กับ column "target_pest" (ศัตรูพืชที่กำจัดได้)
@@ -2121,37 +2033,6 @@ async def retrieve_products_with_matching_score(
             logger.warning(f"🚫 โรคที่ไม่มียาของบริษัท detected: {disease_name}")
             logger.warning("   ⚠️ ไม่แนะนำสินค้า แค่ให้คำแนะนำการรักษาเบื้องต้น")
             return []
-
-        # 🆕 STEP 0: ดึง recommended_products จากตาราง diseases ก่อน (แม่นยำที่สุด!)
-        logger.info(f"📋 Step 0: Checking diseases table for recommended_products...")
-        recommended_product_names = await get_recommended_products_from_diseases_table(disease_name)
-
-        if recommended_product_names:
-            logger.info(f"✅ Found {len(recommended_product_names)} recommended products from diseases table")
-            recommended_products = await fetch_products_by_names(recommended_product_names)
-
-            if recommended_products:
-                # สร้าง ProductRecommendation จากข้อมูลสินค้า
-                recommendations = []
-                for idx, product in enumerate(recommended_products):
-                    rec = ProductRecommendation(
-                        product_id=str(product.get('id')),
-                        product_name=product.get('product_name', ''),
-                        matching_score=0.95 - (idx * 0.02),  # High score for recommended products
-                        relevance_reason="✅ ผลิตภัณฑ์แนะนำโดยตรงสำหรับโรคนี้",
-                        usage_instructions=product.get('usage_instructions', ''),
-                        product_category=product.get('product_category', ''),
-                        image_url=product.get('image_url'),
-                        active_ingredient=product.get('active_ingredient', ''),
-                        target_pest=product.get('target_pest', ''),
-                        crop_target=product.get('crop_target', ''),
-                    )
-                    recommendations.append(rec)
-
-                logger.info(f"🎯 Returning {len(recommendations)} products from diseases.recommended_products")
-                return recommendations[:5]
-
-        logger.info(f"⚠️ No recommended_products in diseases table - using fallback search")
 
         # ตรวจสอบว่าโรคนี้มีแมลงพาหะหรือไม่
         pest_type = ""
