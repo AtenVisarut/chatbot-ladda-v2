@@ -80,7 +80,7 @@ async def generate_embedding(text: str) -> List[float]:
 
 
 async def vector_search_knowledge(query: str, top_k: int = 5) -> List[Dict]:
-    """Vector search จากตาราง knowledge"""
+    """Vector search จากตาราง knowledge11"""
     if not supabase_client or not openai_client:
         return []
 
@@ -90,7 +90,7 @@ async def vector_search_knowledge(query: str, top_k: int = 5) -> List[Dict]:
             return []
 
         result = supabase_client.rpc(
-            'match_knowledge',
+            'match_knowledge11',
             {
                 'query_embedding': query_embedding,
                 'match_threshold': 0.30,
@@ -99,11 +99,11 @@ async def vector_search_knowledge(query: str, top_k: int = 5) -> List[Dict]:
         ).execute()
 
         if result.data:
-            logger.info(f"✓ Found {len(result.data)} knowledge docs via vector search")
+            logger.info(f"✓ Found {len(result.data)} knowledge11 docs via vector search")
             return result.data
         return []
     except Exception as e:
-        logger.error(f"Knowledge vector search failed: {e}")
+        logger.error(f"Knowledge11 vector search failed: {e}")
         return []
 
 
