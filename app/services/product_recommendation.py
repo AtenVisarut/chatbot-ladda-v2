@@ -754,6 +754,17 @@ PLANT_SYNONYMS = {
     "ผักกาด": ["ผักกาด", "cabbage", "กะหล่ำ"],
 }
 
+# =============================================================================
+# PLANT_EXCLUSIONS - คำที่ต้อง exclude เมื่อค้นหาพืช
+# เช่น ค้นหา "ข้าว" → ต้อง exclude product ที่มีเฉพาะ "ข้าวโพด"
+# =============================================================================
+PLANT_EXCLUSIONS = {
+    "ข้าว": ["ข้าวโพด"],  # ข้าว ≠ ข้าวโพด
+    "rice": ["corn", "maize"],
+    "ข้าวโพด": [],  # ข้าวโพด ไม่ต้อง exclude อะไร
+    "corn": [],
+}
+
 
 def filter_products_by_plant(products: List[Dict], plant_type: str) -> List[Dict]:
     """
@@ -855,26 +866,33 @@ def filter_products_strict(
         return []
 
     # ==========================================================================
-    # PLANT EXCLUSION MAP - ป้องกัน substring matching ผิดพลาด
-    # เช่น "ข้าว" ไม่ควร match "ข้าวโพด"
+    # PLANT MATCHING - ใช้ keywords ที่ชัดเจนสำหรับแต่ละพืช
+    # STRICT: ต้อง match เฉพาะ keyword ที่ไม่ใช่ substring ของพืชอื่น
     # ==========================================================================
-    PLANT_EXCLUSIONS = {
-        "ข้าว": ["ข้าวโพด"],  # ถ้าหาข้าว → ต้องไม่ใช่ข้าวโพด
-        "rice": ["corn", "maize"],
+    STRICT_PLANT_PATTERNS = {
+        # ข้าว - ต้องไม่ใช่ข้าวโพด
+        "ข้าว": {
+            "must_match": ["นาข้าว", "ข้าว:", "ข้าว,", ",ข้าว", "ข้าว ", " ข้าว", "(ข้าว)", "rice", "paddy"],
+            "must_not_match": ["ข้าวโพด", "corn", "maize"],
+        },
+        "rice": {
+            "must_match": ["นาข้าว", "rice", "paddy", "ข้าว:", "ข้าว,", ",ข้าว"],
+            "must_not_match": ["ข้าวโพด", "corn", "maize"],
+        },
     }
 
     # ==========================================================================
     # DISEASE-SPECIFIC KEYWORDS - keywords เฉพาะโรค
-    # โรคไหม้ข้าว (Blast) ต้องใช้ keywords เฉพาะ ไม่ใช่แค่ "ไหม้" (ซึ่ง match ใบไหม้ทั่วไป)
+    # โรคไหม้ข้าว (Blast) - รวม keywords จากข้อมูลจริงในฐานข้อมูล
     # ==========================================================================
     DISEASE_SPECIFIC_KEYWORDS = {
-        "โรคไหม้คอรวง": ["blast", "pyricularia", "โรคไหม้ข้าว", "neck blast", "panicle blast"],
-        "โรคไหม้ข้าว": ["blast", "pyricularia", "rice blast", "leaf blast"],
-        "rice blast": ["blast", "pyricularia", "โรคไหม้"],
-        "neck blast": ["blast", "pyricularia", "โรคไหม้คอรวง"],
+        "โรคไหม้คอรวง": ["blast", "pyricularia", "โรคไหม้ข้าว", "โรคเน่าคอรวง", "คอรวง", "neck blast", "panicle blast", "กาบใบไหม้"],
+        "โรคไหม้ข้าว": ["blast", "pyricularia", "rice blast", "leaf blast", "โรคไหม้", "กาบใบไหม้"],
+        "rice blast": ["blast", "pyricularia", "โรคไหม้", "คอรวง"],
+        "neck blast": ["blast", "pyricularia", "โรคไหม้คอรวง", "โรคเน่าคอรวง", "คอรวง"],
         "leaf blast": ["blast", "pyricularia", "โรคไหม้ใบ"],
-        "โรครากเน่าโคนเน่า": ["phytophthora", "รากเน่า", "โคนเน่า", "root rot"],
-        "phytophthora": ["phytophthora", "รากเน่า", "โคนเน่า"],
+        "โรครากเน่าโคนเน่า": ["phytophthora", "รากเน่า", "โคนเน่า", "root rot", "ยางไหล"],
+        "phytophthora": ["phytophthora", "รากเน่า", "โคนเน่า", "ยางไหล"],
     }
 
     disease_lower = disease_name.lower()
@@ -909,13 +927,17 @@ def filter_products_strict(
 
     # Get plant keywords
     plant_lower = plant_type.lower() if plant_type else ""
+
+    # Check if we have strict patterns for this plant
+    use_strict_matching = plant_lower in STRICT_PLANT_PATTERNS
+    strict_patterns = STRICT_PLANT_PATTERNS.get(plant_lower, {})
+
+    # Fallback: use PLANT_SYNONYMS + PLANT_EXCLUSIONS
     plant_keywords = [plant_lower]
     for main_plant, synonyms in PLANT_SYNONYMS.items():
         if plant_lower in [s.lower() for s in synonyms] or plant_lower == main_plant.lower():
             plant_keywords = [s.lower() for s in synonyms]
             break
-
-    # Get exclusion list for this plant
     plant_exclusions = PLANT_EXCLUSIONS.get(plant_lower, [])
 
     strict_matched = []
@@ -926,21 +948,45 @@ def filter_products_strict(
         target_pest = (product.get("target_pest") or "").lower()
         product_name = product.get("product_name", "")
 
-        # Check plant match with EXCLUSION check
+        # Check plant match - use STRICT matching if available
         plant_match = False
         if plant_type:
-            for kw in plant_keywords:
-                if kw in applicable_crops:
-                    # Check exclusions - ถ้ามีคำที่ต้อง exclude → ไม่ match
-                    is_excluded = False
-                    for excl in plant_exclusions:
-                        if excl.lower() in applicable_crops:
-                            is_excluded = True
-                            logger.debug(f"   ❌ EXCLUDED: {product_name} - มี '{excl}' ใน applicable_crops")
+            if use_strict_matching:
+                # === STRICT MATCHING ===
+                # ต้องมี must_match pattern อย่างน้อย 1 ตัว
+                # ถ้ามี must_match → match (แม้จะมี must_not_match ด้วย เพราะ product อาจใช้ได้กับหลายพืช)
+                # ถ้าไม่มี must_match แต่มี must_not_match → exclude
+                must_match = strict_patterns.get("must_match", [])
+                must_not_match = strict_patterns.get("must_not_match", [])
+
+                has_required = any(p.lower() in applicable_crops for p in must_match)
+                has_excluded = any(p.lower() in applicable_crops for p in must_not_match)
+
+                # Special case: applicable_crops = "ข้าว" พอดี (exact match)
+                # ถ้า plant_lower ตรงกับ applicable_crops พอดี และไม่มี excluded → match
+                if applicable_crops.strip() == plant_lower:
+                    plant_match = True
+                    logger.debug(f"   ✓ EXACT MATCH: {product_name}")
+                elif has_required:
+                    # มี must_match → match (เช่น "นาข้าว" อยู่ใน applicable_crops)
+                    plant_match = True
+                    logger.debug(f"   ✓ STRICT MATCH: {product_name}")
+                elif has_excluded and not has_required:
+                    # ไม่มี must_match แต่มี excluded (เช่น มีแค่ "ข้าวโพด")
+                    logger.debug(f"   ✗ STRICT EXCLUDED: {product_name} - มี excluded pattern แต่ไม่มี required")
+            else:
+                # === FALLBACK: Original matching ===
+                for kw in plant_keywords:
+                    if kw in applicable_crops:
+                        is_excluded = False
+                        for excl in plant_exclusions:
+                            if excl.lower() in applicable_crops:
+                                is_excluded = True
+                                logger.debug(f"   ❌ EXCLUDED: {product_name} - มี '{excl}' ใน applicable_crops")
+                                break
+                        if not is_excluded:
+                            plant_match = True
                             break
-                    if not is_excluded:
-                        plant_match = True
-                        break
 
             # Also check for general products
             if not plant_match and ("พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops):
