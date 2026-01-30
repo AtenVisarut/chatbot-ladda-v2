@@ -232,6 +232,66 @@ def extract_search_keywords(disease_name: str) -> List[str]:
     return keywords
 
 
+async def get_recommended_products_from_diseases(disease_name: str) -> List[Dict]:
+    """
+    ดึงรายชื่อสินค้าแนะนำจาก diseases.recommended_products
+    แล้ว fetch ข้อมูลสินค้าเต็มจาก products table
+
+    Args:
+        disease_name: ชื่อโรค (ภาษาไทยหรืออังกฤษ)
+
+    Returns:
+        รายการสินค้าที่แนะนำสำหรับโรคนี้
+    """
+    if not supabase_client:
+        return []
+
+    try:
+        # 1. ค้นหาโรคจาก diseases table
+        disease_name_lower = disease_name.lower()
+
+        # Try matching by name_th or name_en
+        result = supabase_client.table('diseases').select(
+            'name_th, name_en, recommended_products'
+        ).or_(
+            f"name_th.ilike.%{disease_name}%,name_en.ilike.%{disease_name}%"
+        ).limit(1).execute()
+
+        if not result.data:
+            logger.info(f"   ไม่พบโรค '{disease_name}' ใน diseases table")
+            return []
+
+        disease = result.data[0]
+        recommended_names = disease.get('recommended_products', [])
+
+        if not recommended_names:
+            logger.info(f"   โรค '{disease.get('name_th')}' ไม่มี recommended_products")
+            return []
+
+        logger.info(f"   โรค '{disease.get('name_th')}' แนะนำ: {recommended_names}")
+
+        # 2. Fetch products by names
+        products = []
+        for product_name in recommended_names:
+            try:
+                prod_result = supabase_client.table('products').select('*').ilike(
+                    'product_name', f"%{product_name}%"
+                ).limit(1).execute()
+
+                if prod_result.data:
+                    products.append(prod_result.data[0])
+                else:
+                    logger.warning(f"   ⚠️ ไม่พบสินค้า '{product_name}' ใน products table")
+            except Exception as e:
+                logger.error(f"   Error fetching product '{product_name}': {e}")
+
+        return products
+
+    except Exception as e:
+        logger.error(f"Error getting recommended products from diseases: {e}")
+        return []
+
+
 async def query_products_by_target_pest(disease_name: str, required_category: str = None) -> List[Dict]:
     """
     ค้นหาสินค้าจาก DB โดยตรง โดย match กับ column "target_pest" (ศัตรูพืชที่กำจัดได้)
@@ -772,6 +832,109 @@ def filter_products_by_plant(products: List[Dict], plant_type: str) -> List[Dict
 
     # ถ้าไม่มีเลย → return ทั้งหมด (ไม่กรอง)
     logger.warning(f"⚠️ ไม่พบสินค้าสำหรับ {plant_type} → ไม่กรอง")
+    return products
+
+
+def filter_products_strict(
+    products: List[Dict],
+    plant_type: str,
+    disease_name: str
+) -> List[Dict]:
+    """
+    กรองสินค้าแบบ strict - ต้องตรงทั้ง applicable_crops และ target_pest
+
+    Args:
+        products: รายการสินค้าทั้งหมด
+        plant_type: ชนิดพืช (เช่น "ข้าว", "ทุเรียน")
+        disease_name: ชื่อโรคที่วิเคราะห์ได้
+
+    Returns:
+        รายการสินค้าที่ตรงทั้ง 2 เงื่อนไข
+    """
+    if not products:
+        return []
+
+    # Extract keywords from disease name
+    disease_lower = disease_name.lower()
+    disease_keywords = []
+
+    # Common disease keywords to extract
+    disease_patterns = [
+        "ไหม้", "เน่า", "จุด", "ราน้ำค้าง", "ราแป้ง", "ราสนิม",
+        "แอนแทรคโนส", "anthracnose", "blast", "rot", "blight",
+        "phytophthora", "pythium", "fusarium", "cercospora",
+        "เพลี้ย", "หนอน", "ด้วง", "ไร", "เชื้อรา"
+    ]
+
+    for pattern in disease_patterns:
+        if pattern.lower() in disease_lower:
+            disease_keywords.append(pattern.lower())
+
+    # Add main disease name words
+    for word in disease_name.split():
+        if len(word) > 2:
+            disease_keywords.append(word.lower())
+
+    # Remove duplicates
+    disease_keywords = list(set(disease_keywords))
+
+    logger.info(f"🔍 Strict filter - Plant: {plant_type}, Disease keywords: {disease_keywords[:5]}")
+
+    # Get plant keywords
+    plant_lower = plant_type.lower() if plant_type else ""
+    plant_keywords = [plant_lower]
+    for main_plant, synonyms in PLANT_SYNONYMS.items():
+        if plant_lower in [s.lower() for s in synonyms] or plant_lower == main_plant.lower():
+            plant_keywords = [s.lower() for s in synonyms]
+            break
+
+    strict_matched = []
+    plant_only_matched = []
+
+    for product in products:
+        applicable_crops = (product.get("applicable_crops") or "").lower()
+        target_pest = (product.get("target_pest") or "").lower()
+        product_name = product.get("product_name", "")
+
+        # Check plant match
+        plant_match = False
+        if plant_type:
+            for kw in plant_keywords:
+                if kw in applicable_crops:
+                    plant_match = True
+                    break
+            # Also check for general products
+            if not plant_match and ("พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops):
+                plant_match = True
+
+        # Check disease match in target_pest
+        disease_match = False
+        for kw in disease_keywords:
+            if kw in target_pest:
+                disease_match = True
+                break
+
+        # Strict match: both plant AND disease must match
+        if plant_match and disease_match:
+            strict_matched.append(product)
+            logger.debug(f"   ✅ STRICT: {product_name} (plant={plant_match}, disease={disease_match})")
+        elif plant_match:
+            plant_only_matched.append(product)
+            logger.debug(f"   🌱 PLANT ONLY: {product_name}")
+
+    logger.info(f"   → Strict matched: {len(strict_matched)}, Plant-only: {len(plant_only_matched)}")
+
+    # Return strict matched first, then plant-only as fallback
+    if strict_matched:
+        return strict_matched
+
+    # Fallback: return plant-only matches if no strict matches
+    if plant_only_matched:
+        logger.warning(f"⚠️ No strict match for {disease_name} → using plant-only matches")
+        return plant_only_matched
+
+    # Last fallback: return all
+    logger.warning(f"⚠️ No matches at all → returning all products")
     return products
 
 
@@ -2045,10 +2208,8 @@ async def retrieve_products_with_matching_score(
         if pest_name:
             logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
 
-        # 🆕 STEP 1: Direct Query ก่อน (แม่นยำกว่า Hybrid Search)
+        # STEP 1: Direct Query จาก target_pest
         all_results = []
-
-        # 1.1 Direct Query จาก target_pest (ให้ score boost เพราะแม่นยำกว่า)
         logger.info(f"📦 Step 1: Direct Query by target_pest for: {disease_name}")
         direct_results = await query_products_by_target_pest(disease_name)
 
@@ -2120,7 +2281,7 @@ async def retrieve_products_with_matching_score(
 
         logger.info(f"📊 รวมทั้งหมด: {len(all_results)} products")
 
-        # 🆕 Filter by product category (ป้องกันโรค/กำจัดแมลง/กำจัดวัชพืช)
+        # Filter by product category (ป้องกันโรค/กำจัดแมลง/กำจัดวัชพืช)
         required_category, required_category_th = get_required_category(disease_name)
 
         # ถ้าโรคมีพาหะ → ต้องการ กำจัดแมลง
@@ -2133,27 +2294,24 @@ async def retrieve_products_with_matching_score(
             all_results = filter_products_by_category(all_results, required_category)
             logger.info(f"   → After category filter: {len(all_results)} products")
 
-        # 🆕 Filter by plant type (กรองตามชนิดพืช)
+        # 🆕 STRICT FILTER: กรองตาม applicable_crops + target_pest
         if plant_type and all_results:
-            all_results = filter_products_by_plant(all_results, plant_type)
-            logger.info(f"   → After plant filter: {len(all_results)} products")
+            logger.info(f"🎯 Strict filter: plant={plant_type}, disease={disease_name}")
+            all_results = filter_products_strict(all_results, plant_type, disease_name)
+            logger.info(f"   → After strict filter: {len(all_results)} products")
 
-        # 🆕 Filter by pathogen_type (Oomycetes vs Fungi)
+        # Filter by pathogen_type (Oomycetes vs Fungi) - เฉพาะโรคที่ต้องใช้ยาเฉพาะ
         if is_oomycetes_disease(disease_name):
-            # สำหรับ Oomycetes: ใช้ Direct Query เพื่อให้ได้สินค้าครบทุกตัว
-            logger.info(f"🦠 โรค Oomycetes detected - ใช้ Direct Query แทน Hybrid Search filter")
+            logger.info(f"🦠 โรค Oomycetes detected - ใช้ Direct Query")
             oomycetes_products = await fetch_products_by_pathogen_type("oomycetes", plant_type)
 
             if oomycetes_products:
-                # ใช้ผลจาก direct query แทน (ครบทุกตัว)
                 all_results = oomycetes_products
                 logger.info(f"   → Direct query Oomycetes: {len(all_results)} products")
             else:
-                # Fallback: ใช้ filter จาก hybrid search results
                 all_results = filter_products_for_oomycetes(all_results, disease_name)
                 logger.info(f"   → After Oomycetes filter: {len(all_results)} products")
         elif all_results:
-            # Check if it's a fungal disease
             disease_lower = disease_name.lower()
             fungal_keywords = ["โรคใบ", "ราสนิม", "ราน้ำค้าง", "ราแป้ง", "แอนแทรคโนส",
                                "โรคเน่า", "ใบไหม้", "leaf spot", "rust", "blight", "rot"]
@@ -2187,14 +2345,14 @@ async def retrieve_products_with_matching_score(
             # Combine hybrid score with matching score
             hybrid_score = product.get("hybrid_score", product.get("similarity", 0))
 
-            # 🆕 Bonus สำหรับ Direct Query results (แม่นยำกว่า Hybrid Search)
+            # Bonus สำหรับ Direct Query results
             direct_match_bonus = 0.0
             if product.get('_direct_match'):
                 direct_match_bonus = 0.2  # +20% สำหรับ direct match
                 if product.get('_disease_match'):
                     direct_match_bonus = 0.25  # +25% ถ้า match โรคโดยตรง
 
-            # 🆕 Verify disease/pest ตรงกับ target_pest จริงหรือไม่
+            # Verify disease/pest ตรงกับ target_pest จริงหรือไม่
             target_pest = (product.get("target_pest") or "").lower()
             disease_lower = disease_name.lower()
             disease_in_target = any(kw in target_pest for kw in disease_lower.split() if len(kw) > 2)
