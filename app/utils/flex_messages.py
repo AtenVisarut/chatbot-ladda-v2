@@ -4,7 +4,7 @@ LINE Flex Message Templates
 """
 
 from typing import Dict, List, Optional
-from app.config import LIFF_DISEASES_URL
+from app.config import LIFF_DISEASES_URL, LIFF_URL
 
 
 # =============================================================================
@@ -503,9 +503,9 @@ def create_welcome_flex() -> Dict:
                         "style": "primary",
                         "height": "sm",
                         "action": {
-                            "type": "message",
-                            "label": "📝 ลงทะเบียน",
-                            "text": "ลงทะเบียน"
+                            "type": "uri",
+                            "label": "📝 กดลงทะเบียน",
+                            "uri": LIFF_URL
                         },
                         "color": "#27AE60"
                     },
@@ -1676,7 +1676,30 @@ def create_usage_guide_flex() -> Dict:
                         ]
                     },
                     {"type": "separator", "margin": "lg"},
-                    # Section 4: คู่มือโรคพืช
+                    # Section 4: ถามตอบเรื่องโรคพืช (Q&A Chat)
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "💬 ถามตอบเรื่องโรคพืช",
+                                "weight": "bold",
+                                "size": "sm",
+                                "color": "#0288D1"
+                            },
+                            {
+                                "type": "text",
+                                "text": "• พิมพ์ถามเรื่องโรคพืชได้เลย\n• เช่น \"โรคใบไหม้รักษายังไง\"\n• ถามเรื่องยา ปุ๋ย ศัตรูพืชได้",
+                                "size": "xs",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "sm"
+                            }
+                        ]
+                    },
+                    {"type": "separator", "margin": "lg"},
+                    # Section 5: คู่มือโรคพืช
                     {
                         "type": "box",
                         "layout": "vertical",
