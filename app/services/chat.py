@@ -188,6 +188,46 @@ def is_product_question(message: str) -> bool:
 
 
 # =============================================================================
+# ตรวจจับประเภทปัญหา: โรค vs แมลง
+# =============================================================================
+DISEASE_KEYWORDS = [
+    # โรคทั่วไป
+    "โรค", "ใบจุด", "ใบไหม้", "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา",
+    "แอนแทรคโนส", "ผลเน่า", "รากเน่า", "โคนเน่า", "ลำต้นเน่า", "กิ่งแห้ง",
+    "ราดำ", "ใบเหลือง", "ใบร่วง", "จุดสีน้ำตาล", "ใบแห้ง",
+    # English
+    "disease", "fungus", "fungal", "rot", "blight", "mildew", "rust", "anthracnose"
+]
+
+INSECT_KEYWORDS = [
+    # แมลง
+    "แมลง", "เพลี้ย", "หนอน", "ด้วง", "มด", "ปลวก", "ไร", "เพลี้ยไฟ",
+    "เพลี้ยอ่อน", "เพลี้ยแป้ง", "เพลี้ยกระโดด", "หนอนกอ", "หนอนเจาะ",
+    "หนอนใย", "แมลงวัน", "จักจั่น", "ทริปส์", "ศัตรูพืช",
+    # English
+    "insect", "pest", "aphid", "thrips", "mite", "worm", "caterpillar", "beetle"
+]
+
+
+def detect_problem_type(message: str) -> str:
+    """
+    ตรวจจับประเภทปัญหา: disease (โรค) หรือ insect (แมลง)
+    Returns: 'disease', 'insect', หรือ 'unknown'
+    """
+    message_lower = message.lower()
+
+    disease_count = sum(1 for kw in DISEASE_KEYWORDS if kw in message_lower)
+    insect_count = sum(1 for kw in INSECT_KEYWORDS if kw in message_lower)
+
+    if disease_count > insect_count:
+        return 'disease'
+    elif insect_count > disease_count:
+        return 'insect'
+    else:
+        return 'unknown'
+
+
+# =============================================================================
 # Vector Search Functions สำหรับ Q&A
 # =============================================================================
 async def generate_embedding(text: str) -> List[float]:
@@ -208,19 +248,18 @@ async def generate_embedding(text: str) -> List[float]:
         return []
 
 
-async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: bool = True) -> Tuple[List[Dict], Optional[str]]:
+async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: bool = True, problem_type: str = None) -> Tuple[List[Dict], Optional[str]]:
     """
-    Vector search จากตาราง knowledge
+    Vector search จากตาราง knowledge พร้อมกรองตาม category
 
     Args:
         query: คำถาม
         top_k: จำนวนผลลัพธ์สูงสุด
         validate_product: ตรวจสอบว่าชื่อสินค้าตรงกับผลลัพธ์หรือไม่
+        problem_type: 'disease', 'insect', หรือ None
 
     Returns:
         Tuple[results, product_not_found_message]
-        - results: ผลลัพธ์ที่ตรวจสอบแล้ว
-        - product_not_found_message: ข้อความแจ้งถ้าไม่พบสินค้า (None ถ้าพบ)
     """
     if not supabase_client or not openai_client:
         return [], None
@@ -230,6 +269,10 @@ async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: 
         product_in_question = extract_product_name_from_question(query) if validate_product else None
         plant_in_question = extract_plant_type_from_question(query) if validate_product else None
 
+        # ตรวจจับประเภทปัญหาถ้าไม่ได้ระบุ
+        if problem_type is None:
+            problem_type = detect_problem_type(query)
+
         query_embedding = await generate_embedding(query)
         if not query_embedding:
             return [], None
@@ -238,33 +281,80 @@ async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: 
             'match_knowledge',
             {
                 'query_embedding': query_embedding,
-                'match_threshold': 0.20,  # ใช้ 0.20 เพื่อรองรับ embedding variability
-                'match_count': top_k * 5  # ดึงมามากขึ้นเพื่อกรองตาม product + plant
+                'match_threshold': 0.20,
+                'match_count': top_k * 10  # ดึงมามากขึ้นเพื่อกรองตาม category
             }
         ).execute()
 
         if not result.data:
-            # ไม่พบผลลัพธ์เลย
             if product_in_question:
                 return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล"
             return [], None
 
-        logger.info(f"✓ Found {len(result.data)} knowledge docs via vector search")
+        logger.info(f"✓ Found {len(result.data)} knowledge docs via vector search (problem_type={problem_type})")
+
+        # กรองตาม category (disease vs insect)
+        filtered_results = result.data
+        if problem_type == 'disease':
+            # กรองเฉพาะ category ที่เกี่ยวกับโรค (ไม่ใช่ insecticide)
+            disease_categories = ['fungicide', 'ป้องกันโรค', 'กำจัดโรค', 'สารป้องกันโรค', 'ยาป้องกันโรค']
+            insect_categories = ['insecticide', 'กำจัดแมลง', 'สารกำจัดแมลง', 'ยาฆ่าแมลง']
+
+            filtered = []
+            for doc in result.data:
+                category = (doc.get('category') or '').lower()
+                target_pest = (doc.get('target_pest') or '').lower()
+
+                # ถ้ามี category → ตรวจสอบว่าไม่ใช่ insecticide
+                is_insecticide = any(cat in category for cat in insect_categories)
+                if not is_insecticide:
+                    filtered.append(doc)
+
+            if filtered:
+                filtered_results = filtered
+                logger.info(f"✓ Filtered to {len(filtered_results)} disease-related docs")
+
+        elif problem_type == 'insect':
+            # กรองเฉพาะ category ที่เกี่ยวกับแมลง
+            insect_categories = ['insecticide', 'กำจัดแมลง', 'สารกำจัดแมลง', 'ยาฆ่าแมลง']
+
+            filtered = []
+            for doc in result.data:
+                category = (doc.get('category') or '').lower()
+
+                is_insecticide = any(cat in category for cat in insect_categories)
+                if is_insecticide:
+                    filtered.append(doc)
+
+            if filtered:
+                filtered_results = filtered
+                logger.info(f"✓ Filtered to {len(filtered_results)} insect-related docs")
 
         # ถ้าถามเกี่ยวกับสินค้าเฉพาะ → ตรวจสอบว่าผลลัพธ์ตรงกับชื่อสินค้าหรือไม่
         if product_in_question:
-            # ส่ง plant_type ไปด้วยเพื่อ prioritize ผลที่ตรงทั้ง product และ plant
-            validated_results = validate_knowledge_results(result.data, product_in_question, plant_in_question)
+            validated_results = validate_knowledge_results(filtered_results, product_in_question, plant_in_question)
 
             if not validated_results:
-                # พบผลลัพธ์แต่ไม่ตรงกับสินค้าที่ถาม
                 logger.warning(f"⚠️ ถามเกี่ยวกับ '{product_in_question}' แต่ไม่พบข้อมูลตรง")
                 return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล กรุณาตรวจสอบชื่อสินค้าอีกครั้ง"
 
-            logger.info(f"✓ Validated: {len(validated_results)} results match product '{product_in_question}'" + (f" + plant '{plant_in_question}'" if plant_in_question else ""))
+            logger.info(f"✓ Validated: {len(validated_results)} results match product '{product_in_question}'")
             return validated_results[:top_k], None
 
-        return result.data[:top_k], None
+        # กรองตาม plant_type ถ้ามี
+        if plant_in_question:
+            plant_filtered = []
+            for doc in filtered_results:
+                plant_type = (doc.get('plant_type') or '').lower()
+                title = (doc.get('title') or '').lower()
+                if plant_in_question.lower() in plant_type or plant_in_question.lower() in title:
+                    plant_filtered.append(doc)
+
+            if plant_filtered:
+                filtered_results = plant_filtered
+                logger.info(f"✓ Filtered to {len(filtered_results)} docs for plant '{plant_in_question}'")
+
+        return filtered_results[:top_k], None
 
     except Exception as e:
         logger.error(f"Knowledge vector search failed: {e}")
@@ -291,66 +381,69 @@ async def vector_search_products(query: str, top_k: int = 5) -> List[Dict]:
 
 async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
     """
-    ตอบคำถาม Q&A โดยใช้ Vector Search จาก 3 tables:
-    1. diseases - สำหรับคำถามเกี่ยวกับโรคพืช/ศัตรูพืช
-    2. products - สำหรับคำถามเกี่ยวกับสินค้า/ผลิตภัณฑ์
-    3. knowledge - สำหรับความรู้ทั่วไปเกี่ยวกับการเกษตร
+    ตอบคำถาม Q&A โดยใช้ Vector Search จาก knowledge table เป็นหลัก
+    พร้อมกรองตาม category (โรค vs แมลง)
     """
     try:
-        logger.info(f"🔍 Q&A Vector Search: {question[:50]}...")
+        logger.info(f"Q&A Vector Search: {question[:50]}...")
 
         # ตรวจสอบว่าเป็นคำถามประเภทไหน
         is_product_q = is_product_question(question)
         is_agri_q = is_agriculture_question(question)
 
+        # ตรวจจับประเภทปัญหา (โรค vs แมลง)
+        problem_type = detect_problem_type(question)
+        plant_in_question = extract_plant_type_from_question(question)
+        product_in_question = extract_product_name_from_question(question)
+
+        logger.info(f"Detected: problem_type={problem_type}, plant={plant_in_question}, product={product_in_question}")
+
         # เก็บ context จากแต่ละ source
         all_context_parts = []
 
-        # 1. ค้นหาจาก diseases (ถ้าเป็นคำถามเกี่ยวกับโรค/ศัตรูพืช)
-        if is_agri_q:
-            diseases = await search_diseases_by_text(question, top_k=3)
-            if diseases:
-                disease_context = build_context_from_diseases(diseases)
-                all_context_parts.append(f"📚 ข้อมูลโรค/ศัตรูพืช:\n{disease_context}")
-                logger.info(f"✓ Added {len(diseases)} diseases to context")
-
-        # 2. ค้นหาจาก products (ถ้าเป็นคำถามเกี่ยวกับสินค้า หรือต้องการแนะนำยา)
-        if is_product_q or is_agri_q:
-            products = await vector_search_products(question, top_k=5)
-            if products:
-                product_context = "🛒 ผลิตภัณฑ์ที่เกี่ยวข้อง:\n"
-                for idx, p in enumerate(products[:5], 1):
-                    product_context += f"\n{idx}. {p.get('product_name', 'N/A')}"
-                    if p.get('active_ingredient'):
-                        product_context += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
-                    if p.get('target_pest'):
-                        target = p.get('target_pest', '')[:100]
-                        product_context += f"\n   กำจัด: {target}"
-                    if p.get('applicable_crops'):
-                        crops = p.get('applicable_crops', '')[:80]
-                        product_context += f"\n   ใช้กับ: {crops}"
-                    if p.get('how_to_use'):
-                        how_to = p.get('how_to_use', '')[:100]
-                        product_context += f"\n   วิธีใช้: {how_to}"
-                all_context_parts.append(product_context)
-                logger.info(f"✓ Added {len(products)} products to context")
-
-        # 3. ค้นหาจาก knowledge (ความรู้ทั่วไป)
-        # ตรวจสอบว่าถามเกี่ยวกับสินค้าเฉพาะหรือไม่
-        product_in_question = extract_product_name_from_question(question)
-        knowledge_docs, product_not_found_msg = await vector_search_knowledge(question, top_k=3, validate_product=True)
+        # 1. ค้นหาจาก knowledge table เป็นหลัก (พร้อมกรองตาม category)
+        knowledge_docs, product_not_found_msg = await vector_search_knowledge(
+            question,
+            top_k=5,
+            validate_product=True,
+            problem_type=problem_type
+        )
 
         if knowledge_docs:
-            knowledge_context = "📖 ความรู้เพิ่มเติม:\n"
-            for idx, doc in enumerate(knowledge_docs[:3], 1):
-                content = doc.get('content', '')[:300]
-                knowledge_context += f"\n[{idx}] {content}"
+            knowledge_context = "ข้อมูลสินค้าและวิธีใช้:\n"
+            for idx, doc in enumerate(knowledge_docs[:5], 1):
+                title = doc.get('title', '')
+                content = doc.get('content', '')[:400]
+                product_name = doc.get('product_name', '')
+                usage_rate = doc.get('usage_rate', '')
+                target_pest = doc.get('target_pest', '')
+                category = doc.get('category', '')
+
+                knowledge_context += f"\n[{idx}] {title}"
+                if product_name:
+                    knowledge_context += f"\n   ชื่อสินค้า: {product_name}"
+                if category:
+                    knowledge_context += f"\n   ประเภท: {category}"
+                if target_pest:
+                    knowledge_context += f"\n   ใช้กำจัด: {target_pest[:100]}"
+                if usage_rate:
+                    knowledge_context += f"\n   อัตราใช้: {usage_rate}"
+                knowledge_context += f"\n   รายละเอียด: {content}"
+
             all_context_parts.append(knowledge_context)
-            logger.info(f"✓ Added {len(knowledge_docs)} knowledge docs to context")
+            logger.info(f"Added {len(knowledge_docs)} knowledge docs to context")
+
         elif product_not_found_msg:
-            # ถ้าถามเกี่ยวกับสินค้าแต่ไม่พบ → แจ้งผู้ใช้
-            logger.warning(f"⚠️ Product not found: {product_not_found_msg}")
-            all_context_parts.append(f"⚠️ {product_not_found_msg}")
+            logger.warning(f"Product not found: {product_not_found_msg}")
+            all_context_parts.append(f"หมายเหตุ: {product_not_found_msg}")
+
+        # 2. ค้นหาจาก diseases (เสริม - ถ้าเป็นคำถามเกี่ยวกับโรค)
+        if is_agri_q and problem_type == 'disease':
+            diseases = await search_diseases_by_text(question, top_k=2)
+            if diseases:
+                disease_context = build_context_from_diseases(diseases)
+                all_context_parts.append(f"ข้อมูลโรค:\n{disease_context}")
+                logger.info(f"Added {len(diseases)} diseases to context")
 
         # รวม context ทั้งหมด
         combined_context = "\n\n".join(all_context_parts) if all_context_parts else "(ไม่พบข้อมูลในฐานข้อมูล)"
