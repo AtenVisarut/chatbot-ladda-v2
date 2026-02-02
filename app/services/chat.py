@@ -113,6 +113,45 @@ def extract_product_name_from_question(question: str) -> Optional[str]:
     return None
 
 
+def detect_unknown_product_in_question(question: str) -> Optional[str]:
+    """
+    ตรวจสอบว่า user ถามเกี่ยวกับสินค้าที่ไม่มีใน ICP_PRODUCT_NAMES หรือไม่
+    Returns: ชื่อสินค้าที่ไม่รู้จัก หรือ None
+
+    หมายเหตุ: ใช้เฉพาะกรณีที่ user ถามชื่อสินค้าโดยตรง เช่น "โตโร่ ใช้ยังไง"
+    ไม่ใช้กับคำถามทั่วไป เช่น "แนะนำยาตัวไหน"
+    """
+    # ถ้าพบสินค้าที่รู้จักแล้ว → return None
+    if extract_product_name_from_question(question):
+        return None
+
+    # คำที่ต้องข้าม (คำทั่วไป, คำถาม, คำกริยา)
+    skip_words = [
+        'อะไร', 'ยังไง', 'อย่างไร', 'เท่าไหร่', 'ตัวไหน', 'กี่', 'ทำไม', 'ไหม',
+        'ใช้', 'พ่น', 'ฉีด', 'ผสม', 'กำจัด', 'รักษา', 'แนะนำ', 'ดี', 'ได้',
+        'ยา', 'สาร', 'โรค', 'แมลง', 'หญ้า', 'วัชพืช', 'ธาตุ', 'อาหาร',
+        'ข้าว', 'ทุเรียน', 'มะม่วง', 'ส้ม', 'พริก', 'ข้าวโพด', 'อ้อย',
+        'นา', 'ไร่', 'สวน', 'ต้น', 'ใบ', 'ผล', 'ดอก',
+        'ฆ่า', 'ป้องกัน', 'ควบคุม', 'ขาด', 'ร่วง', 'เหลือง', 'จุด',
+        'สำคัญ', 'ที่สุด', 'บำรุง', 'ติด', 'การ'
+    ]
+
+    # pattern สำหรับตรวจจับชื่อสินค้าที่ไม่รู้จัก
+    # เฉพาะกรณี "XXX ใช้ยังไง" ที่ XXX เป็นชื่อสินค้าโดยตรง
+    import re
+
+    # Pattern 1: "XXX ใช้ยังไง" - XXX ต้องขึ้นต้นประโยค
+    match = re.match(r'^([ก-๙a-zA-Z]+)\s+(?:ใช้|พ่น|ฉีด|ผสม)', question.strip())
+    if match:
+        potential_product = match.group(1)
+        # ตรวจสอบว่าไม่ใช่คำทั่วไป และมีความยาวเหมาะสม
+        if potential_product.lower() not in [w.lower() for w in skip_words]:
+            if 2 < len(potential_product) < 20:
+                return potential_product
+
+    return None
+
+
 def extract_plant_type_from_question(question: str) -> Optional[str]:
     """
     ดึงชื่อพืชจากคำถาม
@@ -451,6 +490,24 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         logger.info(f"Detected: problem_type={problem_type}, plant={plant_in_question}, product={product_in_question}")
 
         # =================================================================
+        # STEP 2: ถ้าคำถามสั้นเกินไป (เช่น "อัตราการใช้") → ถามรายละเอียด
+        # =================================================================
+        short_questions = ['อัตราการใช้', 'วิธีใช้', 'อัตราผสม', 'ผสมยังไง', 'ใช้ยังไง', 'อัตรา']
+        is_very_short = question.strip() in short_questions or (len(question.strip()) < 12 and not product_in_question and not plant_in_question)
+
+        if is_very_short and problem_type == 'unknown':
+            logger.info(f"⚠️ คำถามสั้นไม่มีรายละเอียด: {question}")
+            return "ขอทราบรายละเอียดเพิ่มเติมค่ะ:\n- ต้องการทราบข้อมูลของสินค้าตัวไหนคะ?\n- และใช้กับพืชอะไรคะ?\n\nเพื่อให้ลัดดาตอบได้ถูกต้องค่ะ"
+
+        # =================================================================
+        # STEP 2.5: ถ้าถามเกี่ยวกับสินค้าที่ไม่มีใน ICP → บอกว่าไม่มี
+        # =================================================================
+        unknown_product = detect_unknown_product_in_question(question)
+        if unknown_product and not product_in_question:
+            logger.info(f"⚠️ ถามเกี่ยวกับสินค้าที่ไม่รู้จัก: {unknown_product}")
+            return f"ขออภัยค่ะ ไม่พบข้อมูลสินค้า \"{unknown_product}\" ในฐานข้อมูลของ ICP Ladda ค่ะ\n\nกรุณาตรวจสอบชื่อสินค้าอีกครั้ง หรือสอบถามเกี่ยวกับสินค้าอื่นได้เลยค่ะ"
+
+        # =================================================================
         # STEP 3: ถ้าถามเรื่องโรค/แมลง แต่ไม่ระบุพืช → ถามพืชก่อน
         # =================================================================
         # ตรวจสอบว่าเป็นคำถาม "รักษา/กำจัด" ที่ต้องการสินค้า
@@ -522,9 +579,33 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         is_what_question = any(kw in question.lower() for kw in ['ใช้ทำอะไร', 'คืออะไร', 'ใช้อะไร', 'ทำอะไร', 'เป็นอะไร'])
         is_how_question = any(kw in question.lower() for kw in ['ใช้ยังไง', 'ใช้อย่างไร', 'วิธีใช้', 'ผสมยังไง'])
         is_rate_question = any(kw in question.lower() for kw in ['อัตรา', 'ผสมเท่าไหร่', 'กี่ซีซี', 'กี่ลิตร'])
+        # เพิ่ม: คำถามแนะนำสินค้า/สาร
+        is_recommend_question = any(kw in question.lower() for kw in ['แนะนำ', 'ใช้ยาอะไร', 'ใช้สารอะไร', 'ยาตัวไหน', 'สารตัวไหน', 'ฉีดพ่น'])
 
         # สร้าง prompt ตามประเภทคำถาม
-        if product_in_question and is_what_question:
+        if is_recommend_question and knowledge_docs:
+            # คำถามแนะนำสินค้า (มี knowledge_docs แล้ว) → ตอบจากข้อมูลที่มี
+            prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
+
+คำถาม: {question}
+
+ข้อมูลจากฐานข้อมูล:
+{combined_context}
+
+หลักการตอบ (สำคัญมาก!):
+1. แนะนำสินค้าจากข้อมูลที่ให้มาเท่านั้น
+2. ตอบในรูปแบบ:
+   [ผลิตภัณฑ์แนะนำ]
+   1. ชื่อสินค้า (สารสำคัญ)
+      - อัตราใช้: ...
+      - วิธีใช้: ...
+
+3. ถ้าไม่มีข้อมูลอัตราหรือวิธีใช้ → ระบุว่า "ไม่มีข้อมูล"
+4. ห้ามแต่งข้อมูลเอง ใช้เฉพาะที่มีในฐานข้อมูล
+5. ห้ามใช้ ** หรือ ## หรือ emoji
+
+ตอบ:"""
+        elif product_in_question and is_what_question:
             # คำถามแบบ "X ใช้ทำอะไร" → ตอบสั้นๆ + ถาม follow-up
             prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
 
@@ -756,7 +837,7 @@ USAGE_QUESTION_PATTERNS = [
     r"ฉีด(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
     r"ผสม(?:ยัง|ยังไง|อย่างไร|ย่างไร)",
     # อัตราส่วน
-    r"อัตรา(?:ใช้|ผสม|ส่วน)",
+    r"อัตรา(?:การ)?(?:ใช้|ผสม|ส่วน)",
     r"ผสม(?:กี่|เท่าไหร่|เท่าไร)",
     r"ใช้(?:กี่|เท่าไหร่|เท่าไร)",
     # ช่วงเวลา
