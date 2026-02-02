@@ -20,8 +20,9 @@ def post_process_answer(answer: str) -> str:
     answer = answer.replace('', '')
     answer = answer.replace('\x00', '')
     
-    # 3. Fix spacing issues
-    answer = re.sub(r'\s+', ' ', answer)  # Multiple spaces → single space
+    # 3. Fix spacing issues (preserve newlines!)
+    # Only collapse multiple spaces within lines, preserve newlines
+    answer = re.sub(r'[ \t]+', ' ', answer)  # Multiple spaces/tabs → single space (preserve \n)
     answer = answer.replace(' ,', ',')
     answer = answer.replace(' .', '.')
     answer = answer.replace(' :', ':')
