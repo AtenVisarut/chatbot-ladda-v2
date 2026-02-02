@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Dict, Optional, Tuple
 from app.services.services import openai_client, supabase_client
-from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products
+from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
 from app.services.knowledge_base import answer_question_with_knowledge
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product_recommendation import recommend_products_by_intent, hybrid_search_products
@@ -1084,8 +1084,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         # 1. Add user message to memory
         await add_to_memory(user_id, "user", message)
 
-        # 2. Get conversation context
-        context = await get_conversation_context(user_id)
+        # 2. Get enhanced conversation context (includes summary + products)
+        context = await get_enhanced_context(user_id)
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         if is_usage_question(message):

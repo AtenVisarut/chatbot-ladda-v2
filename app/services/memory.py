@@ -1,6 +1,6 @@
 import logging
 from app.services.services import supabase_client
-from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW
+from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW
 
 logger = logging.getLogger(__name__)
 
@@ -35,30 +35,39 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
     try:
         if not supabase_client:
             return ""
-        
+
         # Get last N messages for this user
         result = supabase_client.table('conversation_memory')\
-            .select('role, content, created_at')\
+            .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
             .limit(limit)\
             .execute()
-        
+
         if not result.data:
             return ""
-        
+
         # Reverse to get chronological order
         messages = list(reversed(result.data))
-        
+
         context_parts = []
         for msg in messages:
-            role = "ผู้ใช้" if msg["role"] == "user" else "ฉัน"
-            content = msg["content"][:150]  # Truncate for context
+            role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+            content = msg["content"][:MEMORY_CONTENT_PREVIEW]  # Use config value
+
+            # Add product info from metadata if available
+            metadata = msg.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                products = metadata.get("products", [])
+                if products:
+                    product_names = [p.get("product_name", "") for p in products[:3]]
+                    content += f" (สินค้าที่แนะนำ: {', '.join(product_names)})"
+
             context_parts.append(f"{role}: {content}")
-        
+
         logger.info(f"✓ Retrieved {len(messages)} messages from memory")
         return "\n".join(context_parts)
-        
+
     except Exception as e:
         logger.error(f"Failed to get conversation context: {e}")
         return ""
@@ -278,3 +287,129 @@ async def get_full_conversation_history(user_id: str, limit: int = MEMORY_CONTEX
     except Exception as e:
         logger.error(f"Failed to get full conversation history: {e}")
         return []
+
+
+async def get_conversation_summary(user_id: str) -> dict:
+    """
+    สรุปบทสนทนา: หัวข้อที่คุย, สินค้าที่แนะนำ, พืชที่ถาม
+    ใช้สำหรับให้ AI เข้าใจ context ได้ดีขึ้น
+    """
+    try:
+        if not supabase_client:
+            return {}
+
+        result = supabase_client.table('conversation_memory')\
+            .select('role, content, metadata, created_at')\
+            .eq('user_id', user_id)\
+            .order('created_at', desc=True)\
+            .limit(50)\
+            .execute()
+
+        if not result.data:
+            return {}
+
+        # Extract topics and products from conversation
+        topics = []
+        products_mentioned = []
+        plants_mentioned = []
+        last_question = ""
+
+        # Plant keywords
+        plant_keywords = [
+            "ข้าว", "ทุเรียน", "มะม่วง", "ส้ม", "พริก", "ข้าวโพด", "อ้อย",
+            "ลำไย", "มันสำปะหลัง", "ยางพารา", "ปาล์ม", "ถั่ว", "ผัก"
+        ]
+
+        for msg in result.data:
+            content = msg.get("content", "")
+            metadata = msg.get("metadata", {})
+
+            # Get last user question
+            if msg["role"] == "user" and not last_question:
+                last_question = content[:200]
+
+            # Extract products from metadata
+            if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                products = metadata.get("products", [])
+                for p in products:
+                    name = p.get("product_name", "")
+                    if name and name not in products_mentioned:
+                        products_mentioned.append(name)
+
+            # Extract plants from content
+            for plant in plant_keywords:
+                if plant in content and plant not in plants_mentioned:
+                    plants_mentioned.append(plant)
+
+            # Extract topics (simple keyword detection)
+            if msg["role"] == "user":
+                if any(kw in content for kw in ["โรค", "รักษา", "ป้องกัน"]):
+                    if "โรคพืช" not in topics:
+                        topics.append("โรคพืช")
+                if any(kw in content for kw in ["แมลง", "เพลี้ย", "หนอน", "กำจัด"]):
+                    if "แมลงศัตรูพืช" not in topics:
+                        topics.append("แมลงศัตรูพืช")
+                if any(kw in content for kw in ["หญ้า", "วัชพืช"]):
+                    if "วัชพืช" not in topics:
+                        topics.append("วัชพืช")
+                if any(kw in content for kw in ["บำรุง", "ธาตุ", "ปุ๋ย", "ติดดอก", "ติดผล"]):
+                    if "การบำรุง" not in topics:
+                        topics.append("การบำรุง")
+                if any(kw in content for kw in ["วิธีใช้", "อัตรา", "ผสม"]):
+                    if "วิธีใช้สินค้า" not in topics:
+                        topics.append("วิธีใช้สินค้า")
+
+        summary = {
+            "topics": topics[:5],
+            "products_mentioned": products_mentioned[:10],
+            "plants_mentioned": plants_mentioned[:5],
+            "last_question": last_question,
+            "total_messages": len(result.data)
+        }
+
+        logger.info(f"✓ Conversation summary: {len(topics)} topics, {len(products_mentioned)} products")
+        return summary
+
+    except Exception as e:
+        logger.error(f"Failed to get conversation summary: {e}")
+        return {}
+
+
+async def get_enhanced_context(user_id: str) -> str:
+    """
+    สร้าง context แบบ enhanced สำหรับ AI
+    รวม: บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
+    """
+    try:
+        # Get conversation context
+        context = await get_conversation_context(user_id, limit=15)
+
+        # Get conversation summary
+        summary = await get_conversation_summary(user_id)
+
+        if not summary:
+            return context
+
+        # Build enhanced context
+        parts = []
+
+        # Add summary header
+        if summary.get("topics"):
+            parts.append(f"[หัวข้อที่คุยกัน: {', '.join(summary['topics'])}]")
+
+        if summary.get("plants_mentioned"):
+            parts.append(f"[พืชที่ถาม: {', '.join(summary['plants_mentioned'])}]")
+
+        if summary.get("products_mentioned"):
+            parts.append(f"[สินค้าที่แนะนำ: {', '.join(summary['products_mentioned'][:5])}]")
+
+        # Add conversation
+        if context:
+            parts.append("\nบทสนทนาล่าสุด:")
+            parts.append(context)
+
+        return "\n".join(parts)
+
+    except Exception as e:
+        logger.error(f"Failed to get enhanced context: {e}")
+        return await get_conversation_context(user_id)
