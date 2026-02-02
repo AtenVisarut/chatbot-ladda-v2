@@ -302,7 +302,7 @@ async def get_conversation_summary(user_id: str) -> dict:
             .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(50)\
+            .limit(MEMORY_CONTEXT_WINDOW)\
             .execute()
 
         if not result.data:

@@ -50,9 +50,9 @@ UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
 USE_REDIS_CACHE = bool(REDIS_URL or UPSTASH_REDIS_REST_URL)
 
 # Memory configuration
-MAX_MEMORY_MESSAGES = 100  # Keep last 100 messages for context (เพิ่มจาก 40)
-MEMORY_CONTEXT_WINDOW = 30  # Use last 30 messages for context (เพิ่มจาก 20)
-MEMORY_CONTENT_PREVIEW = 400  # Characters to show in context preview (เพิ่มจาก 150)
+MAX_MEMORY_MESSAGES = 50  # Keep last 50 messages for context (ปรับจาก 100 เพื่อ performance)
+MEMORY_CONTEXT_WINDOW = 30  # Use last 30 messages for context
+MEMORY_CONTENT_PREVIEW = 300  # Characters to show in context preview (ลดจาก 400)
 
 # RAG-based Disease Detection
 # Set to "1" to use RAG + Vector Search (faster, cheaper)
