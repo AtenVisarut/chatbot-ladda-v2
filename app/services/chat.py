@@ -427,6 +427,14 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
     """
     ตอบคำถาม Q&A โดยใช้ Vector Search จาก knowledge table เป็นหลัก
     พร้อมกรองตาม category (โรค vs แมลง)
+
+    Flow ที่ถูกต้อง:
+    1. รับคำถามจาก user
+    2. ตรวจจับ: ชื่อสินค้า, ชื่อพืช, ประเภทปัญหา
+    3. ถ้าถามเรื่องโรค/แมลง แต่ไม่ระบุพืช → ถามพืชก่อน
+    4. ถ้าถามเรื่องสินค้าเฉพาะแต่ไม่ระบุพืช → ถามพืชก่อน (เพื่อให้อัตราการใช้ถูกต้อง)
+    5. ค้นหาจาก knowledge table
+    6. ตอบเฉพาะข้อมูลที่มีใน DB - ห้าม hallucinate
     """
     try:
         logger.info(f"Q&A Vector Search: {question[:50]}...")
@@ -441,6 +449,23 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         product_in_question = extract_product_name_from_question(question)
 
         logger.info(f"Detected: problem_type={problem_type}, plant={plant_in_question}, product={product_in_question}")
+
+        # =================================================================
+        # STEP 3: ถ้าถามเรื่องโรค/แมลง แต่ไม่ระบุพืช → ถามพืชก่อน
+        # =================================================================
+        # ตรวจสอบว่าเป็นคำถาม "รักษา/กำจัด" ที่ต้องการสินค้า
+        is_treatment_question = any(kw in question.lower() for kw in [
+            'รักษา', 'กำจัด', 'แนะนำ', 'ใช้ยา', 'ยาอะไร', 'สารอะไร',
+            'ป้องกัน', 'ฆ่า', 'ควบคุม', 'จัดการ'
+        ])
+
+        # ถ้าถามเรื่องโรค/แมลง และต้องการรักษา แต่ไม่ระบุพืช → ถามพืชก่อน
+        if problem_type in ['insect', 'disease'] and is_treatment_question and not plant_in_question and not product_in_question:
+            logger.info(f"⚠️ ถามเรื่อง {problem_type} แต่ไม่ระบุพืช → ถามพืชก่อน")
+            if problem_type == 'insect':
+                return "ขอทราบว่าเจอปัญหาแมลงศัตรูพืชในพืชอะไรคะ? (เช่น ข้าว, ทุเรียน, พริก, มะม่วง)\n\nเพื่อให้ลัดดาแนะนำผลิตภัณฑ์ที่เหมาะสมกับพืชของพี่ค่ะ"
+            else:  # disease
+                return "ขอทราบว่าพบโรคนี้ในพืชอะไรคะ? (เช่น ข้าว, ทุเรียน, มะม่วง, ส้ม)\n\nเพื่อให้ลัดดาแนะนำผลิตภัณฑ์และอัตราการใช้ที่ถูกต้องสำหรับพืชของพี่ค่ะ"
 
         # เก็บ context จากแต่ละ source
         all_context_parts = []
@@ -570,21 +595,43 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         if not knowledge_docs:
             return f"ขออภัยค่ะ ไม่พบข้อมูลที่ตรงกับคำถามในฐานข้อมูลของเรา\n\nกรุณาระบุ:\n- ชื่อพืช (เช่น ทุเรียน, ข้าว)\n- ปัญหาที่พบ (เช่น โรค, แมลง, ต้องการบำรุง)\n\nเพื่อให้ลัดดาแนะนำผลิตภัณฑ์ที่เหมาะสมค่ะ"
 
+        # =================================================================
+        # สร้างรายชื่อสินค้าที่อนุญาตให้แนะนำ (จาก knowledge_docs เท่านั้น)
+        # =================================================================
+        allowed_products = []
+        for doc in knowledge_docs:
+            pname = doc.get('product_name') or doc.get('title', '')
+            if pname and pname not in allowed_products:
+                allowed_products.append(pname)
+
+        allowed_products_str = ", ".join(allowed_products[:10]) if allowed_products else "(ไม่มี)"
+
         response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": """คุณคือน้องลัดดา ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
+                {"role": "system", "content": f"""คุณคือน้องลัดดา ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
 
-กฎสำคัญที่ต้องปฏิบัติ (ห้ามละเมิด!):
-1. ใช้ข้อมูลจากฐานข้อมูลที่ให้มาเท่านั้น ห้ามแต่งเอง ห้าม hallucinate
-2. ถ้าข้อมูลในฐานข้อมูลไม่เพียงพอ → บอกว่า "ไม่พบข้อมูล" แล้วถามรายละเอียดเพิ่ม
-3. แนะนำเฉพาะสินค้าที่มีในฐานข้อมูลเท่านั้น
+⚠️ กฎสำคัญที่ห้ามละเมิดเด็ดขาด:
+
+1. ห้ามแต่งชื่อสินค้าขึ้นมาเอง - แนะนำได้เฉพาะสินค้าต่อไปนี้เท่านั้น:
+   [{allowed_products_str}]
+
+2. ถ้าไม่มีสินค้าที่เหมาะสมในรายการด้านบน → ตอบว่า:
+   "ขออภัยค่ะ ไม่พบข้อมูลผลิตภัณฑ์ที่ตรงกับความต้องการในฐานข้อมูล
+   กรุณาระบุชื่อพืชและปัญหาที่พบให้ชัดเจนขึ้นค่ะ"
+
+3. ใช้ข้อมูลจากฐานข้อมูลที่ให้มาเท่านั้น - ห้าม hallucinate ข้อมูลใดๆ:
+   - ห้ามแต่งอัตราการใช้
+   - ห้ามแต่งวิธีการใช้
+   - ห้ามแต่งชื่อสารเคมี
+
 4. ห้ามใช้ ** หรือ ## หรือ emoji
+
 5. ตอบสั้น กระชับ ตรงประเด็น"""},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
-            temperature=0.3  # ลด temperature เพื่อให้ตอบตรงกับข้อมูลมากขึ้น
+            temperature=0.2  # ลด temperature เพื่อให้ตอบตรงกับข้อมูลมากขึ้น
         )
 
         answer = post_process_answer(response.choices[0].message.content)
@@ -755,8 +802,25 @@ def is_usage_question(message: str) -> bool:
 async def answer_usage_question(user_id: str, message: str, context: str = "") -> str:
     """
     ตอบคำถามเกี่ยวกับวิธีใช้สินค้าจากข้อมูลที่เก็บใน memory
+
+    Flow ที่ถูกต้อง:
+    1. ถ้าถามแบบสั้น (เช่น "อัตราการใช้") โดยไม่ระบุสินค้า/พืช → ถามกลับ
+    2. ถ้ามีสินค้าใน memory และระบุพืช → ตอบจาก memory
+    3. ถ้าไม่มี memory → ไป flow ปกติ
     """
     try:
+        # ตรวจสอบว่าคำถามระบุสินค้าหรือพืชหรือไม่
+        product_in_question = extract_product_name_from_question(message)
+        plant_in_question = extract_plant_type_from_question(message)
+
+        # ถ้าถามแบบสั้นๆ (เช่น "อัตราการใช้", "วิธีใช้") โดยไม่ระบุสินค้า → ต้องถามกลับ
+        short_questions = ['อัตราการใช้', 'วิธีใช้', 'อัตราผสม', 'ผสมยังไง', 'ใช้ยังไง']
+        is_short_question = message.strip() in short_questions or len(message.strip()) < 15
+
+        if is_short_question and not product_in_question and not plant_in_question:
+            logger.info(f"⚠️ คำถามสั้นไม่ระบุรายละเอียด: {message}")
+            return "ขอทราบรายละเอียดเพิ่มเติมค่ะ:\n- ต้องการทราบอัตราการใช้ของสินค้าตัวไหนคะ?\n- และใช้กับพืชอะไรคะ?\n\nเพื่อให้ลัดดาแนะนำอัตราการใช้ที่ถูกต้องค่ะ"
+
         # ดึงข้อมูลสินค้าที่แนะนำล่าสุด
         products = await get_recommended_products(user_id, limit=5)
 
