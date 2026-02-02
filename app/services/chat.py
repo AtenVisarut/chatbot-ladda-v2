@@ -188,13 +188,13 @@ def is_product_question(message: str) -> bool:
 
 
 # =============================================================================
-# ตรวจจับประเภทปัญหา: โรค vs แมลง
+# ตรวจจับประเภทปัญหา: โรค vs แมลง vs ธาตุอาหาร vs วัชพืช
 # =============================================================================
 DISEASE_KEYWORDS = [
     # โรคทั่วไป
     "โรค", "ใบจุด", "ใบไหม้", "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา",
     "แอนแทรคโนส", "ผลเน่า", "รากเน่า", "โคนเน่า", "ลำต้นเน่า", "กิ่งแห้ง",
-    "ราดำ", "ใบเหลือง", "ใบร่วง", "จุดสีน้ำตาล", "ใบแห้ง",
+    "ราดำ", "จุดสีน้ำตาล", "ใบแห้ง", "ไฟท็อป", "ใบติด",
     # English
     "disease", "fungus", "fungal", "rot", "blight", "mildew", "rust", "anthracnose"
 ]
@@ -204,26 +204,69 @@ INSECT_KEYWORDS = [
     "แมลง", "เพลี้ย", "หนอน", "ด้วง", "มด", "ปลวก", "เพลี้ยไฟ",
     "เพลี้ยอ่อน", "เพลี้ยแป้ง", "เพลี้ยกระโดด", "หนอนกอ", "หนอนเจาะ",
     "หนอนใย", "แมลงวัน", "จักจั่น", "ทริปส์", "ศัตรูพืช",
-    "ไรแดง", "ไรขาว", "ไรแมง", "ตัวไร",  # ใช้คำเฉพาะแทน "ไร"
+    "ไรแดง", "ไรขาว", "ไรแมง", "ตัวไร",
     # English
     "insect", "pest", "aphid", "thrips", "mite", "worm", "caterpillar", "beetle"
+]
+
+# เพิ่ม: Keywords สำหรับธาตุอาหาร/การบำรุง
+NUTRIENT_KEYWORDS = [
+    # ขาดธาตุ/บำรุง
+    "ขาดธาตุ", "ธาตุอาหาร", "บำรุง", "เสริมธาตุ", "ปุ๋ย",
+    # อาการ
+    "ดอกร่วง", "ผลร่วง", "ใบเหลือง", "ใบร่วง", "ไม่ติดดอก", "ไม่ติดผล",
+    "ดอกไม่ติด", "ผลไม่ติด", "ต้นโทรม", "ต้นไม่สมบูรณ์",
+    # การบำรุง
+    "ติดดอก", "ติดผล", "ขยายผล", "บำรุงดอก", "บำรุงผล", "บำรุงต้น",
+    "เร่งดอก", "เร่งผล", "สะสมอาหาร", "เพิ่มผลผลิต",
+    # ธาตุเฉพาะ
+    "โพแทสเซียม", "ฟอสฟอรัส", "ไนโตรเจน", "แคลเซียม", "โบรอน", "สังกะสี", "ซิงค์"
+]
+
+# เพิ่ม: Keywords สำหรับวัชพืช
+WEED_KEYWORDS = [
+    "หญ้า", "วัชพืช", "กำจัดหญ้า", "ยาฆ่าหญ้า", "หญ้าขึ้น", "หญ้างอก",
+    "ใบแคบ", "ใบกว้าง", "กก"
 ]
 
 
 def detect_problem_type(message: str) -> str:
     """
-    ตรวจจับประเภทปัญหา: disease (โรค) หรือ insect (แมลง)
-    Returns: 'disease', 'insect', หรือ 'unknown'
+    ตรวจจับประเภทปัญหา
+    Returns: 'disease', 'insect', 'nutrient', 'weed', หรือ 'unknown'
+
+    Priority: nutrient > disease > insect > weed > unknown
+    (เพราะคำถามเรื่องบำรุงมักมีคำว่า "ใบเหลือง" ซึ่งอาจซ้ำกับ disease)
     """
     message_lower = message.lower()
 
+    # นับ keywords แต่ละประเภท
+    nutrient_count = sum(1 for kw in NUTRIENT_KEYWORDS if kw in message_lower)
     disease_count = sum(1 for kw in DISEASE_KEYWORDS if kw in message_lower)
     insect_count = sum(1 for kw in INSECT_KEYWORDS if kw in message_lower)
+    weed_count = sum(1 for kw in WEED_KEYWORDS if kw in message_lower)
 
-    if disease_count > insect_count:
+    # หา max count
+    counts = {
+        'nutrient': nutrient_count,
+        'disease': disease_count,
+        'insect': insect_count,
+        'weed': weed_count
+    }
+
+    max_count = max(counts.values())
+    if max_count == 0:
+        return 'unknown'
+
+    # Return ตาม priority: nutrient > disease > insect > weed
+    if counts['nutrient'] == max_count:
+        return 'nutrient'
+    elif counts['disease'] == max_count:
         return 'disease'
-    elif insect_count > disease_count:
+    elif counts['insect'] == max_count:
         return 'insect'
+    elif counts['weed'] == max_count:
+        return 'weed'
     else:
         return 'unknown'
 
@@ -295,42 +338,34 @@ async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: 
 
         logger.info(f"✓ Found {len(result.data)} knowledge docs via vector search (problem_type={problem_type})")
 
-        # กรองตาม category (disease vs insect)
+        # กรองตาม category ตามประเภทปัญหา
         filtered_results = result.data
-        if problem_type == 'disease':
-            # กรองเฉพาะ category ที่เกี่ยวกับโรค (ไม่ใช่ insecticide)
-            disease_categories = ['fungicide', 'ป้องกันโรค', 'กำจัดโรค', 'สารป้องกันโรค', 'ยาป้องกันโรค']
-            insect_categories = ['insecticide', 'กำจัดแมลง', 'สารกำจัดแมลง', 'ยาฆ่าแมลง']
 
-            filtered = []
-            for doc in result.data:
-                category = (doc.get('category') or '').lower()
-                target_pest = (doc.get('target_pest') or '').lower()
+        # กำหนด category mapping
+        CATEGORY_MAPPING = {
+            'disease': ['fungicide'],
+            'insect': ['insecticide'],
+            'nutrient': ['fertilizer', 'growth_regulator', 'enhancer'],
+            'weed': ['herbicide']
+        }
 
-                # ถ้ามี category → ตรวจสอบว่าไม่ใช่ insecticide
-                is_insecticide = any(cat in category for cat in insect_categories)
-                if not is_insecticide:
-                    filtered.append(doc)
-
-            if filtered:
-                filtered_results = filtered
-                logger.info(f"✓ Filtered to {len(filtered_results)} disease-related docs")
-
-        elif problem_type == 'insect':
-            # กรองเฉพาะ category ที่เกี่ยวกับแมลง
-            insect_categories = ['insecticide', 'กำจัดแมลง', 'สารกำจัดแมลง', 'ยาฆ่าแมลง']
+        if problem_type in CATEGORY_MAPPING:
+            target_categories = CATEGORY_MAPPING[problem_type]
 
             filtered = []
             for doc in result.data:
                 category = (doc.get('category') or '').lower()
 
-                is_insecticide = any(cat in category for cat in insect_categories)
-                if is_insecticide:
+                # ตรวจสอบว่า category ตรงกับที่ต้องการ
+                if any(cat in category for cat in target_categories):
                     filtered.append(doc)
 
             if filtered:
                 filtered_results = filtered
-                logger.info(f"✓ Filtered to {len(filtered_results)} insect-related docs")
+                logger.info(f"✓ Filtered to {len(filtered_results)} {problem_type}-related docs")
+            else:
+                # ถ้าไม่เจอ category ที่ตรง → ลองใช้ผลทั้งหมด
+                logger.info(f"⚠️ No {problem_type} category found, using all results")
 
         # ถ้าถามเกี่ยวกับสินค้าเฉพาะ → กรองเฉพาะสินค้าที่ตรงกับชื่อ
         if product_in_question:
@@ -531,21 +566,25 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         if not openai_client:
             return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
 
+        # ถ้าไม่พบข้อมูลในฐานข้อมูล → บอกตรงๆ
+        if not knowledge_docs:
+            return f"ขออภัยค่ะ ไม่พบข้อมูลที่ตรงกับคำถามในฐานข้อมูลของเรา\n\nกรุณาระบุ:\n- ชื่อพืช (เช่น ทุเรียน, ข้าว)\n- ปัญหาที่พบ (เช่น โรค, แมลง, ต้องการบำรุง)\n\nเพื่อให้ลัดดาแนะนำผลิตภัณฑ์ที่เหมาะสมค่ะ"
+
         response = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": """คุณคือน้องลัดดา ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
 
-หลักการตอบ:
-- ตอบสั้น กระชับ ตรงประเด็น
-- ใช้ข้อมูลจากฐานข้อมูลที่ให้มาเท่านั้น ห้ามแต่งข้อมูลเอง
-- ถ้าถามว่า "X ใช้ทำอะไร" → ตอบสั้นๆ แล้วถามว่าต้องการรู้อะไรเพิ่ม
-- ห้ามใช้ ** หรือ ## หรือ emoji
-- ถ้าไม่แน่ใจ ให้ถามกลับ"""},
+กฎสำคัญที่ต้องปฏิบัติ (ห้ามละเมิด!):
+1. ใช้ข้อมูลจากฐานข้อมูลที่ให้มาเท่านั้น ห้ามแต่งเอง ห้าม hallucinate
+2. ถ้าข้อมูลในฐานข้อมูลไม่เพียงพอ → บอกว่า "ไม่พบข้อมูล" แล้วถามรายละเอียดเพิ่ม
+3. แนะนำเฉพาะสินค้าที่มีในฐานข้อมูลเท่านั้น
+4. ห้ามใช้ ** หรือ ## หรือ emoji
+5. ตอบสั้น กระชับ ตรงประเด็น"""},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
-            temperature=0.5
+            temperature=0.3  # ลด temperature เพื่อให้ตอบตรงกับข้อมูลมากขึ้น
         )
 
         answer = post_process_answer(response.choices[0].message.content)
