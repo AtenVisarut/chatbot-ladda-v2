@@ -57,3 +57,27 @@ MEMORY_CONTEXT_WINDOW = 20  # Use last 20 messages for context (จำบทส�
 # Set to "1" to use RAG + Vector Search (faster, cheaper)
 # Set to "0" to use original hardcoded database (default for rollback)
 USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
+
+# ============================================================================#
+# AGENTIC RAG CONFIGURATION
+# ============================================================================#
+# Set to "1" to enable Agentic RAG pipeline for Q&A
+# Set to "0" to use legacy answer_qa_with_vector_search
+USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
+
+AGENTIC_RAG_CONFIG = {
+    # Vector search threshold (increased from 0.20 for better precision)
+    "VECTOR_THRESHOLD": float(os.getenv("AGENTIC_VECTOR_THRESHOLD", "0.35")),
+
+    # Minimum rerank score to include in results
+    "RERANK_THRESHOLD": float(os.getenv("AGENTIC_RERANK_THRESHOLD", "0.50")),
+
+    # Minimum number of relevant documents to return
+    "MIN_RELEVANT_DOCS": int(os.getenv("AGENTIC_MIN_DOCS", "3")),
+
+    # Enable grounding check (hallucination prevention)
+    "ENABLE_GROUNDING": os.getenv("AGENTIC_ENABLE_GROUNDING", "1") == "1",
+
+    # Maximum citations to include in response
+    "MAX_CITATIONS": int(os.getenv("AGENTIC_MAX_CITATIONS", "3")),
+}

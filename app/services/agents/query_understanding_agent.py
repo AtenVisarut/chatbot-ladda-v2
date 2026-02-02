@@ -1,0 +1,256 @@
+"""
+Query Understanding Agent
+
+Responsibilities:
+- Semantic intent detection using LLM (not keyword matching)
+- Entity extraction: product_name, plant_type, disease_name, pest_name
+- Query expansion for multi-query retrieval
+- Determine required sources: knowledge, products, diseases
+"""
+
+import logging
+import json
+import re
+from typing import Optional, List, Dict, Any
+
+from app.services.agents import IntentType, QueryAnalysis
+
+logger = logging.getLogger(__name__)
+
+
+class QueryUnderstandingAgent:
+    """
+    Agent 1: Query Understanding
+    Uses LLM to semantically understand user queries
+    """
+
+    def __init__(self, openai_client=None):
+        self.openai_client = openai_client
+
+    async def analyze(self, query: str) -> QueryAnalysis:
+        """
+        Analyze user query to extract intent, entities, and generate expanded queries
+
+        Returns:
+            QueryAnalysis with intent, entities, expanded_queries, required_sources
+        """
+        try:
+            logger.info(f"QueryUnderstandingAgent: Analyzing '{query[:50]}...'")
+
+            if not self.openai_client:
+                logger.warning("OpenAI client not available, using fallback analysis")
+                return self._fallback_analysis(query)
+
+            # Use LLM for semantic understanding
+            result = await self._llm_analyze(query)
+            logger.info(f"QueryUnderstandingAgent: intent={result.intent}, confidence={result.confidence:.2f}")
+            return result
+
+        except Exception as e:
+            logger.error(f"QueryUnderstandingAgent error: {e}", exc_info=True)
+            return self._fallback_analysis(query)
+
+    async def _llm_analyze(self, query: str) -> QueryAnalysis:
+        """Use LLM for semantic query analysis"""
+
+        prompt = f"""วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
+
+คำถาม: "{query}"
+
+ตอบเป็น JSON format เท่านั้น (ไม่มี markdown):
+{{
+    "intent": "<intent_type>",
+    "confidence": <0.0-1.0>,
+    "entities": {{
+        "product_name": "<ชื่อสินค้าถ้ามี หรือ null>",
+        "plant_type": "<ชื่อพืชถ้ามี หรือ null>",
+        "disease_name": "<ชื่อโรคถ้ามี หรือ null>",
+        "pest_name": "<ชื่อแมลง/ศัตรูพืชถ้ามี หรือ null>",
+        "weed_type": "<ประเภทวัชพืชถ้ามี หรือ null>",
+        "growth_stage": "<ระยะการเจริญเติบโตถ้ามี หรือ null>"
+    }},
+    "expanded_queries": ["<คำค้นหาหลัก>", "<คำค้นหาเสริม1>", "<คำค้นหาเสริม2>"],
+    "required_sources": ["<source1>", "<source2>"]
+}}
+
+intent_type ที่เป็นไปได้:
+- product_inquiry: ถามเกี่ยวกับสินค้าเฉพาะ (เช่น "โมเดิน ใช้ยังไง", "แกนเตอร์ คืออะไร")
+- product_recommendation: ขอแนะนำสินค้า (เช่น "แนะนำยากำจัดแมลง")
+- disease_treatment: การรักษาโรคพืช (เช่น "ราน้ำค้าง รักษายังไง")
+- pest_control: การกำจัดแมลง (เช่น "กำจัดเพลี้ยในทุเรียน")
+- weed_control: การกำจัดวัชพืช (เช่น "หญ้าในนาข้าว")
+- nutrient_supplement: การเสริมธาตุอาหาร (เช่น "ดอกร่วง ติดดอก")
+- usage_instruction: วิธีใช้/อัตราผสม (เช่น "อัตราการใช้", "ผสมกี่ซีซี")
+- general_agriculture: คำถามเกษตรทั่วไป
+- greeting: ทักทาย (เช่น "สวัสดี", "ดีจ้า")
+- unknown: ไม่เกี่ยวกับเกษตร
+
+required_sources ที่เป็นไปได้:
+- knowledge: ข้อมูลสินค้าและวิธีใช้
+- products: ตารางสินค้า
+- diseases: ข้อมูลโรคพืช
+
+expanded_queries: สร้างคำค้นหาเพิ่มเติมที่เกี่ยวข้อง เช่น
+- ถ้าถาม "โมเดิน ใช้กับทุเรียน" → ["โมเดิน ทุเรียน", "โมเดิน 50", "โปรฟีโนฟอส ทุเรียน"]
+- ถ้าถาม "กำจัดหญ้าในนา" → ["ยาฆ่าหญ้านาข้าว", "herbicide rice", "วัชพืชนาข้าว"]
+"""
+
+        response = await self.openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์คำถามการเกษตร ตอบเป็น JSON เท่านั้น ไม่มี markdown"
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+
+        response_text = response.choices[0].message.content.strip()
+
+        # Parse JSON response
+        try:
+            # Remove markdown code blocks if present
+            if response_text.startswith("```"):
+                response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
+                response_text = re.sub(r'\n?```$', '', response_text)
+
+            data = json.loads(response_text)
+
+            # Map intent string to IntentType enum
+            intent_map = {
+                "product_inquiry": IntentType.PRODUCT_INQUIRY,
+                "product_recommendation": IntentType.PRODUCT_RECOMMENDATION,
+                "disease_treatment": IntentType.DISEASE_TREATMENT,
+                "pest_control": IntentType.PEST_CONTROL,
+                "weed_control": IntentType.WEED_CONTROL,
+                "nutrient_supplement": IntentType.NUTRIENT_SUPPLEMENT,
+                "usage_instruction": IntentType.USAGE_INSTRUCTION,
+                "general_agriculture": IntentType.GENERAL_AGRICULTURE,
+                "greeting": IntentType.GREETING,
+                "unknown": IntentType.UNKNOWN,
+            }
+
+            intent = intent_map.get(data.get("intent", "unknown"), IntentType.UNKNOWN)
+
+            # Clean entities (remove null values)
+            entities = {k: v for k, v in data.get("entities", {}).items() if v is not None}
+
+            # Get expanded queries
+            expanded_queries = data.get("expanded_queries", [query])
+            if not expanded_queries:
+                expanded_queries = [query]
+
+            # Get required sources
+            required_sources = data.get("required_sources", ["knowledge"])
+            if not required_sources:
+                required_sources = self._determine_sources(intent)
+
+            return QueryAnalysis(
+                original_query=query,
+                intent=intent,
+                confidence=float(data.get("confidence", 0.5)),
+                entities=entities,
+                expanded_queries=expanded_queries,
+                required_sources=required_sources
+            )
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse LLM response as JSON: {e}")
+            return self._fallback_analysis(query)
+
+    def _fallback_analysis(self, query: str) -> QueryAnalysis:
+        """Fallback to keyword-based analysis when LLM is not available"""
+        query_lower = query.lower()
+
+        # Intent detection using keywords
+        intent = IntentType.UNKNOWN
+        confidence = 0.5
+        entities = {}
+
+        # Product inquiry patterns
+        product_keywords = [
+            "โมเดิน", "แกนเตอร์", "เกรค", "อิมิดาโกลด์", "เลกาซี",
+            "โคเบิล", "โทมาฮอค", "แอสไปร์", "ไพรซีน", "ไฮซีส"
+        ]
+        for product in product_keywords:
+            if product in query_lower:
+                intent = IntentType.PRODUCT_INQUIRY
+                entities["product_name"] = product
+                confidence = 0.8
+                break
+
+        # Disease treatment patterns
+        disease_keywords = ["โรค", "ราน้ำค้าง", "ราแป้ง", "ใบไหม้", "เชื้อรา", "รักษา"]
+        if any(kw in query_lower for kw in disease_keywords):
+            if intent == IntentType.UNKNOWN:
+                intent = IntentType.DISEASE_TREATMENT
+                confidence = 0.7
+
+        # Pest control patterns
+        pest_keywords = ["แมลง", "เพลี้ย", "หนอน", "ด้วง", "กำจัด", "ฆ่า"]
+        if any(kw in query_lower for kw in pest_keywords):
+            if intent == IntentType.UNKNOWN:
+                intent = IntentType.PEST_CONTROL
+                confidence = 0.7
+
+        # Weed control patterns
+        weed_keywords = ["หญ้า", "วัชพืช", "ยาฆ่าหญ้า"]
+        if any(kw in query_lower for kw in weed_keywords):
+            if intent == IntentType.UNKNOWN:
+                intent = IntentType.WEED_CONTROL
+                confidence = 0.7
+
+        # Nutrient supplement patterns
+        nutrient_keywords = ["บำรุง", "ธาตุอาหาร", "ดอกร่วง", "ติดดอก", "ติดผล"]
+        if any(kw in query_lower for kw in nutrient_keywords):
+            if intent == IntentType.UNKNOWN:
+                intent = IntentType.NUTRIENT_SUPPLEMENT
+                confidence = 0.6
+
+        # Usage instruction patterns
+        usage_keywords = ["วิธีใช้", "อัตรา", "ผสม", "ใช้ยังไง"]
+        if any(kw in query_lower for kw in usage_keywords):
+            if intent == IntentType.UNKNOWN:
+                intent = IntentType.USAGE_INSTRUCTION
+                confidence = 0.7
+
+        # Greeting patterns
+        greeting_keywords = ["สวัสดี", "ดีจ้า", "หวัดดี", "hello"]
+        if any(kw in query_lower for kw in greeting_keywords):
+            intent = IntentType.GREETING
+            confidence = 0.9
+
+        # Extract plant type
+        plants = ["ข้าว", "ทุเรียน", "มะม่วง", "ส้ม", "พริก", "ข้าวโพด", "อ้อย", "ลำไย"]
+        for plant in plants:
+            if plant in query_lower:
+                entities["plant_type"] = plant
+                break
+
+        return QueryAnalysis(
+            original_query=query,
+            intent=intent,
+            confidence=confidence,
+            entities=entities,
+            expanded_queries=[query],
+            required_sources=self._determine_sources(intent)
+        )
+
+    def _determine_sources(self, intent: IntentType) -> List[str]:
+        """Determine which data sources to query based on intent"""
+        source_map = {
+            IntentType.PRODUCT_INQUIRY: ["knowledge", "products"],
+            IntentType.PRODUCT_RECOMMENDATION: ["knowledge", "products"],
+            IntentType.DISEASE_TREATMENT: ["knowledge", "diseases"],
+            IntentType.PEST_CONTROL: ["knowledge", "products"],
+            IntentType.WEED_CONTROL: ["knowledge", "products"],
+            IntentType.NUTRIENT_SUPPLEMENT: ["knowledge", "products"],
+            IntentType.USAGE_INSTRUCTION: ["knowledge"],
+            IntentType.GENERAL_AGRICULTURE: ["knowledge", "diseases"],
+            IntentType.GREETING: [],
+            IntentType.UNKNOWN: ["knowledge"],
+        }
+        return source_map.get(intent, ["knowledge"])
