@@ -43,8 +43,8 @@ def post_process_answer(answer: str) -> str:
     answer = answer.replace('ต้', 'ต้')
     answer = answer.replace('ต', 'ต')
     
-    # 8. Ensure emoji spacing
-    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍])([ก-๙A-Za-z])', r'\1 \2', answer)
+    # 8. Ensure emoji spacing (include common emojis used in responses)
+    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍😊🌾💚])([ก-๙A-Za-z])', r'\1 \2', answer)
     
     return answer
 
