@@ -200,10 +200,11 @@ DISEASE_KEYWORDS = [
 ]
 
 INSECT_KEYWORDS = [
-    # แมลง
-    "แมลง", "เพลี้ย", "หนอน", "ด้วง", "มด", "ปลวก", "ไร", "เพลี้ยไฟ",
+    # แมลง (หมายเหตุ: หลีกเลี่ยง "ไร" เพราะจะ match กับ "อะไร")
+    "แมลง", "เพลี้ย", "หนอน", "ด้วง", "มด", "ปลวก", "เพลี้ยไฟ",
     "เพลี้ยอ่อน", "เพลี้ยแป้ง", "เพลี้ยกระโดด", "หนอนกอ", "หนอนเจาะ",
     "หนอนใย", "แมลงวัน", "จักจั่น", "ทริปส์", "ศัตรูพืช",
+    "ไรแดง", "ไรขาว", "ไรแมง", "ตัวไร",  # ใช้คำเฉพาะแทน "ไร"
     # English
     "insect", "pest", "aphid", "thrips", "mite", "worm", "caterpillar", "beetle"
 ]
@@ -266,8 +267,9 @@ async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: 
 
     try:
         # ตรวจสอบว่าคำถามถามเกี่ยวกับสินค้าตัวไหน และพืชอะไร
-        product_in_question = extract_product_name_from_question(query) if validate_product else None
-        plant_in_question = extract_plant_type_from_question(query) if validate_product else None
+        # Extract เสมอ เพื่อกรองผลลัพธ์ให้ตรงกับสินค้าที่ถาม
+        product_in_question = extract_product_name_from_question(query)
+        plant_in_question = extract_plant_type_from_question(query)
 
         # ตรวจจับประเภทปัญหาถ้าไม่ได้ระบุ
         if problem_type is None:
@@ -330,16 +332,23 @@ async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: 
                 filtered_results = filtered
                 logger.info(f"✓ Filtered to {len(filtered_results)} insect-related docs")
 
-        # ถ้าถามเกี่ยวกับสินค้าเฉพาะ → ตรวจสอบว่าผลลัพธ์ตรงกับชื่อสินค้าหรือไม่
+        # ถ้าถามเกี่ยวกับสินค้าเฉพาะ → กรองเฉพาะสินค้าที่ตรงกับชื่อ
         if product_in_question:
             validated_results = validate_knowledge_results(filtered_results, product_in_question, plant_in_question)
 
-            if not validated_results:
-                logger.warning(f"⚠️ ถามเกี่ยวกับ '{product_in_question}' แต่ไม่พบข้อมูลตรง")
-                return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล กรุณาตรวจสอบชื่อสินค้าอีกครั้ง"
-
-            logger.info(f"✓ Validated: {len(validated_results)} results match product '{product_in_question}'")
-            return validated_results[:top_k], None
+            if validated_results:
+                logger.info(f"✓ Validated: {len(validated_results)} results match product '{product_in_question}'")
+                return validated_results[:top_k], None
+            else:
+                # ถ้าไม่เจอสินค้าที่ตรงกัน
+                if validate_product:
+                    # Strict mode: return error
+                    logger.warning(f"⚠️ ถามเกี่ยวกับ '{product_in_question}' แต่ไม่พบข้อมูลตรง")
+                    return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล กรุณาตรวจสอบชื่อสินค้าอีกครั้ง"
+                else:
+                    # Relaxed mode: return top results anyway
+                    logger.info(f"ℹ️ ไม่พบ '{product_in_question}' ตรงๆ ใช้ผลลัพธ์จาก vector search")
+                    return filtered_results[:top_k], None
 
         # กรองตาม plant_type ถ้ามี
         if plant_in_question:
