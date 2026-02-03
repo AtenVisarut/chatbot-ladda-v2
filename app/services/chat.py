@@ -1,5 +1,6 @@
 import logging
 import re
+from difflib import SequenceMatcher
 from typing import List, Dict, Optional, Tuple
 from app.services.services import openai_client, supabase_client
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
@@ -126,12 +127,52 @@ def extract_product_name_from_question(question: str) -> Optional[str]:
     """
     question_lower = question.lower()
 
+    # Step 1: Exact substring match (เร็ว)
     for product_name, aliases in ICP_PRODUCT_NAMES.items():
         for alias in aliases:
             if alias.lower() in question_lower:
                 return product_name
 
-    return None
+    # Step 2: Fuzzy match (fallback สำหรับพิมพ์ผิด)
+    return fuzzy_match_product_name(question)
+
+
+def fuzzy_match_product_name(text: str, threshold: float = 0.65) -> Optional[str]:
+    """
+    Fuzzy matching สำหรับชื่อสินค้าที่พิมพ์ผิด
+    เช่น "แแกนเตอ" → "แกนเตอร์", "โมเดิ้น" → "โมเดิน"
+    """
+    # แยกคำ: ทั้งคำภาษาไทยต่อกัน และคำ English
+    tokens = re.findall(r'[\u0E00-\u0E7F]+|[a-zA-Z]+', text)
+
+    best_match = None
+    best_score = 0.0
+
+    for token in tokens:
+        if len(token) < 3:  # ข้ามคำสั้นเกินไป
+            continue
+        token_lower = token.lower()
+        for product_name, aliases in ICP_PRODUCT_NAMES.items():
+            for alias in aliases:
+                alias_lower = alias.lower()
+                # Direct comparison
+                score = SequenceMatcher(None, token_lower, alias_lower).ratio()
+                if score > best_score and score >= threshold:
+                    best_score = score
+                    best_match = product_name
+
+                # Sliding window: ถ้า token ยาวกว่า alias มาก ให้ลองเทียบ substring
+                alias_len = len(alias_lower)
+                if len(token_lower) > alias_len + 1 and alias_len >= 3:
+                    for i in range(len(token_lower) - alias_len + 2):
+                        end = min(i + alias_len + 1, len(token_lower))
+                        sub = token_lower[i:end]
+                        score = SequenceMatcher(None, sub, alias_lower).ratio()
+                        if score > best_score and score >= threshold:
+                            best_score = score
+                            best_match = product_name
+
+    return best_match
 
 
 def detect_unknown_product_in_question(question: str) -> Optional[str]:
