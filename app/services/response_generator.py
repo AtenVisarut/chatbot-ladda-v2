@@ -3,9 +3,10 @@ from typing import List, Optional, Union, Dict
 from app.models import DiseaseDetectionResult, ProductRecommendation
 from app.services.services import openai_client
 from app.utils.response_template import build_simple_response
-from app.utils.flex_messages import (
-    create_disease_result_flex,
-    create_product_carousel_flex
+from app.utils.text_messages import (
+    format_disease_result_text,
+    format_product_list_text,
+    get_growth_stage_question_text
 )
 from app.services.product_recommendation import get_search_query_for_disease
 
@@ -152,33 +153,14 @@ def get_growth_stage_options(plant_type: str) -> list:
         return GROWTH_STAGES["default"]
 
 
-def create_growth_stage_quick_reply(plant_type: str) -> dict:
-    """Create Quick Reply asking for growth stage based on plant type"""
-    stages = get_growth_stage_options(plant_type)
-
-    quick_reply_items = []
-    for stage in stages:
-        quick_reply_items.append({
-            "type": "action",
-            "action": {
-                "type": "message",
-                "label": stage["label"][:20],  # LINE limit 20 chars
-                "text": stage["text"]
-            }
-        })
-
-    return {
-        "items": quick_reply_items
-    }
-
 async def generate_final_response(
-    disease_info: DiseaseDetectionResult, 
+    disease_info: DiseaseDetectionResult,
     products: List[ProductRecommendation],
     extra_user_info: Optional[str] = None
 ) -> str:
     """
     Generate final response using GPT-4o- (AI-powered)
-    
+
     Includes:
     - Symptoms (อาการที่เกิด)
     - Additional Disease Info (ข้อมูลกำกับโรค)
@@ -186,10 +168,10 @@ async def generate_final_response(
     """
     try:
         logger.info("Generating response using GPT-4o")
-        
+
         # Knowledge base table removed - using GPT knowledge instead
         knowledge_text = None
-        
+
         # Prepare product list text
         products_text = ""
         if products:
@@ -205,7 +187,6 @@ async def generate_final_response(
         else:
             products_text = "ไม่พบผลิตภัณฑ์ที่เหมาะสมในระบบ"
 
-        # Construct Prompt
         # Construct Prompt
         if products:
             product_section_prompt = f"""
@@ -228,7 +209,7 @@ async def generate_final_response(
             product_section_prompt = ""
             products_list_prompt = ""
 
-        prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชและศัตรูพืชประสบการณ์20ปี ของ ICP LADDA  
+        prompt = f"""คุณคือผู้เชี่ยวชาญด้านโรคพืชและศัตรูพืชประสบการณ์20ปี ของ ICP LADDA
 หน้าที่ของคุณคือแจ้งผลการตรวจโรคพืชและแนะนำวิธีรักษาให้กับเกษตรกร
 
 ข้อมูลการตรวจ:
@@ -266,12 +247,12 @@ async def generate_final_response(
             temperature=0.7,
             max_tokens=1000
         )
-        
+
         final_response = response.choices[0].message.content.strip()
-        
+
         # Post-process (remove markdown code blocks if any)
         final_response = final_response.replace("```", "").replace("**", "")
-        
+
         # Append Static Footer (Important Notes & Links)
         final_response += "\n\n" + "="*30
         final_response += "\n*หมายเหตุสำคัญ*"
@@ -279,11 +260,11 @@ async def generate_final_response(
         final_response += "\n• ปรับอัตรา/ปริมาณตามฉลากจริงก่อนใช้ทุกครั้ง"
         final_response += "\n• ควรสอบถามร้านค้าตัวแทนจำหน่ายเพื่อแนะนำเพิ่มเติม"
         final_response += "\n• ทดสอบในพื้นที่เล็กก่อนพ่นทั้งแปลง"
-        
+
         final_response += "\n\n📚 ดูรายละเอียดผลิตภัณฑ์ทั้งหมด:"
         final_response += "\n🔗 https://www.icpladda.com/about/"
         final_response += "\n\n💬 ส่งรูปเพิ่มหรือถามข้อมูลเพิ่มเติมได้เลยค่ะ 😊"
-        
+
         logger.info("✓ Response generated successfully with GPT")
         return final_response
 
@@ -292,17 +273,17 @@ async def generate_final_response(
         return build_simple_response(disease_info)
 
 
-async def generate_flex_response(
+async def generate_text_response(
     disease_info: DiseaseDetectionResult,
     products: List[ProductRecommendation],
     extra_user_info: Optional[str] = None
-) -> List[Dict]:
+) -> List[str]:
     """
-    Generate Flex Message response for disease detection
-    Returns list of Flex Messages: [disease_result, product_carousel]
+    Generate text message response for disease detection
+    Returns list of text strings: [disease_result_text, product_list_text, footer_text]
     """
     try:
-        logger.info("Generating Flex Message response")
+        logger.info("Generating text message response")
         logger.info(f"  Disease: {disease_info.disease_name}")
         logger.info(f"  Products count: {len(products) if products else 0}")
 
@@ -318,7 +299,7 @@ async def generate_flex_response(
         except Exception as e:
             logger.warning(f"Error extracting pest_type: {e}")
 
-        # 1. Disease Result Flex
+        # 1. Disease Result Text
         try:
             # Sanitize inputs
             safe_disease_name = (disease_info.disease_name or "ไม่ทราบ")[:100]
@@ -337,7 +318,7 @@ async def generate_flex_response(
             except Exception as e:
                 logger.warning(f"Error checking pest vector: {e}")
 
-            disease_flex = create_disease_result_flex(
+            disease_text = format_disease_result_text(
                 disease_name=safe_disease_name,
                 confidence=safe_confidence,
                 symptoms=safe_symptoms,
@@ -347,22 +328,17 @@ async def generate_flex_response(
                 pest_vector=pest_vector_info,
                 category=disease_info.category or ""
             )
-            messages.append(disease_flex)
-            logger.info("  ✓ Disease flex created")
+            messages.append(disease_text)
+            logger.info("  ✓ Disease text created")
         except Exception as e:
-            logger.error(f"Error creating disease flex: {e}", exc_info=True)
-            # Add simple text fallback
-            messages.append({
-                "type": "text",
-                "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\nความมั่นใจ: {disease_info.confidence}\nอาการ: {disease_info.symptoms[:200] if disease_info.symptoms else 'ไม่ระบุ'}"
-            })
+            logger.error(f"Error creating disease text: {e}", exc_info=True)
+            messages.append(f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\nความมั่นใจ: {disease_info.confidence}\nอาการ: {disease_info.symptoms[:200] if disease_info.symptoms else 'ไม่ระบุ'}")
 
-        # 2. Product Carousel Flex (if products available)
+        # 2. Product list text (if products available)
         if products:
             try:
                 product_list = []
                 for p in products[:5]:  # Limit to 5 products
-                    # Sanitize all product fields
                     product_list.append({
                         "product_name": (p.product_name or "ไม่ระบุ")[:100],
                         "active_ingredient": (p.active_ingredient or "-")[:100],
@@ -376,93 +352,35 @@ async def generate_flex_response(
                         "similarity": p.score if hasattr(p, 'score') else 0.8
                     })
 
-                product_flex = create_product_carousel_flex(product_list)
-                messages.append(product_flex)
-                logger.info(f"  ✓ Product carousel created with {len(product_list)} products")
+                product_text = format_product_list_text(product_list)
+                messages.append(product_text)
+                logger.info(f"  ✓ Product list created with {len(product_list)} products")
             except Exception as e:
-                logger.error(f"Error creating product carousel: {e}", exc_info=True)
-                # Add simple text fallback for products
+                logger.error(f"Error creating product list: {e}", exc_info=True)
                 product_names = [p.product_name for p in products[:3]]
-                messages.append({
-                    "type": "text",
-                    "text": f"💊 ผลิตภัณฑ์แนะนำ:\n" + "\n".join(f"• {name}" for name in product_names)
-                })
+                messages.append("💊 ผลิตภัณฑ์แนะนำ:\n" + "\n".join(f"• {name}" for name in product_names))
 
-        # 3. Add footer text message with Quick Reply buttons
-        quick_reply_items = []
+        # 3. Footer text
+        footer_text = (
+            "⚠️ หมายเหตุ: นี่เป็นการวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้\n\n"
+            "📚 ดูรายละเอียดเพิ่มเติม: icpladda.com\n"
+            "💬 ส่งรูปใหม่หรือพิมพ์ถามเพิ่มเติมได้เลยค่ะ"
+        )
+        messages.append(footer_text)
 
-        # ถ้ามีสินค้า → เพิ่มปุ่มถามวิธีใช้
-        if products:
-            quick_reply_items.extend([
-                {
-                    "type": "action",
-                    "action": {
-                        "type": "message",
-                        "label": "💉 วิธีพ่น/ฉีด",
-                        "text": "วิธีพ่นยายังไงคะ"
-                    }
-                },
-                {
-                    "type": "action",
-                    "action": {
-                        "type": "message",
-                        "label": "📊 อัตราผสม",
-                        "text": "ผสมน้ำกี่ลิตร อัตราเท่าไหร่"
-                    }
-                },
-                {
-                    "type": "action",
-                    "action": {
-                        "type": "message",
-                        "label": "⏰ ช่วงเวลาใช้",
-                        "text": "ใช้ตอนไหนดี พ่นช่วงไหน"
-                    }
-                }
-            ])
-
-        # ปุ่มทั่วไป
-        quick_reply_items.extend([
-            {
-                "type": "action",
-                "action": {
-                    "type": "message",
-                    "label": "📸 ส่งรูปใหม่",
-                    "text": "ส่งรูปวิเคราะห์ใหม่"
-                }
-            },
-            {
-                "type": "action",
-                "action": {
-                    "type": "message",
-                    "label": "📦 ดูผลิตภัณฑ์",
-                    "text": "ดูผลิตภัณฑ์"
-                }
-            }
-        ])
-
-        footer_msg = {
-            "type": "text",
-            "text": "⚠️ หมายเหตุ: นี่เป็นการวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้\n\n📚 ดูรายละเอียดเพิ่มเติม: icpladda.com\n💬 กดปุ่มด้านล่างเพื่อถามเพิ่มเติมได้เลยค่ะ 👇",
-            "quickReply": {
-                "items": quick_reply_items
-            }
-        }
-        messages.append(footer_msg)
-
-        logger.info(f"✓ Flex response generated: {len(messages)} messages")
+        logger.info(f"✓ Text response generated: {len(messages)} messages")
         return messages
 
     except Exception as e:
-        logger.error(f"Error generating flex response: {e}", exc_info=True)
-        # Fallback to simple text
-        return [{"type": "text", "text": build_simple_response(disease_info)}]
+        logger.error(f"Error generating text response: {e}", exc_info=True)
+        return [build_simple_response(disease_info)]
 
 
 async def generate_diagnosis_with_stage_question(
     disease_info: DiseaseDetectionResult
 ) -> list:
     """
-    Generate Flex Message for disease diagnosis + Quick Reply asking for growth stage
+    Generate text message for disease diagnosis + ask for growth stage
     NO product recommendations yet - wait for user to select growth stage first
     """
     try:
@@ -480,7 +398,7 @@ async def generate_diagnosis_with_stage_question(
         except Exception:
             pass
 
-        # 1. Disease Result Flex
+        # 1. Disease Result Text
         try:
             safe_disease_name = (disease_info.disease_name or "ไม่ทราบ")[:100]
             safe_confidence = str(disease_info.confidence or "75")[:20]
@@ -497,7 +415,7 @@ async def generate_diagnosis_with_stage_question(
             except Exception:
                 pass
 
-            disease_flex = create_disease_result_flex(
+            disease_text = format_disease_result_text(
                 disease_name=safe_disease_name,
                 confidence=safe_confidence,
                 symptoms=safe_symptoms,
@@ -506,32 +424,23 @@ async def generate_diagnosis_with_stage_question(
                 pest_type=pest_type,
                 pest_vector=pest_vector_info,
                 category=disease_info.category or "",
-                show_product_hint=False  # ไม่แสดง "ผลิตภัณฑ์แนะนำด้านล่าง" เพราะต้องถามระยะปลูกก่อน
+                show_product_hint=False
             )
-            messages.append(disease_flex)
+            messages.append(disease_text)
         except Exception as e:
-            logger.error(f"Error creating disease flex: {e}", exc_info=True)
-            messages.append({
-                "type": "text",
-                "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}"
-            })
+            logger.error(f"Error creating disease text: {e}", exc_info=True)
+            messages.append(f"🔍 ผลวิเคราะห์: {disease_info.disease_name}")
 
-        # 2. Ask for growth stage with Quick Reply
+        # 2. Ask for growth stage
         plant_type = disease_info.plant_type or ""
         plant_display = plant_type if plant_type else "พืช"
 
-        growth_stage_qr = create_growth_stage_quick_reply(plant_type)
-
-        question_msg = {
-            "type": "text",
-            "text": f"🌱 เพื่อแนะนำผลิตภัณฑ์ที่เหมาะสมที่สุด\n\n{plant_display} อยู่ในระยะไหนคะ? 👇",
-            "quickReply": growth_stage_qr
-        }
-        messages.append(question_msg)
+        question_text = get_growth_stage_question_text(plant_display)
+        messages.append(question_text)
 
         logger.info(f"✓ Diagnosis with stage question generated for plant: {plant_type}")
         return messages
 
     except Exception as e:
         logger.error(f"Error generating diagnosis with stage question: {e}", exc_info=True)
-        return [{"type": "text", "text": f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\n\nพืชอยู่ในระยะไหนคะ?"}]
+        return [f"🔍 ผลวิเคราะห์: {disease_info.disease_name}\n\nพืชอยู่ในระยะไหนคะ? กรุณาพิมพ์ระยะการเติบโต"]

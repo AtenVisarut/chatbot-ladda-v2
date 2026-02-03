@@ -274,154 +274,31 @@ async def get_weather_forecast(lat: float, lng: float, days: int = 7, address: O
         }
 
 
-def create_weather_error_flex(error_message: str) -> Dict:
+def create_weather_error_text(error_message: str) -> str:
     """
-    สร้าง Flex Message สำหรับแสดง error
-    หมายเหตุ: ใช้ message action แทน location action เพราะ location ใช้ใน Flex button ไม่ได้
+    สร้างข้อความ error สภาพอากาศ
     """
-    return {
-        "type": "flex",
-        "altText": "ไม่สามารถดูสภาพอากาศได้",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "❌ เกิดข้อผิดพลาด",
-                        "color": "#ffffff",
-                        "size": "lg",
-                        "weight": "bold",
-                        "align": "center"
-                    }
-                ],
-                "backgroundColor": "#E74C3C",
-                "paddingAll": "15px"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": error_message,
-                        "size": "sm",
-                        "color": "#666666",
-                        "wrap": True,
-                        "align": "center"
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "action": {
-                            "type": "message",
-                            "label": "🔄 ลองใหม่อีกครั้ง",
-                            "text": "ดูสภาพอากาศ"
-                        },
-                        "color": "#27AE60"
-                    }
-                ]
-            }
-        }
-    }
+    return (
+        f"❌ เกิดข้อผิดพลาด\n\n"
+        f"{error_message}\n\n"
+        "พิมพ์ \"ดูสภาพอากาศ\" เพื่อลองใหม่อีกครั้งค่ะ"
+    )
 
 
-def create_weather_request_quick_reply() -> Dict:
+def create_crop_selection_text() -> str:
     """
-    สร้าง Quick Reply สำหรับขอ location
-    ใช้ action type: location เพื่อให้ LINE ขอพิกัดจาก user
+    สร้างข้อความให้เลือกประเภทพืชเพื่อวิเคราะห์ความเสี่ยง
     """
-    return {
-        "items": [
-            {
-                "type": "action",
-                "action": {
-                    "type": "location",
-                    "label": "🌤️ ดูสภาพอากาศในพื้นที่"
-                }
-            }
-        ]
-    }
-
-
-def create_crop_selection_flex(lat: float, lng: float) -> Dict:
-    """
-    สร้าง Flex Message สำหรับเลือกประเภทพืชเพื่อวิเคราะห์ความเสี่ยง
-    """
-    crops = [
-        {"name": "ข้าว", "icon": "🌾"},
-        {"name": "ข้าวโพด", "icon": "🌽"},
-        {"name": "มันสำปะหลัง", "icon": "🥔"},
-        {"name": "อ้อย", "icon": "🎋"},
-        {"name": "ทุเรียน", "icon": "🥝"},
-        {"name": "ลำไย", "icon": "🫐"},
-        {"name": "มะม่วง", "icon": "🥭"},
-        {"name": "องุ่น", "icon": "🍇"},
-    ]
-
-    buttons = []
-    for crop in crops:
-        buttons.append({
-            "type": "button",
-            "style": "secondary",
-            "height": "sm",
-            "action": {
-                "type": "postback",
-                "label": f"{crop['icon']} {crop['name']}",
-                "data": f"action=analyze_crop_risk&lat={lat}&lng={lng}&crop={crop['name']}"
-            }
-        })
-
-    return {
-        "type": "flex",
-        "altText": "เลือกประเภทพืชเพื่อวิเคราะห์ความเสี่ยง",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "🌱 วิเคราะห์ความเสี่ยงพืช",
-                        "color": "#ffffff",
-                        "size": "lg",
-                        "weight": "bold",
-                        "align": "center"
-                    }
-                ],
-                "backgroundColor": "#27AE60",
-                "paddingAll": "15px"
-            },
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "เลือกประเภทพืชที่ต้องการวิเคราะห์",
-                        "size": "sm",
-                        "color": "#666666",
-                        "align": "center",
-                        "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": buttons
-            }
-        }
-    }
+    return (
+        "🌱 วิเคราะห์ความเสี่ยงพืช\n"
+        "━━━━━━━━━━━━━━━━━━━\n\n"
+        "กรุณาพิมพ์ชื่อพืชที่ต้องการวิเคราะห์:\n\n"
+        "🌾 ข้าว\n"
+        "🌽 ข้าวโพด\n"
+        "🥔 มันสำปะหลัง\n"
+        "🎋 อ้อย\n"
+        "🥝 ทุเรียน\n"
+        "🫐 ลำไย\n"
+        "🥭 มะม่วง\n"
+        "🍇 องุ่น"
+    )

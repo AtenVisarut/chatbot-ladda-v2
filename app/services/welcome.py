@@ -4,53 +4,52 @@ Handles welcome messages and usage guides for new users
 """
 
 import logging
-from typing import Dict, List
-from app.utils.flex_messages import (
-    create_welcome_flex,
-    create_registration_required_flex,
-    create_usage_guide_flex,
-    create_product_catalog_flex,
-    create_help_menu_flex
+from app.utils.text_messages import (
+    get_welcome_text,
+    get_registration_required_text,
+    get_usage_guide_text,
+    get_product_catalog_text,
+    get_help_menu_text
 )
 
 logger = logging.getLogger(__name__)
 
 
-def get_welcome_message() -> Dict:
+def get_welcome_message() -> str:
     """
     Create welcome message for new users (follow event)
-    Returns LINE Flex Message
+    Returns text message string
     """
-    return create_welcome_flex()
+    return get_welcome_text()
 
 
-def get_usage_guide() -> Dict:
+def get_usage_guide() -> str:
     """
     Create comprehensive usage guide message
-    Returns LINE Flex Message
+    Returns text message string
     """
-    return create_usage_guide_flex()
+    return get_usage_guide_text()
 
 
-def get_registration_required_message() -> Dict:
+def get_registration_required_message() -> str:
     """
     Create message asking user to register before using features
-    Returns LINE Flex Message
+    Returns text message string
     """
-    return create_registration_required_flex()
+    return get_registration_required_text("")
 
 
-def get_product_catalog_message() -> Dict:
+def get_product_catalog_message() -> str:
     """
     Create product catalog message
-    Returns LINE Flex Message
+    Returns text message string
     """
-    return create_product_catalog_flex()
+    return get_product_catalog_text()
 
 
-def get_help_menu() -> Dict:
+def get_help_menu() -> str:
     """
     Create help menu message
-    Returns LINE Flex Message
+    Returns text message string
     """
-    return create_help_menu_flex()
+    return get_help_menu_text()

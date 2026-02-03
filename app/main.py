@@ -47,15 +47,17 @@ from app.services.welcome import (
     get_registration_required_message,
     get_help_menu
 )
-from app.utils.flex_messages import (
-    create_liff_registration_flex,
-    create_liff_welcome_flex,
-    create_initial_questions_flex,
-    create_analyzing_flex,
-    create_product_carousel_flex,
-    create_growth_stage_question_flex,
-    create_other_plant_prompt_flex,
-    create_plant_type_retry_flex
+from app.utils.text_messages import (
+    get_liff_welcome_text,
+    get_registration_required_text,
+    get_initial_questions_text,
+    get_analyzing_text,
+    get_growth_stage_question_text,
+    get_other_plant_prompt_text,
+    get_plant_type_retry_text,
+    format_product_list_text,
+    get_weather_error_text,
+    get_crop_selection_text
 )
 from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
@@ -74,16 +76,13 @@ from app.services.memory import (
 )
 from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
-from app.services.response_generator import generate_final_response, generate_flex_response, generate_diagnosis_with_stage_question
+from app.services.response_generator import generate_final_response, generate_text_response, generate_diagnosis_with_stage_question
 # Q&A Chat Service - Vector Search from products, diseases, knowledge tables
 from app.services.chat import handle_natural_conversation
-from app.services.rich_menu import setup_rich_menu, setup_rich_menu_debug
 from app.services.agro_risk import (
     check_weather,
     analyze_crop_risk,
-    get_weather_forecast,
-    create_weather_error_flex,
-    create_crop_selection_flex
+    get_weather_forecast
 )
 from app.services.context_handler import (
     handle_context_interrupt,
@@ -292,85 +291,6 @@ async def clear_cache_endpoint(request: Request):
     # In production, add authentication here
     await clear_all_caches()
     return {"status": "success", "message": "All caches cleared"}
-
-# ============================================================================#
-# Rich Menu Setup Endpoint
-# ============================================================================#
-
-@app.api_route("/admin/setup-rich-menu", methods=["GET", "POST"])
-async def setup_rich_menu_endpoint(request: Request, key: str = None):
-    """Setup Rich Menu - อัพโหลดรูปและตั้งค่า Rich Menu ใหม่"""
-    # Check authentication - session OR secret key (or no auth for quick setup)
-    # Temporarily allow without auth for debugging
-
-    try:
-        # Path to rich menu image
-        image_path = "rich_menu.png"
-        cwd = os.getcwd()
-        full_path = os.path.join(cwd, image_path)
-
-        # Debug info
-        debug_info = {
-            "cwd": cwd,
-            "image_path": image_path,
-            "full_path": full_path,
-            "file_exists": os.path.exists(image_path),
-            "full_path_exists": os.path.exists(full_path)
-        }
-
-        # List files in current directory
-        try:
-            files_in_cwd = [f for f in os.listdir(cwd) if f.endswith(('.png', '.jpg', '.jpeg'))]
-            debug_info["image_files_in_cwd"] = files_in_cwd
-        except:
-            debug_info["image_files_in_cwd"] = "Error listing files"
-
-        # Check if file exists
-        if not os.path.exists(image_path):
-            return {
-                "status": "error",
-                "message": f"Rich menu image not found: {image_path}",
-                "debug": debug_info
-            }
-
-        # Get file size
-        file_size = os.path.getsize(image_path)
-        debug_info["file_size_bytes"] = file_size
-
-        # Setup rich menu
-        rich_menu_id = await setup_rich_menu(image_path, delete_old=True)
-
-        if rich_menu_id:
-            return {
-                "status": "success",
-                "message": "Rich Menu setup completed",
-                "rich_menu_id": rich_menu_id,
-                "debug": debug_info
-            }
-        else:
-            return {
-                "status": "error",
-                "message": "Failed to setup Rich Menu - setup_rich_menu returned None",
-                "debug": debug_info
-            }
-
-    except Exception as e:
-        logger.error(f"Error setting up Rich Menu: {e}")
-        import traceback
-        return {
-            "status": "error",
-            "message": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-@app.get("/admin/debug-rich-menu")
-async def debug_rich_menu_endpoint(test_upload: bool = False):
-    """Debug Rich Menu - ทดสอบ LINE API และดู config
-
-    Args:
-        test_upload: ถ้า True จะทดสอบ upload รูปและ set default ด้วย
-    """
-    return await setup_rich_menu_debug(test_upload=test_upload)
 
 # ============================================================================#
 # Dashboard Endpoints
@@ -718,9 +638,9 @@ async def _process_webhook_events(events: list):
             # 1. Handle Follow Event (Welcome Message with LIFF)
             if event_type == "follow":
                 logger.info(f"User {user_id} followed the bot")
-                # Send LIFF welcome message
-                welcome_flex = create_liff_welcome_flex(LIFF_URL)
-                await reply_line(reply_token, welcome_flex)
+                # Send LIFF welcome text
+                welcome_text = get_liff_welcome_text(LIFF_URL)
+                await reply_line(reply_token, welcome_text)
                 continue
 
             # 2. Handle Image Message (Interactive Diagnosis)
@@ -731,9 +651,9 @@ async def _process_webhook_events(events: list):
                 # Check if user has completed registration
                 if not await is_registration_completed(user_id):
                     logger.info(f"User {user_id} not registered - blocking disease detection")
-                    # Send LIFF registration message
-                    reg_flex = create_liff_registration_flex(LIFF_URL)
-                    await reply_line(reply_token, reg_flex)
+                    # Send LIFF registration text
+                    reg_text = get_registration_required_text(LIFF_URL)
+                    await reply_line(reply_token, reg_text)
                     continue
 
                 try:
@@ -752,9 +672,9 @@ async def _process_webhook_events(events: list):
                             continue
                     
                     # FIX: Reply IMMEDIATELY to prevent reply token expiration (30 sec limit)
-                    # Step 1: Ask for plant type with Quick Reply buttons (2-step flow)
-                    questions_flex = create_initial_questions_flex()
-                    await reply_line(reply_token, questions_flex)
+                    # Step 1: Ask for plant type (2-step flow)
+                    questions_text = get_initial_questions_text()
+                    await reply_line(reply_token, questions_text)
                     logger.info(f"Replied immediately to user {user_id} - asking plant type (Step 1/2)")
 
                     # FIX: Store only message_id (50 bytes) instead of image_bytes (5-7 MB)
@@ -806,33 +726,26 @@ async def _process_webhook_events(events: list):
                     await reply_line(reply_token, catalog)
                     continue
 
-                # 0.2 Check for weather request - ส่ง Text พร้อม Quick Reply ขอ location
+                # 0.2 Check for weather request
                 if text in ["ดูสภาพอากาศ", "สภาพอากาศ", "อากาศ", "weather", "🌤️"]:
                     logger.info(f"🟢 User {user_id} requested weather")
-                    # ใช้ Quick Reply เพราะ location action ใช้ใน Flex button ไม่ได้
-                    weather_message = {
-                        "type": "text",
-                        "text": "🌤️ ดูสภาพอากาศในพื้นที่\n\nกดปุ่ม 📍 ด้านล่างเพื่อแชร์ตำแหน่งของคุณ\n\nข้อมูลที่จะได้รับ:\n• อุณหภูมิและความชื้น\n• โอกาสฝนตก\n• ความเสี่ยงสภาพอากาศ\n• คำแนะนำสำหรับเกษตรกร",
-                        "quickReply": {
-                            "items": [
-                                {
-                                    "type": "action",
-                                    "action": {
-                                        "type": "location",
-                                        "label": "📍 แชร์ตำแหน่ง"
-                                    }
-                                }
-                            ]
-                        }
-                    }
+                    weather_message = (
+                        "🌤️ ดูสภาพอากาศในพื้นที่\n\n"
+                        "กรุณาแชร์ตำแหน่งของคุณโดยกดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\"\n\n"
+                        "ข้อมูลที่จะได้รับ:\n"
+                        "• อุณหภูมิและความชื้น\n"
+                        "• โอกาสฝนตก\n"
+                        "• ความเสี่ยงสภาพอากาศ\n"
+                        "• คำแนะนำสำหรับเกษตรกร"
+                    )
                     await reply_line(reply_token, weather_message)
                     continue
 
                 # 1. Check if user wants to register - send LIFF link
                 if text in ["ลงทะเบียน", "register", "สมัคร"]:
                     logger.info(f"🟢 User {user_id} wants to register - sending LIFF link")
-                    reg_flex = create_liff_registration_flex(LIFF_URL)
-                    await reply_line(reply_token, reg_flex)
+                    reg_text = get_registration_required_text(LIFF_URL)
+                    await reply_line(reply_token, reg_text)
                     continue
                 # ============================================================================#
 
@@ -854,8 +767,7 @@ async def _process_webhook_events(events: list):
 
                         if text == "อื่นๆ":
                             # User wants to type custom plant name
-                            other_plant_flex = create_other_plant_prompt_flex()
-                            await reply_line(reply_token, other_plant_flex)
+                            await reply_line(reply_token, get_other_plant_prompt_text())
 
                             # Update state to await custom plant name
                             await save_pending_context(user_id, {
@@ -866,8 +778,7 @@ async def _process_webhook_events(events: list):
 
                         elif text in valid_plants:
                             # Valid plant selected - go directly to Step 2 (growth stage)
-                            growth_stage_flex = create_growth_stage_question_flex(text)
-                            await reply_line(reply_token, growth_stage_flex)
+                            await reply_line(reply_token, get_growth_stage_question_text(text))
 
                             # Update context with plant type - skip position/symptom
                             await save_pending_context(user_id, {
@@ -879,8 +790,7 @@ async def _process_webhook_events(events: list):
 
                         else:
                             # Invalid response - ask again
-                            retry_flex = create_plant_type_retry_flex()
-                            await reply_line(reply_token, retry_flex)
+                            await reply_line(reply_token, get_plant_type_retry_text())
                             logger.info(f"Invalid plant type response: {text}, asking again")
 
                     # ==========================================================================
@@ -890,8 +800,7 @@ async def _process_webhook_events(events: list):
                         logger.info(f"Step 1.5: User {user_id} typing custom plant: {text}")
 
                         # Accept any text as plant name, go directly to Step 2 (growth stage)
-                        growth_stage_flex = create_growth_stage_question_flex(text)
-                        await reply_line(reply_token, growth_stage_flex)
+                        await reply_line(reply_token, get_growth_stage_question_text(text))
 
                         # Update context with custom plant type - skip position/symptom
                         await save_pending_context(user_id, {
@@ -924,8 +833,8 @@ async def _process_webhook_events(events: list):
 
                         try:
                             # Send analyzing message
-                            analyzing_flex = create_analyzing_flex(with_info=bool(extra_user_info))
-                            await reply_line(reply_token, analyzing_flex)
+                            analyzing_text = get_analyzing_text(with_info=bool(extra_user_info))
+                            await reply_line(reply_token, analyzing_text)
 
                             # 2. Run disease detection (no position/symptom)
                             detection_result = await smart_detect_disease(image_bytes, extra_user_info=extra_user_info)
@@ -1002,8 +911,8 @@ async def _process_webhook_events(events: list):
 
                                 # 4. Send combined results (diagnosis + products)
                                 # First send diagnosis
-                                flex_messages = await generate_flex_response(detection_result, [], extra_user_info=extra_user_info)
-                                await push_line(user_id, flex_messages)
+                                text_messages = await generate_text_response(detection_result, [], extra_user_info=extra_user_info)
+                                await push_line(user_id, text_messages)
 
                                 # Then send product recommendations if any
                                 if recommendations:
@@ -1022,38 +931,16 @@ async def _process_webhook_events(events: list):
                                             "similarity": p.score if hasattr(p, 'score') else 0.8
                                         })
 
-                                    product_flex = create_product_carousel_flex(product_list)
+                                    product_text = format_product_list_text(product_list)
 
-                                    # Send header text + product carousel + weather suggestion
+                                    # Send header text + product list + weather suggestion
                                     header_text = f"💊 ผลิตภัณฑ์แนะนำสำหรับ {plant_type} {growth_stage}:"
 
-                                    weather_suggestion = {
-                                        "type": "text",
-                                        "text": "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ?",
-                                        "quickReply": {
-                                            "items": [
-                                                {
-                                                    "type": "action",
-                                                    "action": {
-                                                        "type": "location",
-                                                        "label": "📍 ดูสภาพอากาศ"
-                                                    }
-                                                },
-                                                {
-                                                    "type": "action",
-                                                    "action": {
-                                                        "type": "message",
-                                                        "label": "❌ ไม่ต้องการ",
-                                                        "text": "ไม่ต้องการ"
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
+                                    weather_suggestion = "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ? พิมพ์ \"ดูสภาพอากาศ\" แล้วแชร์ตำแหน่งได้เลยค่ะ"
 
                                     await push_line(user_id, [
-                                        {"type": "text", "text": header_text},
-                                        product_flex,
+                                        header_text,
+                                        product_text,
                                         weather_suggestion
                                     ])
 
@@ -1072,8 +959,8 @@ async def _process_webhook_events(events: list):
 
                             else:
                                 # ไม่ต้องแนะนำสินค้า (ขาดธาตุ, ไม่พบปัญหา, สุขภาพดี)
-                                flex_messages = await generate_flex_response(detection_result, [], extra_user_info=extra_user_info)
-                                await push_line(user_id, flex_messages)
+                                text_messages = await generate_text_response(detection_result, [], extra_user_info=extra_user_info)
+                                await push_line(user_id, text_messages)
 
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[พืช] {plant_type} [ระยะ] {growth_stage}")
@@ -1095,8 +982,8 @@ async def _process_webhook_events(events: list):
 
                         # Handle as normal conversation
                         if not await is_registration_completed(user_id):
-                            reg_flex = create_liff_registration_flex(LIFF_URL)
-                            await reply_line(reply_token, reg_flex)
+                            reg_text = get_registration_required_text(LIFF_URL)
+                            await reply_line(reply_token, reg_text)
                         else:
                             # Q&A Chat - Vector Search from products, diseases, knowledge
                             answer = await handle_natural_conversation(user_id, text)
@@ -1117,8 +1004,8 @@ async def _process_webhook_events(events: list):
                         # Check registration first
                         if not await is_registration_completed(user_id):
                             logger.info(f"User {user_id} not registered")
-                            reg_flex = create_liff_registration_flex(LIFF_URL)
-                            await reply_line(reply_token, reg_flex)
+                            reg_text = get_registration_required_text(LIFF_URL)
+                            await reply_line(reply_token, reg_text)
                         else:
                             # Q&A Chat - Vector Search from products, diseases, knowledge
                             answer = await handle_natural_conversation(user_id, text)
@@ -1157,15 +1044,15 @@ async def _process_webhook_events(events: list):
                         })
                     else:
                         # ส่ง error message
-                        error_flex = create_weather_error_flex(
+                        error_text = get_weather_error_text(
                             result.get("error", "ไม่สามารถดูสภาพอากาศได้ กรุณาลองใหม่")
                         )
-                        await reply_line(reply_token, error_flex)
+                        await reply_line(reply_token, error_text)
 
                 except Exception as e:
                     logger.error(f"Error processing location: {e}")
-                    error_flex = create_weather_error_flex("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
-                    await reply_line(reply_token, error_flex)
+                    error_text = get_weather_error_text("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
+                    await reply_line(reply_token, error_text)
 
             # 5. Handle Postback Events
             elif event_type == "postback":
@@ -1179,22 +1066,11 @@ async def _process_webhook_events(events: list):
                     action = params.get("action", [""])[0]
 
                     if action == "refresh_weather":
-                        # ขอ location ใหม่ - ใช้ Quick Reply เพราะ location action ใช้ใน Flex button ไม่ได้
-                        refresh_message = {
-                            "type": "text",
-                            "text": "🔄 รีเฟรชข้อมูลสภาพอากาศ\n\nกดปุ่ม 📍 ด้านล่างเพื่อแชร์ตำแหน่งใหม่",
-                            "quickReply": {
-                                "items": [
-                                    {
-                                        "type": "action",
-                                        "action": {
-                                            "type": "location",
-                                            "label": "📍 แชร์ตำแหน่ง"
-                                        }
-                                    }
-                                ]
-                            }
-                        }
+                        # ขอ location ใหม่
+                        refresh_message = (
+                            "🔄 รีเฟรชข้อมูลสภาพอากาศ\n\n"
+                            "กรุณาแชร์ตำแหน่งใหม่โดยกดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\""
+                        )
                         await reply_line(reply_token, refresh_message)
 
                     elif action == "analyze_crop_risk":
@@ -1225,32 +1101,20 @@ async def _process_webhook_events(events: list):
                             if result["success"] and result.get("flexMessage"):
                                 await reply_line(reply_token, result["flexMessage"])
                             else:
-                                error_flex = create_weather_error_flex(
+                                error_text = get_weather_error_text(
                                     result.get("error", "ไม่สามารถวิเคราะห์ได้ กรุณาลองใหม่")
                                 )
-                                await reply_line(reply_token, error_flex)
+                                await reply_line(reply_token, error_text)
                         elif not lat or not lng:
                             # ไม่มี location - ขอให้แชร์ location ก่อน
-                            no_location_message = {
-                                "type": "text",
-                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน\n\nกดปุ่มด้านล่างเพื่อแชร์ตำแหน่งของคุณ",
-                                "quickReply": {
-                                    "items": [
-                                        {
-                                            "type": "action",
-                                            "action": {
-                                                "type": "location",
-                                                "label": "🌤️ ดูสภาพอากาศ"
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
+                            no_location_message = (
+                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
+                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่งของคุณ"
+                            )
                             await reply_line(reply_token, no_location_message)
                         elif not crop:
-                            # ไม่มีพืช - แสดง Flex ให้เลือกพืช
-                            crop_flex = create_crop_selection_flex(lat, lng)
-                            await reply_line(reply_token, crop_flex)
+                            # ไม่มีพืช - ให้พิมพ์ชื่อพืช
+                            await reply_line(reply_token, get_crop_selection_text())
                         else:
                             await reply_line(reply_token, "ข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้งค่ะ")
 
@@ -1275,31 +1139,19 @@ async def _process_webhook_events(events: list):
                                 if result["success"] and result.get("flexMessage"):
                                     await reply_line(reply_token, result["flexMessage"])
                                 else:
-                                    error_flex = create_weather_error_flex(
+                                    error_text = get_weather_error_text(
                                         result.get("error", "ไม่สามารถวิเคราะห์ความเสี่ยงได้")
                                     )
-                                    await reply_line(reply_token, error_flex)
+                                    await reply_line(reply_token, error_text)
                             else:
-                                # ยังไม่ได้ลงทะเบียนพืช - แสดง Flex ให้เลือกพืช
-                                crop_flex = create_crop_selection_flex(lat, lng)
-                                await reply_line(reply_token, crop_flex)
+                                # ยังไม่ได้ลงทะเบียนพืช - ให้พิมพ์ชื่อพืช
+                                await reply_line(reply_token, get_crop_selection_text())
                         else:
-                            # ไม่มี location - ขอให้ส่ง location ใหม่ (ใช้ Quick Reply)
-                            no_location_message = {
-                                "type": "text",
-                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน\n\nกดปุ่มด้านล่างเพื่อแชร์ตำแหน่งของคุณ",
-                                "quickReply": {
-                                    "items": [
-                                        {
-                                            "type": "action",
-                                            "action": {
-                                                "type": "location",
-                                                "label": "🌤️ ดูสภาพอากาศ"
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
+                            # ไม่มี location - ขอให้ส่ง location ใหม่
+                            no_location_message = (
+                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
+                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่งของคุณ"
+                            )
                             await reply_line(reply_token, no_location_message)
 
                     elif action == "forecast_weather":
@@ -1338,27 +1190,17 @@ async def _process_webhook_events(events: list):
 
                                 await reply_line(reply_token, flex_msg)
                             else:
-                                error_flex = create_weather_error_flex(
+                                error_text = get_weather_error_text(
                                     result.get("error", "ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้")
                                 )
-                                await reply_line(reply_token, error_flex)
+                                await reply_line(reply_token, error_text)
                         else:
                             # ไม่มี location - ขอให้ส่ง location ใหม่
-                            no_location_message = {
-                                "type": "text",
-                                "text": "📍 กรุณาแชร์ตำแหน่งก่อน\n\nกดปุ่มด้านล่างเพื่อแชร์ตำแหน่ง แล้วกดปุ่ม 'พยากรณ์ฝน 7 วัน' อีกครั้ง",
-                                "quickReply": {
-                                    "items": [
-                                        {
-                                            "type": "action",
-                                            "action": {
-                                                "type": "location",
-                                                "label": "🌤️ ดูสภาพอากาศ"
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
+                            no_location_message = (
+                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
+                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่ง\n"
+                                "แล้วกดปุ่ม 'พยากรณ์ฝน 7 วัน' อีกครั้ง"
+                            )
                             await reply_line(reply_token, no_location_message)
 
                     elif action == "refresh_forecast":
@@ -1391,10 +1233,10 @@ async def _process_webhook_events(events: list):
 
                                 await reply_line(reply_token, flex_msg)
                             else:
-                                error_flex = create_weather_error_flex(
+                                error_text = get_weather_error_text(
                                     result.get("error", "ไม่สามารถรีเฟรชข้อมูลได้")
                                 )
-                                await reply_line(reply_token, error_flex)
+                                await reply_line(reply_token, error_text)
                         else:
                             await reply_line(reply_token, "ไม่สามารถรีเฟรชข้อมูลได้ กรุณาลองใหม่อีกครั้ง")
 

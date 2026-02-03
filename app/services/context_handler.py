@@ -4,11 +4,12 @@ from typing import Optional, Tuple
 
 from app.services.cache import get_pending_context, save_pending_context, delete_pending_context
 from app.utils.line_helpers import reply_line
-from app.utils.flex_messages import (
-    create_initial_questions_flex,
-    create_position_question_flex,
-    create_symptom_question_flex,
-    create_other_plant_prompt_flex
+from app.utils.text_messages import (
+    get_initial_questions_text,
+    get_other_plant_prompt_text,
+    get_growth_stage_question_text,
+    get_continue_or_cancel_text,
+    get_image_choice_text
 )
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ OLD_IMAGE_KEYWORDS = ["รูปเดิม", "ใช้รูปเดิม",
 
 # Valid responses สำหรับแต่ละ state
 VALID_GROWTH_STAGES = [
-    "ระยะกล้า", "ระยะแตกกอ", "ระยะตั้งท้อง", 
+    "ระยะกล้า", "ระยะแตกกอ", "ระยะตั้งท้อง",
     "ระยะออกรวง", "ระยะสุกแก่", "ไม่ทราบ",
     "กล้า", "แตกกอ", "ตั้งท้อง", "ออกรวง", "สุกแก่"
 ]
@@ -74,238 +75,10 @@ def is_general_question(text: str) -> bool:
     return has_question and len(text) > 20
 
 
-async def create_continue_or_cancel_flex(current_task: str) -> dict:
-    """สร้าง Flex Message ถาม ทำต่อ/ยกเลิก"""
-    return {
-        "type": "flex",
-        "altText": f"คุณกำลัง{current_task}อยู่",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "⚠️ มีงานค้างอยู่",
-                        "weight": "bold",
-                        "size": "lg",
-                        "color": "#FF6B00"
-                    },
-                    {
-                        "type": "text",
-                        "text": f"คุณกำลัง{current_task}อยู่ค่ะ",
-                        "size": "sm",
-                        "color": "#666666",
-                        "margin": "md",
-                        "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "horizontal",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "color": "#4CAF50",
-                        "action": {
-                            "type": "message",
-                            "label": "✅ ทำต่อ",
-                            "text": "ทำต่อ"
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "❌ ยกเลิก",
-                            "text": "ยกเลิก"
-                        }
-                    }
-                ]
-            }
-        }
-    }
-
-
-async def create_image_choice_flex() -> dict:
-    """สร้าง Flex Message ถาม รูปใหม่/รูปเดิม"""
-    return {
-        "type": "flex",
-        "altText": "คุณส่งรูปใหม่มา",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "📷 ส่งรูปใหม่",
-                        "weight": "bold",
-                        "size": "lg",
-                        "color": "#1E88E5"
-                    },
-                    {
-                        "type": "text",
-                        "text": "คุณกำลังวิเคราะห์รูปอยู่ แต่ส่งรูปใหม่มา",
-                        "size": "sm",
-                        "color": "#666666",
-                        "margin": "md",
-                        "wrap": True
-                    },
-                    {
-                        "type": "text",
-                        "text": "ต้องการวิเคราะห์รูปไหนคะ?",
-                        "size": "sm",
-                        "color": "#666666",
-                        "margin": "sm",
-                        "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "horizontal",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "color": "#1E88E5",
-                        "action": {
-                            "type": "message",
-                            "label": "🆕 รูปใหม่",
-                            "text": "รูปใหม่"
-                        }
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "📷 รูปเดิม",
-                            "text": "รูปเดิม"
-                        }
-                    }
-                ]
-            }
-        }
-    }
-
-
-async def create_growth_stage_flex() -> dict:
-    """สร้าง Flex Message ถามระยะปลูก"""
-    return {
-        "type": "flex",
-        "altText": "เลือกระยะการเจริญเติบโต",
-        "contents": {
-            "type": "bubble",
-            "size": "kilo",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": "🌱 เลือกระยะปลูก",
-                        "weight": "bold",
-                        "size": "lg",
-                        "color": "#4CAF50"
-                    },
-                    {
-                        "type": "text",
-                        "text": "กรุณาเลือกระยะการเจริญเติบโตของพืช",
-                        "size": "sm",
-                        "color": "#666666",
-                        "margin": "md",
-                        "wrap": True
-                    }
-                ]
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "spacing": "sm",
-                        "contents": [
-                            {
-                                "type": "button",
-                                "style": "primary",
-                                "color": "#81C784",
-                                "action": {
-                                    "type": "message",
-                                    "label": "🌱 ระยะกล้า",
-                                    "text": "ระยะกล้า"
-                                }
-                            },
-                            {
-                                "type": "button",
-                                "style": "primary",
-                                "color": "#66BB6A",
-                                "action": {
-                                    "type": "message",
-                                    "label": "🌿 ระยะแตกกอ",
-                                    "text": "ระยะแตกกอ"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "type": "box",
-                        "layout": "horizontal",
-                        "spacing": "sm",
-                        "contents": [
-                            {
-                                "type": "button",
-                                "style": "primary",
-                                "color": "#4CAF50",
-                                "action": {
-                                    "type": "message",
-                                    "label": "🌾 ระยะออกรวง",
-                                    "text": "ระยะออกรวง"
-                                }
-                            },
-                            {
-                                "type": "button",
-                                "style": "secondary",
-                                "action": {
-                                    "type": "message",
-                                    "label": "❓ ไม่ทราบ",
-                                    "text": "ไม่ทราบ"
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "type": "button",
-                        "style": "secondary",
-                        "action": {
-                            "type": "message",
-                            "label": "❌ ยกเลิก",
-                            "text": "ยกเลิก"
-                        }
-                    }
-                ]
-            }
-        }
-    }
-
-
 async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_token: str) -> Tuple[bool, Optional[dict]]:
     """
     จัดการเมื่อ user ส่งข้อความระหว่าง flow
-    
+
     Returns:
         Tuple[bool, Optional[dict]]:
             - (True, None): จัดการแล้ว ไม่ต้องทำอะไรต่อ
@@ -314,47 +87,46 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
     """
     state = ctx.get("state")
     logger.info(f"🔍 Context handler: user={user_id}, state={state}, text={text[:50]}")
-    
+
     # === 1. ตรวจจับคำสั่งยกเลิก ===
     if is_cancel_command(text):
         logger.info(f"❌ User {user_id} cancelled flow")
         await delete_pending_context(user_id)
         await reply_line(reply_token, "ยกเลิกแล้วค่ะ ส่งรูปใหม่ได้เลย 📷")
         return (True, None)
-    
+
     # === 2. ตรวจจับคำสั่งทำต่อ ===
     if is_continue_command(text):
         logger.info(f"✅ User {user_id} wants to continue")
         return await resend_current_question(user_id, ctx, reply_token)
-    
+
     # === 3. ตรวจจับคำสั่งเลือกรูป (กรณี awaiting_image_choice) ===
     if state == "awaiting_image_choice":
         if is_new_image_command(text):
             # ใช้รูปใหม่
             new_message_id = ctx.get("new_message_id")
             logger.info(f"🆕 User {user_id} chose new image: {new_message_id}")
-            
+
             # สร้าง context ใหม่ด้วยรูปใหม่
             new_ctx = {
                 "message_id": new_message_id,
                 "timestamp": ctx.get("timestamp"),
-                "state": "awaiting_plant_type",  # FIX: ต้องเป็น awaiting_plant_type ไม่ใช่ awaiting_info
+                "state": "awaiting_plant_type",
                 "plant_type": None,
                 "position": None,
                 "symptom": None
             }
             await save_pending_context(user_id, new_ctx)
-            
+
             # ส่งคำถามใหม่
-            questions_flex = create_initial_questions_flex()
-            await reply_line(reply_token, questions_flex)
+            await reply_line(reply_token, get_initial_questions_text())
             return (True, None)
-            
+
         elif is_old_image_command(text):
             # ใช้รูปเดิม - กลับไป state เดิม
             old_state = ctx.get("old_state", "awaiting_info")
             logger.info(f"📷 User {user_id} chose old image, back to state: {old_state}")
-            
+
             # Restore context เดิม
             new_ctx = {
                 "message_id": ctx.get("old_message_id", ctx.get("message_id")),
@@ -366,15 +138,14 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
                 "extra_user_info": ctx.get("extra_user_info")
             }
             await save_pending_context(user_id, new_ctx)
-            
+
             # ส่งคำถามตาม state เดิม
             return await resend_current_question(user_id, new_ctx, reply_token)
         else:
             # ไม่ใช่คำตอบที่คาดหวัง - ถามซ้ำ
-            image_choice_flex = await create_image_choice_flex()
-            await reply_line(reply_token, image_choice_flex)
+            await reply_line(reply_token, get_image_choice_text())
             return (True, None)
-    
+
     # === 4. ตรวจจับคำตอบที่ไม่ valid สำหรับ awaiting_growth_stage ===
     # Relaxed validation: Allow any text answer to pass through to main logic
     # unless it is an explicit Cancel command (already handled in step 1)
@@ -382,19 +153,18 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
         # ถ้าเป็นคำสั่งข้าม ให้ผ่านไป
         if is_skip_command(text):
             return (False, None)
-            
-        # ถ้าพิมพ์ยาวๆ หรือเป็นประโยค อาจจะเป็น feedback หรือข้อมูลเพิ่มเติม 
+
+        # ถ้าพิมพ์ยาวๆ หรือเป็นประโยค อาจจะเป็น feedback หรือข้อมูลเพิ่มเติม
         # ให้ main.py จัดการต่อได้เลย ไม่ต้อง block
         pass
-    
+
     # === 5. ตรวจจับคำถามทั่วไประหว่าง awaiting_info ===
     if state == "awaiting_info":
         if is_general_question(text):
             logger.info(f"⚠️ General question during awaiting_info from {user_id}: {text}")
-            flex = await create_continue_or_cancel_flex("วิเคราะห์รูปพืช")
-            await reply_line(reply_token, flex)
+            await reply_line(reply_token, get_continue_or_cancel_text("วิเคราะห์รูปพืช"))
             return (True, None)
-    
+
     # === ไม่ตรงเงื่อนไขใดๆ - ให้ flow ปกติทำต่อ ===
     return (False, None)
 
@@ -405,42 +175,27 @@ async def resend_current_question(user_id: str, ctx: dict, reply_token: str) -> 
     logger.info(f"🔄 Resending question for state: {state}")
 
     if state == "awaiting_info":
-        questions_flex = create_initial_questions_flex()
-        await reply_line(reply_token, questions_flex)
+        await reply_line(reply_token, get_initial_questions_text())
         return (True, None)
 
     # Step 1: รอเลือกชนิดพืช
     elif state == "awaiting_plant_type":
-        questions_flex = create_initial_questions_flex()
-        await reply_line(reply_token, questions_flex)
+        await reply_line(reply_token, get_initial_questions_text())
         return (True, None)
 
     # Step 1.5: รอพิมพ์ชื่อพืชอื่น
     elif state == "awaiting_other_plant":
-        other_plant_flex = create_other_plant_prompt_flex()
-        await reply_line(reply_token, other_plant_flex)
+        await reply_line(reply_token, get_other_plant_prompt_text())
         return (True, None)
 
-    # Step 2: รอเลือกตำแหน่ง
-    elif state == "awaiting_position":
-        position_flex = create_position_question_flex()
-        await reply_line(reply_token, position_flex)
-        return (True, None)
-
-    # Step 3: รอเลือกอาการ
-    elif state == "awaiting_symptom":
-        symptom_flex = create_symptom_question_flex()
-        await reply_line(reply_token, symptom_flex)
-        return (True, None)
-
+    # Step 2: รอเลือกระยะปลูก
     elif state == "awaiting_growth_stage":
-        growth_flex = await create_growth_stage_flex()
-        await reply_line(reply_token, growth_flex)
+        plant_type = ctx.get("plant_type", "พืช")
+        await reply_line(reply_token, get_growth_stage_question_text(plant_type))
         return (True, None)
 
     elif state == "awaiting_image_choice":
-        image_flex = await create_image_choice_flex()
-        await reply_line(reply_token, image_flex)
+        await reply_line(reply_token, get_image_choice_text())
         return (True, None)
 
     # Unknown state - ให้ flow ปกติจัดการ
@@ -450,17 +205,17 @@ async def resend_current_question(user_id: str, ctx: dict, reply_token: str) -> 
 async def handle_new_image_during_flow(user_id: str, new_message_id: str, existing_ctx: dict, reply_token: str) -> bool:
     """
     จัดการเมื่อ user ส่งรูปใหม่ระหว่าง flow
-    
+
     Returns:
         True: จัดการแล้ว (ถาม user ว่าจะใช้รูปไหน)
         False: ไม่มี context เดิม ให้ทำงานปกติ
     """
     if not existing_ctx:
         return False
-    
+
     current_state = existing_ctx.get("state")
     logger.info(f"📷 New image during flow: user={user_id}, current_state={current_state}")
-    
+
     # เก็บรูปใหม่และ state เดิมไว้
     await save_pending_context(user_id, {
         **existing_ctx,
@@ -469,9 +224,8 @@ async def handle_new_image_during_flow(user_id: str, new_message_id: str, existi
         "old_state": current_state,
         "state": "awaiting_image_choice"
     })
-    
+
     # ถาม user ว่าจะใช้รูปไหน
-    image_choice_flex = await create_image_choice_flex()
-    await reply_line(reply_token, image_choice_flex)
-    
+    await reply_line(reply_token, get_image_choice_text())
+
     return True
