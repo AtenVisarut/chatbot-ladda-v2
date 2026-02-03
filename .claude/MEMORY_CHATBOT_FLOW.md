@@ -7,7 +7,6 @@
 - **Chat AI**: GPT-4o-mini (OpenAI)
 - **Database**: Supabase (PostgreSQL)
 - **Cache**: Redis (Upstash) + In-Memory Fallback
-- **Frontend**: LIFF (LINE Front-end Framework)
 
 ## File Structure
 ```
@@ -18,22 +17,21 @@ app/
 ├── services/
 │   ├── disease_detection.py     # วินิจฉัยโรค (v1: hardcode, v2: RAG)
 │   ├── disease_search.py        # RAG + Vector Search สำหรับค้นหาโรค
-│   ├── product_recommendation.py # แนะนำสินค้า (line 1892: retrieve_products_with_matching_score)
+│   ├── product_recommendation.py # แนะนำสินค้า (retrieve_products_with_matching_score)
 │   ├── response_generator.py    # สร้าง Flex Message
 │   ├── knowledge_base.py        # Knowledge RAG for Q&A
 │   ├── cache.py                 # In-Memory Cache (L1) + Supabase (L2)
 │   ├── redis_cache.py           # Redis Cache สำหรับ scale-out (2026-01-26)
+│   ├── user_service.py          # User management (ensure_user_exists)
+│   ├── chat.py                  # Q&A Chat - handle_natural_conversation
+│   ├── context_handler.py       # Context interrupt handling
+│   ├── welcome.py               # Welcome/help messages
 │   └── memory.py                # Conversation memory
 ├── utils/
+│   ├── text_messages.py         # Text message templates
+│   ├── line_helpers.py          # LINE API helpers
+│   ├── question_templates.py    # Question flow templates
 │   └── rate_limiter.py          # Rate limiting
-liff/
-├── index.html                   # หน้าลงทะเบียน
-├── diseases.html                # หน้าเลือกพืช
-├── diseases-rice.html           # โรคข้าว
-├── diseases-corn.html           # โรคข้าวโพด
-├── diseases-durian.html         # โรคทุเรียน
-├── diseases-cassava.html        # โรคมันสำปะหลัง
-└── diseases-sugarcane.html      # โรคอ้อย
 ```
 
 ## Disease Detection Modes (Updated 2026-01-27)
@@ -59,18 +57,18 @@ Step 3: Final Analysis (Gemini 3 Flash + RAG)
 - อัพเดทโรคได้ผ่าน Database โดยไม่ต้อง deploy
 - ความเร็ว ~6-8s (v1 ~10s)
 
-## Disease Detection Flow (3-Step Questions)
+## Disease Detection Flow (2-Step Questions) — Updated 2026-02-03
 
-1. **User ส่งรูปพืช** → Check registration
-2. **Step 1**: ถามชนิดพืช (บังคับ) - state: `awaiting_plant_type`
-   - Quick Reply: ข้าว | ทุเรียน | ข้าวโพด | มันสำปะหลัง | อ้อย | อื่นๆ
-3. **Step 2**: ถามตำแหน่ง (ข้ามได้) - state: `awaiting_position`
-   - Quick Reply: ใบ | ลำต้น | ผล | ราก | กาบใบ | รวง | กิ่ง | ข้าม
-4. **Step 3**: ถามลักษณะ (ข้ามได้) - state: `awaiting_symptom`
-   - Quick Reply: จุดสี | ลักษณะแผล | สีของใบ | เหี่ยว/แห้ง | แมลง | ข้าม
-5. **Download image** → `smart_detect_disease()` → Gemini Vision + RAG
-6. **Ask growth stage** - state: `awaiting_growth_stage`
-7. **Product recommendation** → `retrieve_products_with_matching_score()`
+> **Note:** LIFF registration ถูกลบออกแล้ว — user ใช้งานได้ทันทีไม่ต้องลงทะเบียน
+
+1. **User ส่งรูปพืช** → ไม่ต้อง check registration
+2. **Step 1/2**: ถามชนิดพืช (บังคับ) - state: `awaiting_plant_type`
+   - ตัวเลือก: ข้าว | ทุเรียน | ข้าวโพด | มันสำปะหลัง | อ้อย | อื่นๆ
+   - ถ้าเลือก "อื่นๆ" → state: `awaiting_other_plant` (พิมพ์ชื่อพืชเอง)
+3. **Step 2/2**: ถามระยะการเติบโต - state: `awaiting_growth_stage`
+   - ตัวเลือกเปลี่ยนตามชนิดพืช
+4. **Download image** → `smart_detect_disease()` → Gemini Vision + RAG
+5. **Product recommendation** → `retrieve_products_with_matching_score()`
 
 ## Product Recommendation Flow
 
@@ -153,5 +151,5 @@ REDIS_URL=redis://default:xxx@xxx:6379
 
 ---
 *Created: 2026-01-21*
-*Updated: 2026-01-27 (RAG detection mode documentation)*
+*Updated: 2026-02-03 (ลบ LIFF registration ทั้งหมด, อัพเดท flow เป็น 2-step)*
 *Source: flow chatbot.md v2.8*

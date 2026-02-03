@@ -1,0 +1,97 @@
+# Changelog - 3 February 2026
+
+## Summary
+ลบระบบ LIFF Login/Registration ออกทั้งหมด — User ใช้ bot ได้ทันทีโดยไม่ต้องลงทะเบียน
+
+## Why
+- ระบบเดิมบังคับ user ลงทะเบียนผ่าน LIFF ก่อนใช้งาน (กรอกชื่อ, เบอร์, จังหวัด, พืชที่ปลูก)
+- ทำให้ user ที่ follow bot แล้วต้องผ่าน step เพิ่มก่อนใช้งานจริง
+- ตัดออกเพื่อให้ user เริ่มใช้งานได้ทันที
+
+## Changes Made
+
+### 1. `app/utils/text_messages.py`
+- ลบ `get_liff_welcome_text()` — ข้อความต้อนรับพร้อมลิงก์ LIFF
+- ลบ `get_registration_required_text()` — ข้อความบังคับลงทะเบียน
+
+### 2. `app/services/welcome.py`
+- ลบ import `get_registration_required_text`
+- ลบ function `get_registration_required_message()`
+
+### 3. `app/main.py` (แก้ไขหลัก)
+**Imports ที่ลบ:**
+- `LIFF_ID`, `LIFF_URL` จาก config
+- `get_registration_required_message` จาก welcome
+- `get_liff_welcome_text`, `get_registration_required_text` จาก text_messages
+- `LiffRegistrationData`, `register_user_from_liff` จาก liff_service
+- `FileResponse`, `StaticFiles` (ไม่ใช้แล้ว)
+- `is_registration_completed` จาก user_service
+
+**Logic ที่เปลี่ยน:**
+- Follow event: ส่ง `get_welcome_message()` แทน `get_liff_welcome_text(LIFF_URL)`
+- Image handler: ลบ registration check ที่ block user ไม่ให้ส่งรูป
+- Text handler: ลบ registration check 2 จุด (unknown state fallback + normal text)
+- ลบ quick command "ลงทะเบียน" / "register" / "สมัคร"
+
+**Endpoints ที่ลบ (ทั้งหมด 14 routes):**
+| Route | Purpose |
+|-------|---------|
+| `GET /liff-register` | Redirect หน้าลงทะเบียน |
+| `POST /api/liff/register` | API รับข้อมูลลงทะเบียน |
+| `GET /api/liff/status/{user_id}` | เช็คสถานะลงทะเบียน |
+| `GET /api/diseases` | ดึงรายการโรคพืช |
+| `GET /api/diseases/{disease_key}` | รายละเอียดโรค |
+| `GET /api/diseases/category/{category}` | โรคตามประเภท |
+| `GET /api/products/for-disease/{disease_key}` | สินค้าสำหรับโรค |
+| `GET /liff` | หน้า LIFF ลงทะเบียน |
+| `GET /liff/diseases` | หน้าคู่มือโรคพืช |
+| `GET /liff/diseases-rice` | โรคข้าว |
+| `GET /liff/diseases-durian` | โรคทุเรียน |
+| `GET /liff/diseases-corn` | โรคข้าวโพด |
+| `GET /liff/diseases-cassava` | โรคมันสำปะหลัง |
+| `GET /liff/diseases-sugarcane` | โรคอ้อย |
+
+**อื่นๆ:**
+- Health check: ลบ liff debug info, bump version → 2.7.0
+- CORS comment: ลบ "for LIFF"
+
+### 4. `app/config.py`
+- ลบ `LIFF_ID`
+- ลบ `LIFF_URL`
+- ลบ `LIFF_DISEASES_URL`
+
+### 5. Files Deleted
+| File/Directory | Description |
+|----------------|-------------|
+| `app/services/liff_service.py` | LIFF registration service ทั้งไฟล์ |
+| `liff/index.html` | หน้าลงทะเบียน |
+| `liff/diseases.html` | หน้าเลือกพืช |
+| `liff/diseases-rice.html` | โรคข้าว |
+| `liff/diseases-durian.html` | โรคทุเรียน |
+| `liff/diseases-corn.html` | โรคข้าวโพด |
+| `liff/diseases-cassava.html` | โรคมันสำปะหลัง |
+| `liff/diseases-sugarcane.html` | โรคอ้อย |
+| `liff/disease-detail.html` | รายละเอียดโรค |
+| `liff/assets/` | รูปภาพ (3 ไฟล์) |
+
+## Test Results
+```
+tests/test_webhook.py::test_text_message      PASSED
+tests/test_webhook.py::test_image_message      PASSED
+tests/test_webhook.py::test_health_endpoint    PASSED
+tests/test_redis_cache.py                      5/6 PASSED (1 pre-existing async issue)
+tests/test_supabase.py                         4/4 PASSED
+```
+
+## Impact
+- **16 files changed**: 17 insertions, 5,696 deletions
+- User flow เปลี่ยน: Follow → Welcome message → ใช้งานได้ทันที (ไม่ต้องลงทะเบียน)
+- `is_registration_completed()` ยังอยู่ใน `user_service.py` แต่ไม่ถูกเรียกใช้แล้ว
+
+## Git
+- Commit: `67178a8`
+- Branch: `main`
+- Pushed: Yes
+
+---
+Session: 2026-02-03
