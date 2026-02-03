@@ -360,13 +360,6 @@ async def generate_text_response(
                 product_names = [p.product_name for p in products[:3]]
                 messages.append("💊 ผลิตภัณฑ์แนะนำ:\n" + "\n".join(f"• {name}" for name in product_names))
 
-        # 3. Footer text
-        footer_text = (
-            "⚠️ หมายเหตุ: นี่เป็นการวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้\n\n"
-            "📚 ดูรายละเอียดเพิ่มเติม: icpladda.com\n"
-            "💬 ส่งรูปใหม่หรือพิมพ์ถามเพิ่มเติมได้เลยค่ะ"
-        )
-        messages.append(footer_text)
 
         logger.info(f"✓ Text response generated: {len(messages)} messages")
         return messages
