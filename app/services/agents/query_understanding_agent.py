@@ -242,15 +242,15 @@ expanded_queries: สร้างคำค้นหาเพิ่มเติ�
     def _determine_sources(self, intent: IntentType) -> List[str]:
         """Determine which data sources to query based on intent"""
         source_map = {
-            IntentType.PRODUCT_INQUIRY: ["knowledge", "products"],
-            IntentType.PRODUCT_RECOMMENDATION: ["knowledge", "products"],
-            IntentType.DISEASE_TREATMENT: ["knowledge", "diseases"],
-            IntentType.PEST_CONTROL: ["knowledge", "products"],
-            IntentType.WEED_CONTROL: ["knowledge", "products"],
-            IntentType.NUTRIENT_SUPPLEMENT: ["knowledge", "products"],
-            IntentType.USAGE_INSTRUCTION: ["knowledge"],
-            IntentType.GENERAL_AGRICULTURE: ["knowledge", "diseases"],
+            IntentType.PRODUCT_INQUIRY: ["products"],
+            IntentType.PRODUCT_RECOMMENDATION: ["products"],
+            IntentType.DISEASE_TREATMENT: ["products", "diseases"],
+            IntentType.PEST_CONTROL: ["products"],
+            IntentType.WEED_CONTROL: ["products"],
+            IntentType.NUTRIENT_SUPPLEMENT: ["products"],
+            IntentType.USAGE_INSTRUCTION: ["products"],
+            IntentType.GENERAL_AGRICULTURE: ["products", "diseases"],
             IntentType.GREETING: [],
-            IntentType.UNKNOWN: ["knowledge"],
+            IntentType.UNKNOWN: ["products"],
         }
-        return source_map.get(intent, ["knowledge"])
+        return source_map.get(intent, ["products"])

@@ -44,8 +44,14 @@ def post_process_answer(answer: str) -> str:
     answer = answer.replace('ต', 'ต')
     
     # 8. Ensure emoji spacing (include common emojis used in responses)
-    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍😊🌾💚])([ก-๙A-Za-z])', r'\1 \2', answer)
-    
+    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍😊🌾💚🦠⚖️📅🔢📊🏷️💬🔗])([ก-๙A-Za-z])', r'\1 \2', answer)
+
+    # 9. Normalize dividers to standard format
+    answer = re.sub(r'^[-=─]{3,}$', '━━━━━━━━━━━━━━━', answer, flags=re.MULTILINE)
+
+    # 10. Remove old [หัวข้อ] bracket format (fallback cleanup)
+    answer = re.sub(r'^\[([^\]]+)\]\s*$', r'\1', answer, flags=re.MULTILINE)
+
     return answer
 
 def clean_knowledge_text(text: str) -> str:

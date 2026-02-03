@@ -254,7 +254,7 @@ async def generate_final_response(
         final_response = final_response.replace("```", "").replace("**", "")
 
         # Append Static Footer (Important Notes & Links)
-        final_response += "\n\n" + "="*30
+        final_response += "\n\n" + "━"*15
         final_response += "\n*หมายเหตุสำคัญ*"
         final_response += "\n• เป็นแค่การวินิจฉัยเบื้องต้น ควรปรึกษาผู้เชี่ยวชาญก่อนใช้"
         final_response += "\n• ปรับอัตรา/ปริมาณตามฉลากจริงก่อนใช้ทุกครั้ง"
