@@ -379,6 +379,7 @@ async def get_enhanced_context(user_id: str) -> str:
     """
     สร้าง context แบบ enhanced สำหรับ AI
     รวม: บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
+    ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
     """
     try:
         # Get conversation context
@@ -390,23 +391,28 @@ async def get_enhanced_context(user_id: str) -> str:
         if not summary:
             return context
 
-        # Build enhanced context
+        # Build structured enhanced context
         parts = []
 
-        # Add summary header
-        if summary.get("topics"):
-            parts.append(f"[หัวข้อที่คุยกัน: {', '.join(summary['topics'])}]")
-
-        if summary.get("plants_mentioned"):
-            parts.append(f"[พืชที่ถาม: {', '.join(summary['plants_mentioned'])}]")
-
-        if summary.get("products_mentioned"):
-            parts.append(f"[สินค้าที่แนะนำ: {', '.join(summary['products_mentioned'][:5])}]")
-
-        # Add conversation
+        # Section 1: Recent conversation
         if context:
-            parts.append("\nบทสนทนาล่าสุด:")
+            parts.append("[บทสนทนาล่าสุด]")
             parts.append(context)
+
+        # Section 2: Products recommended
+        if summary.get("products_mentioned"):
+            parts.append("")
+            parts.append(f"[สินค้าที่แนะนำไปแล้ว] {', '.join(summary['products_mentioned'][:5])}")
+
+        # Section 3: Current topics
+        topic_parts = []
+        if summary.get("topics"):
+            topic_parts.append(f"หัวข้อ: {', '.join(summary['topics'])}")
+        if summary.get("plants_mentioned"):
+            topic_parts.append(f"พืช: {', '.join(summary['plants_mentioned'])}")
+        if topic_parts:
+            parts.append("")
+            parts.append(f"[หัวข้อที่กำลังคุย] {' | '.join(topic_parts)}")
 
         return "\n".join(parts)
 

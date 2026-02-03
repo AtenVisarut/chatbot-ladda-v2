@@ -17,6 +17,19 @@ from app.services.agents import IntentType, QueryAnalysis
 
 logger = logging.getLogger(__name__)
 
+# ICP product names for prompt hints (subset for LLM context)
+# Product names that actually exist in the products table (42 products)
+_ICP_PRODUCT_LIST = [
+    "กะรัต", "ก็อปกัน", "คาริสมา", "ซิมเมอร์", "ซีเอ็มจี", "ทูโฟฟอส",
+    "นาแดน", "บลูไวท์", "พรีดิคท์", "พาสนาว", "พานาส", "ราเซอร์",
+    "รีโนเวท", "วอร์แรนต์", "อะนิลการ์ด", "อัพดาว", "อาร์ดอน",
+    "อาร์เทมีส", "อิมิดาโกลด์", "เกรค", "เคเซีย", "เทอราโน่",
+    "เบนซาน่า", "เมลสัน", "แกนเตอร์", "แจ๊ส", "แมสฟอร์ด",
+    "แอนดาแม็กซ์", "แอสไปร์", "โค-ราซ", "โคเบิล", "โซนิก",
+    "โทมาฮอค", "โม-เซ่", "โมเดิน", "โฮป", "ไซม๊อกซิเมท",
+    "ไดแพ๊กซ์", "ไพรซีน", "ไฮซีส", "ชุดกล่องม่วง", "เลกาซี",
+]
+
 
 class QueryUnderstandingAgent:
     """
@@ -27,13 +40,14 @@ class QueryUnderstandingAgent:
     def __init__(self, openai_client=None):
         self.openai_client = openai_client
 
-    async def analyze(self, query: str, context: str = "") -> QueryAnalysis:
+    async def analyze(self, query: str, context: str = "", hints: dict = None) -> QueryAnalysis:
         """
         Analyze user query to extract intent, entities, and generate expanded queries
 
         Args:
             query: Current user message
             context: Conversation history for understanding follow-up messages
+            hints: Pre-detected hints dict with keys: product_name, problem_type
 
         Returns:
             QueryAnalysis with intent, entities, expanded_queries, required_sources
@@ -41,12 +55,16 @@ class QueryUnderstandingAgent:
         try:
             logger.info(f"QueryUnderstandingAgent: Analyzing '{query[:50]}...'")
 
+            # Build hints from external detection functions if not provided
+            if hints is None:
+                hints = {}
+
             if not self.openai_client:
                 logger.warning("OpenAI client not available, using fallback analysis")
                 return self._fallback_analysis(query)
 
-            # Use LLM for semantic understanding
-            result = await self._llm_analyze(query, context=context)
+            # Use LLM for semantic understanding with hints
+            result = await self._llm_analyze(query, context=context, hints=hints)
             logger.info(f"QueryUnderstandingAgent: intent={result.intent}, confidence={result.confidence:.2f}")
             return result
 
@@ -54,18 +72,35 @@ class QueryUnderstandingAgent:
             logger.error(f"QueryUnderstandingAgent error: {e}", exc_info=True)
             return self._fallback_analysis(query)
 
-    async def _llm_analyze(self, query: str, context: str = "") -> QueryAnalysis:
-        """Use LLM for semantic query analysis with conversation context"""
+    async def _llm_analyze(self, query: str, context: str = "", hints: dict = None) -> QueryAnalysis:
+        """Use LLM for semantic query analysis with conversation context and hints"""
+
+        if hints is None:
+            hints = {}
 
         context_section = ""
         if context:
             context_section = f"""บริบทการสนทนาก่อนหน้า:
-{context[:1000]}
+{context[:2000]}
 
 """
 
+        # Build hint sections
+        hint_section = ""
+        if hints.get('product_name'):
+            hint_section += f"\n[HINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ใช้ชื่อนี้ใน entities.product_name"
+        if hints.get('problem_type') and hints['problem_type'] != 'unknown':
+            problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
+            hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
+
+        products_str = ", ".join(_ICP_PRODUCT_LIST)
+
         prompt = f"""{context_section}วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
 ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ ให้ใช้บริบทการสนทนาก่อนหน้าเพื่อเข้าใจว่าผู้ใช้หมายถึงอะไร
+{hint_section}
+
+รายชื่อสินค้า ICP ในระบบ: [{products_str}]
+(ถ้าชื่อในคำถามคล้ายชื่อสินค้าใดๆ ให้ถือว่าเป็น product_inquiry)
 
 คำถาม: "{query}"
 
@@ -81,14 +116,14 @@ class QueryUnderstandingAgent:
         "weed_type": "<ประเภทวัชพืชถ้ามี หรือ null>",
         "growth_stage": "<ระยะการเจริญเติบโตถ้ามี หรือ null>"
     }},
-    "expanded_queries": ["<คำค้นหาหลัก>", "<คำค้นหาเสริม1>", "<คำค้นหาเสริม2>"],
+    "expanded_queries": ["<คำค้นหาภาษาไทย1>", "<คำค้นหาภาษาไทย2>", "<คำค้นหาภาษาไทย3>"],
     "required_sources": ["<source1>", "<source2>"]
 }}
 
 intent_type ที่เป็นไปได้:
 - product_inquiry: ถามเกี่ยวกับสินค้าเฉพาะ (เช่น "โมเดิน ใช้ยังไง", "แกนเตอร์ คืออะไร")
 - product_recommendation: ขอแนะนำสินค้า (เช่น "แนะนำยากำจัดแมลง")
-- disease_treatment: การรักษาโรคพืช (เช่น "ราน้ำค้าง รักษายังไง")
+- disease_treatment: การรักษาโรคพืช (เช่น "ราน้ำค้าง รักษายังไง", "เป็นรากเน่า")
 - pest_control: การกำจัดแมลง (เช่น "กำจัดเพลี้ยในทุเรียน")
 - weed_control: การกำจัดวัชพืช (เช่น "หญ้าในนาข้าว")
 - nutrient_supplement: การเสริมธาตุอาหาร (เช่น "ดอกร่วง ติดดอก")
@@ -101,9 +136,19 @@ required_sources ที่เป็นไปได้:
 - products: ตารางสินค้า (ข้อมูลสินค้า วิธีใช้ อัตราผสม สารสำคัญ)
 - diseases: ข้อมูลโรคพืช
 
-expanded_queries: สร้างคำค้นหาเพิ่มเติมที่เกี่ยวข้อง เช่น
-- ถ้าถาม "โมเดิน ใช้กับทุเรียน" → ["โมเดิน ทุเรียน", "โมเดิน 50", "โปรฟีโนฟอส ทุเรียน"]
-- ถ้าถาม "กำจัดหญ้าในนา" → ["ยาฆ่าหญ้านาข้าว", "herbicide rice", "วัชพืชนาข้าว"]
+กฎสำคัญสำหรับ expanded_queries:
+- ห้ามสร้าง query ภาษาอังกฤษ (ฐานข้อมูลเป็นภาษาไทย)
+- สร้างคำค้นหาภาษาไทยเท่านั้น
+- รวมชื่อสินค้า + พืช + ปัญหา ในรูปแบบต่างๆ
+
+ตัวอย่าง:
+1. "คาริส ใช้ยังไง" → intent=product_inquiry, product_name="คาริสมา", expanded_queries=["คาริสมา วิธีใช้", "คาริสมา อัตราผสม", "คาริสมา"]
+2. "เป็นรากเน่า ใช้ยาไรครับ" → intent=disease_treatment, disease_name="รากเน่า", expanded_queries=["รากเน่า ยาป้องกัน", "โรครากเน่า สารป้องกัน", "รากเน่า"]
+3. "สวัสดีครับ" → intent=greeting, confidence=0.95
+4. "ทูโฟโฟส ใช้ยังไง" → intent=product_inquiry, product_name="ทูโฟฟอส", expanded_queries=["ทูโฟฟอส วิธีใช้", "ทูโฟฟอส อัตรา", "ทูโฟฟอส"]
+5. "แมลงในข้าว กำจัดยังไง" → intent=pest_control, plant_type="ข้าว", expanded_queries=["กำจัดแมลง ข้าว", "ยาฆ่าแมลง ข้าว", "แมลงศัตรูข้าว"]
+6. "ข้าวเป็นราน้ำค้าง" → intent=disease_treatment, plant_type="ข้าว", disease_name="ราน้ำค้าง", expanded_queries=["ราน้ำค้าง ข้าว", "ป้องกันราน้ำค้าง", "ราน้ำค้าง"]
+7. "โมเดิน 50 อัตราผสมเท่าไหร่" → intent=usage_instruction, product_name="โมเดิน", expanded_queries=["โมเดิน อัตราผสม", "โมเดิน 50 วิธีใช้", "โมเดิน"]
 """
 
         response = await self.openai_client.chat.completions.create(
@@ -181,11 +226,8 @@ expanded_queries: สร้างคำค้นหาเพิ่มเติ�
         confidence = 0.5
         entities = {}
 
-        # Product inquiry patterns
-        product_keywords = [
-            "โมเดิน", "แกนเตอร์", "เกรค", "อิมิดาโกลด์", "เลกาซี",
-            "โคเบิล", "โทมาฮอค", "แอสไปร์", "ไพรซีน", "ไฮซีส"
-        ]
+        # Product inquiry patterns (full ICP product list)
+        product_keywords = _ICP_PRODUCT_LIST
         for product in product_keywords:
             if product in query_lower:
                 intent = IntentType.PRODUCT_INQUIRY

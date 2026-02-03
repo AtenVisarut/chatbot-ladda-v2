@@ -23,7 +23,7 @@ from app.services.agents import (
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_VECTOR_THRESHOLD = 0.35  # Increased from 0.20
+DEFAULT_VECTOR_THRESHOLD = 0.25  # Lowered from 0.35 for better recall
 DEFAULT_RERANK_THRESHOLD = 0.50
 DEFAULT_TOP_K = 10
 MIN_RELEVANT_DOCS = 3
@@ -46,6 +46,116 @@ class RetrievalAgent:
         self.openai_client = openai_client
         self.vector_threshold = vector_threshold
         self.rerank_threshold = rerank_threshold
+
+    async def _direct_product_lookup(self, product_name: str) -> List[RetrievedDocument]:
+        """Direct database lookup by product name (exact/ilike match)"""
+        if not self.supabase:
+            return []
+
+        try:
+            # Try ilike search on product_name
+            result = self.supabase.table('products') \
+                .select('*') \
+                .ilike('product_name', f'%{product_name}%') \
+                .limit(5) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            docs = []
+            for item in result.data:
+                doc = RetrievedDocument(
+                    id=str(item.get('id', '')),
+                    title=item.get('product_name', ''),
+                    content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
+                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
+                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
+                    source="products",
+                    similarity_score=1.0,
+                    rerank_score=1.0,
+                    metadata={
+                        'product_name': item.get('product_name'),
+                        'active_ingredient': item.get('active_ingredient'),
+                        'target_pest': item.get('target_pest'),
+                        'applicable_crops': item.get('applicable_crops'),
+                        'category': item.get('product_category') or item.get('category'),
+                        'how_to_use': item.get('how_to_use'),
+                        'usage_rate': item.get('usage_rate'),
+                        'usage_period': item.get('usage_period'),
+                    }
+                )
+                docs.append(doc)
+
+            logger.info(f"    Direct lookup: {len(docs)} docs for '{product_name}'")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Direct product lookup error: {e}")
+            return []
+
+    async def _fallback_keyword_search(self, query: str, top_k: int = 5) -> List[RetrievedDocument]:
+        """Fallback keyword search when vector search returns no results"""
+        if not self.supabase:
+            return []
+
+        try:
+            # Extract potential keywords from query
+            keywords = re.findall(r'[\u0E00-\u0E7F]+|[a-zA-Z]+', query)
+            keywords = [kw for kw in keywords if len(kw) >= 3]
+
+            if not keywords:
+                return []
+
+            # Build OR filter for ilike search
+            or_conditions = []
+            for kw in keywords[:3]:  # Limit to 3 keywords
+                or_conditions.append(f"product_name.ilike.%{kw}%")
+                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.append(f"active_ingredient.ilike.%{kw}%")
+
+            or_filter = ",".join(or_conditions)
+
+            result = self.supabase.table('products') \
+                .select('*') \
+                .or_(or_filter) \
+                .limit(top_k) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            docs = []
+            for item in result.data:
+                doc = RetrievedDocument(
+                    id=str(item.get('id', '')),
+                    title=item.get('product_name', ''),
+                    content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
+                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
+                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
+                    source="products",
+                    similarity_score=0.5,
+                    metadata={
+                        'product_name': item.get('product_name'),
+                        'active_ingredient': item.get('active_ingredient'),
+                        'target_pest': item.get('target_pest'),
+                        'applicable_crops': item.get('applicable_crops'),
+                        'category': item.get('product_category') or item.get('category'),
+                        'how_to_use': item.get('how_to_use'),
+                        'usage_rate': item.get('usage_rate'),
+                        'usage_period': item.get('usage_period'),
+                    }
+                )
+                docs.append(doc)
+
+            logger.info(f"    Fallback keyword search: {len(docs)} docs for '{query[:30]}...'")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Fallback keyword search error: {e}")
+            return []
 
     async def retrieve(
         self,
@@ -70,8 +180,26 @@ class RetrievalAgent:
             logger.info(f"  - Sources: {query_analysis.required_sources}")
             logger.info(f"  - Expanded queries: {len(query_analysis.expanded_queries)}")
 
+            # Stage 0: Direct product lookup if entity has product_name
+            all_docs = []
+            product_name = query_analysis.entities.get('product_name')
+            if product_name:
+                direct_docs = await self._direct_product_lookup(product_name)
+                if direct_docs:
+                    all_docs.extend(direct_docs)
+                    logger.info(f"  - Direct lookup found: {len(direct_docs)} docs")
+
             # Stage 1: Parallel retrieval from multiple sources
-            all_docs = await self._multi_source_retrieval(query_analysis, top_k)
+            multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
+            all_docs.extend(multi_docs)
+
+            # Stage 1.5: Fallback keyword search if no results
+            if not all_docs:
+                fallback_docs = await self._fallback_keyword_search(query_analysis.original_query, top_k)
+                all_docs.extend(fallback_docs)
+                if fallback_docs:
+                    logger.info(f"  - Fallback keyword search found: {len(fallback_docs)} docs")
+
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")
 
@@ -215,11 +343,7 @@ class RetrievalAgent:
                 if similarity < self.vector_threshold:
                     continue
 
-                # Filter by category if specified (field is product_category in DB)
-                if category_filter:
-                    item_category = (item.get('product_category') or item.get('category') or '')
-                    if category_filter not in item_category:
-                        continue
+                # Category filter removed - let reranker handle relevance instead
 
                 doc = RetrievedDocument(
                     id=str(item.get('id', '')),
@@ -238,6 +362,7 @@ class RetrievalAgent:
                         'category': item.get('product_category') or item.get('category'),
                         'how_to_use': item.get('how_to_use'),
                         'usage_rate': item.get('usage_rate'),
+                        'usage_period': item.get('usage_period'),
                     }
                 )
                 docs.append(doc)

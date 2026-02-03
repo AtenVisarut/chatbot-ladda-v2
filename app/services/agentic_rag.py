@@ -104,9 +104,25 @@ class AgenticRAG:
             logger.info(f"AgenticRAG.process: '{query[:50]}...'")
 
             # =================================================================
+            # Stage 0: Pre-detect hints using keyword functions
+            # =================================================================
+            hints = {}
+            try:
+                from app.services.chat import extract_product_name_from_question, detect_problem_type
+                detected_product = extract_product_name_from_question(query)
+                if detected_product:
+                    hints['product_name'] = detected_product
+                detected_problem = detect_problem_type(query)
+                if detected_problem != 'unknown':
+                    hints['problem_type'] = detected_problem
+                logger.info(f"  - Hints: {hints}")
+            except ImportError:
+                logger.warning("Could not import hint functions from chat.py")
+
+            # =================================================================
             # Stage 1: Query Understanding
             # =================================================================
-            query_analysis = await self.query_agent.analyze(query, context=context)
+            query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
 
             # Handle greeting intent directly
             if query_analysis.intent == IntentType.GREETING:

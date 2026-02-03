@@ -53,12 +53,12 @@ USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
 # AGENTIC RAG CONFIGURATION
 # ============================================================================#
 # Set to "1" to enable Agentic RAG pipeline for Q&A
-# Set to "0" to use legacy answer_qa_with_vector_search
+# Set to "0" to disable (legacy functions have been removed)
 USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 
 AGENTIC_RAG_CONFIG = {
-    # Vector search threshold (increased from 0.20 for better precision)
-    "VECTOR_THRESHOLD": float(os.getenv("AGENTIC_VECTOR_THRESHOLD", "0.35")),
+    # Vector search threshold (lowered to 0.25 for better recall)
+    "VECTOR_THRESHOLD": float(os.getenv("AGENTIC_VECTOR_THRESHOLD", "0.25")),
 
     # Minimum rerank score to include in results
     "RERANK_THRESHOLD": float(os.getenv("AGENTIC_RERANK_THRESHOLD", "0.50")),

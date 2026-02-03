@@ -89,6 +89,7 @@ class GroundingResult:
     ungrounded_claims: List[str]
     suggested_answer: str
     grounding_notes: str = ""
+    relevant_products: List[str] = field(default_factory=list)
 
 
 @dataclass
