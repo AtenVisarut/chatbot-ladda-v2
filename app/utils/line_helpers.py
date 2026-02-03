@@ -28,7 +28,7 @@ async def get_image_content_from_line(message_id: str) -> bytes:
         response.raise_for_status()
         return response.content
 
-async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], with_sticker: bool = False) -> None:
+async def reply_line(reply_token: str, message: Union[str, Dict, List], with_sticker: bool = False) -> None:
     """Reply to LINE with text message, dict, list of messages, and optionally a sticker"""
     try:
         logger.info(f"Replying to LINE token: {reply_token[:10]}...")
@@ -45,7 +45,11 @@ async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], wi
         elif isinstance(message, dict):
             messages.append(message)
         elif isinstance(message, list):
-            messages.extend(message)
+            for item in message:
+                if isinstance(item, str):
+                    messages.append({"type": "text", "text": item})
+                elif isinstance(item, dict):
+                    messages.append(item)
             
         # Add sticker if requested
         if with_sticker:
@@ -70,7 +74,7 @@ async def reply_line(reply_token: str, message: Union[str, Dict, List[Dict]], wi
         logger.error(f"Error sending LINE reply: {e}", exc_info=True)
         # Don't raise exception here to avoid crashing the webhook handler
 
-async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_sticker: bool = False) -> None:
+async def push_line(user_id: str, message: Union[str, Dict, List], with_sticker: bool = False) -> None:
     """Push message to LINE user (use when reply token is already consumed)"""
     try:
         logger.info(f"Pushing message to LINE user: {user_id[:10]}...")
@@ -87,7 +91,11 @@ async def push_line(user_id: str, message: Union[str, Dict, List[Dict]], with_st
         elif isinstance(message, dict):
             messages.append(message)
         elif isinstance(message, list):
-            messages.extend(message)
+            for item in message:
+                if isinstance(item, str):
+                    messages.append({"type": "text", "text": item})
+                elif isinstance(item, dict):
+                    messages.append(item)
 
         # Add sticker if requested
         if with_sticker:

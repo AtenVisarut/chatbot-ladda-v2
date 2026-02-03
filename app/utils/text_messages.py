@@ -156,10 +156,10 @@ def _get_growth_stages_for_plant(plant_type: str) -> list:
     """ดึงรายการระยะการเติบโตตามชนิดพืช"""
     plant_lower = plant_type.lower() if plant_type else ""
 
-    if "ข้าว" in plant_lower:
-        return ["กล้า/ปักดำ", "แตกกอ", "ตั้งท้อง", "ออกรวง"]
-    elif "ข้าวโพด" in plant_lower:
+    if "ข้าวโพด" in plant_lower:
         return ["งอก/ต้นอ่อน", "เจริญเติบโต", "ออกดอก", "ติดฝัก"]
+    elif "ข้าว" in plant_lower:
+        return ["กล้า/ปักดำ", "แตกกอ", "ตั้งท้อง", "ออกรวง"]
     elif "มันสำปะหลัง" in plant_lower or "มัน" in plant_lower:
         return ["ปลูกใหม่", "เจริญเติบโต", "สะสมแป้ง", "เก็บเกี่ยว"]
     elif "อ้อย" in plant_lower:
