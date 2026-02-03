@@ -55,9 +55,7 @@ from app.utils.text_messages import (
     get_growth_stage_question_text,
     get_other_plant_prompt_text,
     get_plant_type_retry_text,
-    format_product_list_text,
-    get_weather_error_text,
-    get_crop_selection_text
+    format_product_list_text
 )
 from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
@@ -79,11 +77,6 @@ from app.services.product_recommendation import retrieve_products_with_matching_
 from app.services.response_generator import generate_final_response, generate_text_response, generate_diagnosis_with_stage_question
 # Q&A Chat Service - Vector Search from products, diseases, knowledge tables
 from app.services.chat import handle_natural_conversation
-from app.services.agro_risk import (
-    check_weather,
-    analyze_crop_risk,
-    get_weather_forecast
-)
 from app.services.context_handler import (
     handle_context_interrupt,
     handle_new_image_during_flow
@@ -726,20 +719,6 @@ async def _process_webhook_events(events: list):
                     await reply_line(reply_token, catalog)
                     continue
 
-                # 0.2 Check for weather request
-                if text in ["ดูสภาพอากาศ", "สภาพอากาศ", "อากาศ", "weather", "🌤️"]:
-                    logger.info(f"🟢 User {user_id} requested weather")
-                    weather_message = (
-                        "🌤️ ดูสภาพอากาศในพื้นที่\n\n"
-                        "กรุณาแชร์ตำแหน่งของคุณโดยกดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\"\n\n"
-                        "ข้อมูลที่จะได้รับ:\n"
-                        "• อุณหภูมิและความชื้น\n"
-                        "• โอกาสฝนตก\n"
-                        "• ความเสี่ยงสภาพอากาศ\n"
-                        "• คำแนะนำสำหรับเกษตรกร"
-                    )
-                    await reply_line(reply_token, weather_message)
-                    continue
 
                 # 1. Check if user wants to register - send LIFF link
                 if text in ["ลงทะเบียน", "register", "สมัคร"]:
@@ -933,15 +912,12 @@ async def _process_webhook_events(events: list):
 
                                     product_text = format_product_list_text(product_list)
 
-                                    # Send header text + product list + weather suggestion
+                                    # Send header text + product list
                                     header_text = f"💊 ผลิตภัณฑ์แนะนำสำหรับ {plant_type} {growth_stage}:"
-
-                                    weather_suggestion = "🌤️ ต้องการดูสภาพอากาศในพื้นที่ไหมคะ? พิมพ์ \"ดูสภาพอากาศ\" แล้วแชร์ตำแหน่งได้เลยค่ะ"
 
                                     await push_line(user_id, [
                                         header_text,
-                                        product_text,
-                                        weather_suggestion
+                                        product_text
                                     ])
 
                                     # Save recommended products to memory
@@ -975,7 +951,7 @@ async def _process_webhook_events(events: list):
                             await delete_pending_context(user_id)
 
                     else:
-                        # Context exists but unknown state (e.g., weather_received)
+                        # Context exists but unknown state
                         logger.warning(f"Found context for {user_id} but state is unknown: {ctx.get('state')}")
                         # Clear unknown context and fall through to normal conversation
                         await delete_pending_context(user_id)
@@ -1011,243 +987,7 @@ async def _process_webhook_events(events: list):
                             answer = await handle_natural_conversation(user_id, text)
                             await reply_line(reply_token, answer)
 
-            # 4. Handle Location Message (Weather Check)
-            elif event_type == "message" and event.get("message", {}).get("type") == "location":
-                lat = event["message"].get("latitude")
-                lng = event["message"].get("longitude")
-                address = event["message"].get("address")
-                logger.info(f"Received location from {user_id}: ({lat}, {lng}), address: {address}")
-
-                try:
-                    # ดึงข้อมูลพืชที่ user ลงทะเบียนไว้ (ทุกพืช)
-                    user_data = await get_user(user_id)
-                    crops = None
-                    if user_data and user_data.get("crops_grown"):
-                        crops = user_data["crops_grown"]
-                        if crops and len(crops) > 0:
-                            logger.info(f"User {user_id} has registered crops: {crops}")
-
-                    # Call weather API with all crops info
-                    result = await check_weather(lat, lng, address, crops)
-
-                    if result["success"] and result.get("flexMessage"):
-                        # ส่ง Flex Message จาก API กลับไป
-                        await reply_line(reply_token, result["flexMessage"])
-
-                        # บันทึก location ไว้สำหรับวิเคราะห์พืช
-                        await save_pending_context(user_id, {
-                            "state": "weather_received",
-                            "lat": lat,
-                            "lng": lng,
-                            "address": address,
-                            "timestamp": asyncio.get_event_loop().time()
-                        })
-                    else:
-                        # ส่ง error message
-                        error_text = get_weather_error_text(
-                            result.get("error", "ไม่สามารถดูสภาพอากาศได้ กรุณาลองใหม่")
-                        )
-                        await reply_line(reply_token, error_text)
-
-                except Exception as e:
-                    logger.error(f"Error processing location: {e}")
-                    error_text = get_weather_error_text("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
-                    await reply_line(reply_token, error_text)
-
-            # 5. Handle Postback Events
-            elif event_type == "postback":
-                postback_data = event.get("postback", {}).get("data", "")
-                logger.info(f"Received postback from {user_id}: {postback_data}")
-
-                try:
-                    # Parse postback data
-                    from urllib.parse import parse_qs
-                    params = parse_qs(postback_data)
-                    action = params.get("action", [""])[0]
-
-                    if action == "refresh_weather":
-                        # ขอ location ใหม่
-                        refresh_message = (
-                            "🔄 รีเฟรชข้อมูลสภาพอากาศ\n\n"
-                            "กรุณาแชร์ตำแหน่งใหม่โดยกดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\""
-                        )
-                        await reply_line(reply_token, refresh_message)
-
-                    elif action == "analyze_crop_risk":
-                        # วิเคราะห์ความเสี่ยงพืช
-                        lat = float(params.get("lat", [0])[0]) if params.get("lat") else None
-                        lng = float(params.get("lng", [0])[0]) if params.get("lng") else None
-                        crop = params.get("crop", [""])[0]
-
-                        # ถ้าไม่มี lat/lng ใน params ให้ดึงจาก context
-                        if not lat or not lng:
-                            ctx = await get_pending_context(user_id)
-                            if ctx and ctx.get("state") == "weather_received":
-                                lat = ctx.get("lat")
-                                lng = ctx.get("lng")
-
-                        # ถ้าไม่มี crop ใน params ให้ดึงจาก user data
-                        if not crop:
-                            user_data = await get_user(user_id)
-                            crops_grown = user_data.get("crops_grown", []) if user_data else []
-                            if crops_grown:
-                                crop = crops_grown[0]
-                                logger.info(f"Using crop from user data: {crop}")
-
-                        if lat and lng and crop:
-                            logger.info(f"Analyzing crop risk: lat={lat}, lng={lng}, crop={crop}")
-                            result = await analyze_crop_risk(lat, lng, crop)
-
-                            if result["success"] and result.get("flexMessage"):
-                                await reply_line(reply_token, result["flexMessage"])
-                            else:
-                                error_text = get_weather_error_text(
-                                    result.get("error", "ไม่สามารถวิเคราะห์ได้ กรุณาลองใหม่")
-                                )
-                                await reply_line(reply_token, error_text)
-                        elif not lat or not lng:
-                            # ไม่มี location - ขอให้แชร์ location ก่อน
-                            no_location_message = (
-                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
-                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่งของคุณ"
-                            )
-                            await reply_line(reply_token, no_location_message)
-                        elif not crop:
-                            # ไม่มีพืช - ให้พิมพ์ชื่อพืช
-                            await reply_line(reply_token, get_crop_selection_text())
-                        else:
-                            await reply_line(reply_token, "ข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้งค่ะ")
-
-                    elif action == "select_crop_for_risk":
-                        # วิเคราะห์ความเสี่ยงพืชจากข้อมูล user ที่ลงทะเบียน
-                        ctx = await get_pending_context(user_id)
-                        if ctx and ctx.get("state") == "weather_received":
-                            lat = ctx.get("lat")
-                            lng = ctx.get("lng")
-
-                            # ดึงข้อมูลพืชที่ปลูกจาก user
-                            user_data = await get_user(user_id)
-                            crops_grown = user_data.get("crops_grown", []) if user_data else []
-
-                            if crops_grown:
-                                # วิเคราะห์พืชแรกที่ user ลงทะเบียนไว้
-                                crop_to_analyze = crops_grown[0]
-                                logger.info(f"Analyzing crop risk for user {user_id}: {crop_to_analyze}")
-
-                                result = await analyze_crop_risk(lat, lng, crop_to_analyze)
-
-                                if result["success"] and result.get("flexMessage"):
-                                    await reply_line(reply_token, result["flexMessage"])
-                                else:
-                                    error_text = get_weather_error_text(
-                                        result.get("error", "ไม่สามารถวิเคราะห์ความเสี่ยงได้")
-                                    )
-                                    await reply_line(reply_token, error_text)
-                            else:
-                                # ยังไม่ได้ลงทะเบียนพืช - ให้พิมพ์ชื่อพืช
-                                await reply_line(reply_token, get_crop_selection_text())
-                        else:
-                            # ไม่มี location - ขอให้ส่ง location ใหม่
-                            no_location_message = (
-                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
-                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่งของคุณ"
-                            )
-                            await reply_line(reply_token, no_location_message)
-
-                    elif action == "forecast_weather":
-                        # พยากรณ์ฝน 7 วัน
-                        logger.info(f"User {user_id} requested 7-day weather forecast")
-
-                        # ดึง location จาก context
-                        ctx = await get_pending_context(user_id)
-                        lat = None
-                        lng = None
-                        address = None
-
-                        if ctx and ctx.get("state") == "weather_received":
-                            lat = ctx.get("lat")
-                            lng = ctx.get("lng")
-                            address = ctx.get("address")
-
-                        if lat and lng:
-                            result = await get_weather_forecast(lat, lng, days=7, address=address)
-
-                            if result["success"] and result.get("flexMessage"):
-                                flex_msg = result["flexMessage"]
-
-                                # Log flexMessage format for debugging
-                                logger.info(f"Forecast flexMessage type: {type(flex_msg)}, keys: {flex_msg.keys() if isinstance(flex_msg, dict) else 'N/A'}")
-
-                                # Ensure flexMessage has correct LINE format
-                                if isinstance(flex_msg, dict):
-                                    if "type" not in flex_msg:
-                                        # Wrap in LINE Flex Message format
-                                        flex_msg = {
-                                            "type": "flex",
-                                            "altText": "พยากรณ์อากาศ 7 วัน",
-                                            "contents": flex_msg
-                                        }
-
-                                await reply_line(reply_token, flex_msg)
-                            else:
-                                error_text = get_weather_error_text(
-                                    result.get("error", "ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้")
-                                )
-                                await reply_line(reply_token, error_text)
-                        else:
-                            # ไม่มี location - ขอให้ส่ง location ใหม่
-                            no_location_message = (
-                                "📍 กรุณาแชร์ตำแหน่งก่อน\n\n"
-                                "กดปุ่ม + ที่ช่องพิมพ์ แล้วเลือก \"ตำแหน่ง\" เพื่อแชร์ตำแหน่ง\n"
-                                "แล้วกดปุ่ม 'พยากรณ์ฝน 7 วัน' อีกครั้ง"
-                            )
-                            await reply_line(reply_token, no_location_message)
-
-                    elif action == "refresh_forecast":
-                        # รีเฟรชพยากรณ์ฝน 7 วัน (มี lat, lng, province จาก postback data)
-                        logger.info(f"User {user_id} requested refresh forecast")
-
-                        lat = float(params.get("lat", [0])[0]) if params.get("lat") else None
-                        lng = float(params.get("lng", [0])[0]) if params.get("lng") else None
-                        province = params.get("province", [""])[0]
-
-                        # URL decode province name
-                        from urllib.parse import unquote
-                        province = unquote(province) if province else None
-
-                        logger.info(f"Refresh forecast: lat={lat}, lng={lng}, province={province}")
-
-                        if lat and lng:
-                            result = await get_weather_forecast(lat, lng, days=7, address=province)
-
-                            if result["success"] and result.get("flexMessage"):
-                                flex_msg = result["flexMessage"]
-
-                                # Ensure flexMessage has correct LINE format
-                                if isinstance(flex_msg, dict) and "type" not in flex_msg:
-                                    flex_msg = {
-                                        "type": "flex",
-                                        "altText": "พยากรณ์อากาศ 7 วัน",
-                                        "contents": flex_msg
-                                    }
-
-                                await reply_line(reply_token, flex_msg)
-                            else:
-                                error_text = get_weather_error_text(
-                                    result.get("error", "ไม่สามารถรีเฟรชข้อมูลได้")
-                                )
-                                await reply_line(reply_token, error_text)
-                        else:
-                            await reply_line(reply_token, "ไม่สามารถรีเฟรชข้อมูลได้ กรุณาลองใหม่อีกครั้ง")
-
-                    else:
-                        logger.warning(f"Unknown postback action: {action}")
-
-                except Exception as e:
-                    logger.error(f"Error processing postback: {e}")
-                    await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่")
-
-            # 6. Handle Sticker (Just for fun)
+            # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
                 # Reply with a sticker
                 await reply_line(reply_token, "ขอบคุณค่ะ! 😊", with_sticker=True)
