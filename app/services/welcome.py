@@ -6,7 +6,6 @@ Handles welcome messages and usage guides for new users
 import logging
 from app.utils.text_messages import (
     get_welcome_text,
-    get_registration_required_text,
     get_usage_guide_text,
     get_product_catalog_text,
     get_help_menu_text
@@ -31,12 +30,6 @@ def get_usage_guide() -> str:
     return get_usage_guide_text()
 
 
-def get_registration_required_message() -> str:
-    """
-    Create message asking user to register before using features
-    Returns text message string
-    """
-    return get_registration_required_text("")
 
 
 def get_product_catalog_message() -> str:

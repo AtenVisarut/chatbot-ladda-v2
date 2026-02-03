@@ -6,9 +6,8 @@ import time
 import os
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -28,9 +27,7 @@ from app.config import (
     MAX_CACHE_SIZE,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
-    SECRET_KEY,
-    LIFF_ID,
-    LIFF_URL
+    SECRET_KEY
 )
 
 # Import services
@@ -44,12 +41,9 @@ from app.services.welcome import (
     get_welcome_message,
     get_usage_guide,
     get_product_catalog_message,
-    get_registration_required_message,
     get_help_menu
 )
 from app.utils.text_messages import (
-    get_liff_welcome_text,
-    get_registration_required_text,
     get_initial_questions_text,
     get_analyzing_text,
     get_growth_stage_question_text,
@@ -57,7 +51,6 @@ from app.utils.text_messages import (
     get_plant_type_retry_text,
     format_product_list_text
 )
-from app.services.liff_service import LiffRegistrationData, register_user_from_liff
 from app.services.cache import (
     cleanup_expired_cache,
     get_cache_stats,
@@ -183,20 +176,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Add Session Middleware
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
-# Add CORS Middleware for LIFF
+# Add CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow LIFF to call our API
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# NOTE: Static mount removed - using explicit routes instead (line 576+)
-# Static mount was intercepting requests before routes could handle them
-# liff_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff")
-# if os.path.exists(liff_path):
-#     app.mount("/liff", StaticFiles(directory=liff_path, html=True), name="liff")
 
 # ============================================================================#
 # Authentication
@@ -253,25 +241,13 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    # Check if liff files exist for debugging
-    liff_diseases_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases.html")
-    liff_dir = os.path.join(os.path.dirname(__file__), "..", "liff")
-    liff_files = []
-    if os.path.exists(liff_dir):
-        liff_files = [f for f in os.listdir(liff_dir) if f.endswith('.html')]
-
     return {
         "status": "healthy",
-        "version": "2.6.0-diseases",  # Version to track deployment
+        "version": "2.7.0",
         "cache_stats": await get_cache_stats(),
         "services": {
             "openai": bool(openai_client),
             "supabase": bool(supabase_client)
-        },
-        "debug": {
-            "liff_diseases_exists": os.path.exists(liff_diseases_path),
-            "liff_dir_exists": os.path.exists(liff_dir),
-            "liff_files": liff_files
         }
     }
 
@@ -323,257 +299,11 @@ async def get_alerts(request: Request):
     return await alert_manager.get_active_alerts()
 
 # ============================================================================#
-# LIFF Endpoints
-# ============================================================================#
-
-@app.get("/liff-register")
-async def liff_register_page():
-    """Redirect to LIFF registration page"""
-    liff_html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "liff", "index.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="LIFF page not found")
-
-@app.post("/api/liff/register")
-async def liff_register(data: LiffRegistrationData):
-    """
-    Register user from LIFF frontend
-    """
-    try:
-        result = await register_user_from_liff(data)
-        return JSONResponse(content=result, status_code=200)
-    except Exception as e:
-        logger.error(f"LIFF registration error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/liff/status/{user_id}")
-async def liff_registration_status(user_id: str):
-    """
-    Check if user has completed registration
-    """
-    from app.services.user_service import is_registration_completed
-    registered = await is_registration_completed(user_id)
-    return {"user_id": user_id, "registered": registered}
-
-# ============================================================================#
-# Disease Guide API (สำหรับ LIFF)
-# ============================================================================#
-
-@app.get("/api/diseases")
-async def get_diseases(category: str = None, plant: str = None, limit: int = 50):
-    """
-    ดึงรายการโรคพืชทั้งหมด หรือ filter ตาม category/plant
-    """
-    try:
-        if not supabase_client:
-            raise HTTPException(status_code=500, detail="Database not available")
-
-        query = supabase_client.table('diseases').select('*').eq('is_active', True)
-
-        if category:
-            query = query.eq('category', category)
-
-        if plant:
-            query = query.ilike('applicable_plants', f'%{plant}%')
-
-        result = query.order('name_th').limit(limit).execute()
-
-        return {
-            "success": True,
-            "count": len(result.data) if result.data else 0,
-            "diseases": result.data or []
-        }
-    except Exception as e:
-        logger.error(f"Get diseases error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/diseases/{disease_key}")
-async def get_disease_detail(disease_key: str):
-    """
-    ดึงรายละเอียดโรคตาม disease_key
-    """
-    try:
-        if not supabase_client:
-            raise HTTPException(status_code=500, detail="Database not available")
-
-        result = supabase_client.table('diseases').select('*').eq(
-            'disease_key', disease_key
-        ).eq('is_active', True).limit(1).execute()
-
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Disease not found")
-
-        disease = result.data[0]
-
-        # ดึงสินค้าที่เกี่ยวข้อง
-        products = []
-        if disease.get('pathogen'):
-            prod_result = supabase_client.table('products').select(
-                'id, product_name, product_category, target_pest, usage_rate, how_to_use, link_product'
-            ).ilike('target_pest', f'%{disease.get("name_th", "")}%').limit(5).execute()
-
-            if prod_result.data:
-                products = prod_result.data
-
-        return {
-            "success": True,
-            "disease": disease,
-            "recommended_products": products
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get disease detail error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/diseases/category/{category}")
-async def get_diseases_by_category(category: str):
-    """
-    ดึงโรคตามประเภท (fungal, bacterial, viral, insect, nutrient)
-    """
-    try:
-        if not supabase_client:
-            raise HTTPException(status_code=500, detail="Database not available")
-
-        result = supabase_client.table('diseases').select('*').eq(
-            'category', category
-        ).eq('is_active', True).order('name_th').execute()
-
-        return {
-            "success": True,
-            "category": category,
-            "count": len(result.data) if result.data else 0,
-            "diseases": result.data or []
-        }
-    except Exception as e:
-        logger.error(f"Get diseases by category error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/products/for-disease/{disease_key}")
-async def get_products_for_disease(disease_key: str):
-    """
-    ดึงสินค้าที่แนะนำสำหรับโรคนี้
-    """
-    try:
-        if not supabase_client:
-            raise HTTPException(status_code=500, detail="Database not available")
-
-        # ดึงข้อมูลโรคก่อน
-        disease_result = supabase_client.table('diseases').select('name_th, pathogen, category').eq(
-            'disease_key', disease_key
-        ).limit(1).execute()
-
-        if not disease_result.data:
-            raise HTTPException(status_code=404, detail="Disease not found")
-
-        disease = disease_result.data[0]
-        disease_name = disease.get('name_th', '')
-
-        # ค้นหาสินค้าที่ตรงกับโรค
-        products = []
-
-        # Search by disease name
-        prod_result = supabase_client.table('products').select('*').ilike(
-            'target_pest', f'%{disease_name}%'
-        ).limit(10).execute()
-
-        if prod_result.data:
-            products = prod_result.data
-
-        return {
-            "success": True,
-            "disease_key": disease_key,
-            "disease_name": disease_name,
-            "count": len(products),
-            "products": products
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get products for disease error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# LIFF Registration Page (หน้าลงทะเบียน)
-@app.get("/liff")
-async def liff_registration_page():
-    """Serve LIFF Registration HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "index.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Registration page not found")
-
-# LIFF Disease Guide Page
-@app.get("/liff/diseases")
-async def liff_diseases_page():
-    """Serve LIFF Disease Guide HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Disease guide page not found")
-
-# LIFF Disease Pages by Plant Type
-@app.get("/liff/diseases-rice")
-async def liff_diseases_rice_page():
-    """Serve LIFF Rice Diseases HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-rice.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Rice diseases page not found")
-
-@app.get("/liff/diseases-durian")
-async def liff_diseases_durian_page():
-    """Serve LIFF Durian Diseases HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-durian.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Durian diseases page not found")
-
-@app.get("/liff/diseases-corn")
-async def liff_diseases_corn_page():
-    """Serve LIFF Corn Diseases HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-corn.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Corn diseases page not found")
-
-@app.get("/liff/diseases-cassava")
-async def liff_diseases_cassava_page():
-    """Serve LIFF Cassava Diseases HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-cassava.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Cassava diseases page not found")
-
-@app.get("/liff/diseases-sugarcane")
-async def liff_diseases_sugarcane_page():
-    """Serve LIFF Sugarcane Diseases HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "diseases-sugarcane.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Sugarcane diseases page not found")
-
-@app.get("/liff/diseases/{disease_key}")
-async def liff_disease_detail_page(disease_key: str):
-    """Serve LIFF Disease Detail HTML"""
-    liff_html_path = os.path.join(os.path.dirname(__file__), "..", "liff", "disease-detail.html")
-    if os.path.exists(liff_html_path):
-        return FileResponse(liff_html_path)
-    raise HTTPException(status_code=404, detail="Disease detail page not found")
-
-@app.get("/liff/assets/{filename}")
-async def liff_assets(filename: str):
-    """Serve LIFF static assets (images, icons)"""
-    allowed_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')
-    if not filename.lower().endswith(allowed_extensions):
-        raise HTTPException(status_code=400, detail="Invalid file type")
-    file_path = os.path.join(os.path.dirname(__file__), "..", "liff", "assets", filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(status_code=404, detail="Asset not found")
-
-# ============================================================================#
 # LINE Webhook
 # ============================================================================#
+
+
+
 
 @app.post("/webhook")
 async def callback(request: Request, x_line_signature: str = Header(None)):
@@ -625,14 +355,13 @@ async def _process_webhook_events(events: list):
                 continue
             
             # Ensure user exists (auto-register new users)
-            from app.services.user_service import ensure_user_exists, is_registration_completed, get_user
+            from app.services.user_service import ensure_user_exists
             await ensure_user_exists(user_id)
             
-            # 1. Handle Follow Event (Welcome Message with LIFF)
+            # 1. Handle Follow Event (Welcome Message)
             if event_type == "follow":
                 logger.info(f"User {user_id} followed the bot")
-                # Send LIFF welcome text
-                welcome_text = get_liff_welcome_text(LIFF_URL)
+                welcome_text = get_welcome_message()
                 await reply_line(reply_token, welcome_text)
                 continue
 
@@ -640,14 +369,6 @@ async def _process_webhook_events(events: list):
             if event_type == "message" and event.get("message", {}).get("type") == "image":
                 message_id = event["message"]["id"]
                 logger.info(f"Received image from {user_id}")
-
-                # Check if user has completed registration
-                if not await is_registration_completed(user_id):
-                    logger.info(f"User {user_id} not registered - blocking disease detection")
-                    # Send LIFF registration text
-                    reg_text = get_registration_required_text(LIFF_URL)
-                    await reply_line(reply_token, reg_text)
-                    continue
 
                 try:
                     # === NEW: ตรวจว่ามี context เดิมอยู่ไหม (user ส่งรูปใหม่ระหว่าง flow) ===
@@ -720,12 +441,6 @@ async def _process_webhook_events(events: list):
                     continue
 
 
-                # 1. Check if user wants to register - send LIFF link
-                if text in ["ลงทะเบียน", "register", "สมัคร"]:
-                    logger.info(f"🟢 User {user_id} wants to register - sending LIFF link")
-                    reg_text = get_registration_required_text(LIFF_URL)
-                    await reply_line(reply_token, reg_text)
-                    continue
                 # ============================================================================#
 
                 if ctx:
@@ -956,14 +671,9 @@ async def _process_webhook_events(events: list):
                         # Clear unknown context and fall through to normal conversation
                         await delete_pending_context(user_id)
 
-                        # Handle as normal conversation
-                        if not await is_registration_completed(user_id):
-                            reg_text = get_registration_required_text(LIFF_URL)
-                            await reply_line(reply_token, reg_text)
-                        else:
-                            # Q&A Chat - Vector Search from products, diseases, knowledge
-                            answer = await handle_natural_conversation(user_id, text)
-                            await reply_line(reply_token, answer)
+                        # Q&A Chat - Vector Search from products, diseases, knowledge
+                        answer = await handle_natural_conversation(user_id, text)
+                        await reply_line(reply_token, answer)
 
                 else:
                     # Normal text message handling
@@ -977,15 +687,9 @@ async def _process_webhook_events(events: list):
                         await reply_line(reply_token, help_flex)
 
                     else:
-                        # Check registration first
-                        if not await is_registration_completed(user_id):
-                            logger.info(f"User {user_id} not registered")
-                            reg_text = get_registration_required_text(LIFF_URL)
-                            await reply_line(reply_token, reg_text)
-                        else:
-                            # Q&A Chat - Vector Search from products, diseases, knowledge
-                            answer = await handle_natural_conversation(user_id, text)
-                            await reply_line(reply_token, answer)
+                        # Q&A Chat - Vector Search from products, diseases, knowledge
+                        answer = await handle_natural_conversation(user_id, text)
+                        await reply_line(reply_token, answer)
 
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
