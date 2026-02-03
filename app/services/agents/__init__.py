@@ -37,13 +37,13 @@ class QueryAnalysis:
     # Extracted entities: product_name, plant_type, disease_name, pest_name, etc.
     expanded_queries: List[str] = field(default_factory=list)
     required_sources: List[str] = field(default_factory=list)
-    # Sources: knowledge, products, diseases
+    # Sources: products, diseases
 
     def __post_init__(self):
         if not self.expanded_queries:
             self.expanded_queries = [self.original_query]
         if not self.required_sources:
-            self.required_sources = ["knowledge"]
+            self.required_sources = ["products"]
 
 
 @dataclass
@@ -52,7 +52,7 @@ class RetrievedDocument:
     id: str
     title: str
     content: str
-    source: str  # knowledge, products, diseases
+    source: str  # products, diseases
     similarity_score: float
     rerank_score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)

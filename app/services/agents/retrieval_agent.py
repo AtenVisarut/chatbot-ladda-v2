@@ -2,7 +2,7 @@
 Retrieval Agent
 
 Responsibilities:
-- Multi-query retrieval from knowledge, products, diseases tables
+- Multi-query retrieval from products, diseases tables
 - De-duplication of results
 - Re-ranking with LLM cross-encoder
 - Relevance filtering based on threshold
@@ -148,9 +148,7 @@ class RetrievalAgent:
         # Build retrieval tasks based on required sources
         for source in query_analysis.required_sources:
             for query in query_analysis.expanded_queries:
-                if source == "knowledge":
-                    tasks.append(self._search_knowledge(query, top_k, query_analysis))
-                elif source == "products":
+                if source == "knowledge" or source == "products":
                     tasks.append(self._search_products(query, top_k, query_analysis))
                 elif source == "diseases":
                     tasks.append(self._search_diseases(query, top_k))

@@ -215,7 +215,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 citations.append(Citation(
                     doc_id=str(cit.get("doc_id", "")),
                     doc_title=cit.get("title", ""),
-                    source="knowledge",
+                    source="products",
                     quoted_text=cit.get("quoted_text", ""),
                     confidence=data.get("confidence", 0.5)
                 ))

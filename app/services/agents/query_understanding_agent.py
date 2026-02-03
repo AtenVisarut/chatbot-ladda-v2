@@ -5,7 +5,7 @@ Responsibilities:
 - Semantic intent detection using LLM (not keyword matching)
 - Entity extraction: product_name, plant_type, disease_name, pest_name
 - Query expansion for multi-query retrieval
-- Determine required sources: knowledge, products, diseases
+- Determine required sources: products, diseases
 """
 
 import logging
@@ -86,8 +86,7 @@ intent_type ที่เป็นไปได้:
 - unknown: ไม่เกี่ยวกับเกษตร
 
 required_sources ที่เป็นไปได้:
-- knowledge: ข้อมูลสินค้าและวิธีใช้
-- products: ตารางสินค้า
+- products: ตารางสินค้า (ข้อมูลสินค้า วิธีใช้ อัตราผสม สารสำคัญ)
 - diseases: ข้อมูลโรคพืช
 
 expanded_queries: สร้างคำค้นหาเพิ่มเติมที่เกี่ยวข้อง เช่น
@@ -144,7 +143,7 @@ expanded_queries: สร้างคำค้นหาเพิ่มเติ�
                 expanded_queries = [query]
 
             # Get required sources
-            required_sources = data.get("required_sources", ["knowledge"])
+            required_sources = data.get("required_sources", ["products"])
             if not required_sources:
                 required_sources = self._determine_sources(intent)
 
