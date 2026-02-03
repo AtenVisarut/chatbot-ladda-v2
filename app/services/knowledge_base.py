@@ -171,23 +171,3 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
         logger.error(f"Error answering question: {e}", exc_info=True)
         return "ขออภัยค่ะ เกิดข้อผิดพลาดในการประมวลผลคำถาม กรุณาลองใหม่อีกครั้งนะคะ"
 
-async def retrieve_knowledge_from_knowledge_table(disease_name: str) -> Optional[str]:
-    """Retrieve disease knowledge from Supabase knowledge_base table"""
-    try:
-        if not supabase_client:
-            return None
-            
-        # Search in content directly since title column might not exist or be in metadata
-        result = supabase_client.table('knowledge')\
-            .select('content')\
-            .ilike('content', f'%{disease_name}%')\
-            .limit(1)\
-            .execute()
-            
-        if result.data:
-            return clean_knowledge_text(result.data[0]['content'])
-            
-        return None
-    except Exception as e:
-        logger.error(f"Failed to retrieve knowledge: {e}")
-        return None

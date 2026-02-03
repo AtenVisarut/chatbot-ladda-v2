@@ -114,51 +114,6 @@ def clean_knowledge_text(text: str) -> str:
     
     return text
 
-def extract_product_names_from_answer(answer: str) -> List[str]:
-    """Extract product names from answer text"""
-    
-    # Common patterns for product names in Thai answers
-    products = []
-    
-    # Pattern 1: "1. ชื่อผลิตภัณฑ์" or "• ชื่อผลิตภัณฑ์"
-    pattern1 = r'(?:^\d+\.|^•)\s*([^\n]+?)(?:\n|$)'
-    matches1 = re.findall(pattern1, answer, re.MULTILINE)
-    
-    # Pattern 2: Look for common product keywords
-    product_keywords = [
-        r'โมเดิน\s*\d+\s*[A-Z]+',
-        r'ไดอะซินอน\s*\d+\s*[A-Z]+',
-        r'อิมิดาโคลพริด\s*\d+\s*[A-Z]+',
-        r'ไซเพอร์เมทริน\s*\d+\s*[A-Z]+',
-        r'คลอร์ไพริฟอส\s*\d+\s*[A-Z]+',
-        r'แมนโคเซบ\s*\d+\s*[A-Z]+',
-        r'คาร์เบนดาซิม\s*\d+\s*[A-Z]+',
-    ]
-    
-    for pattern in product_keywords:
-        matches = re.findall(pattern, answer, re.IGNORECASE)
-        products.extend(matches)
-    
-    # Pattern 3: Text between "ชื่อผลิตภัณฑ์:" and newline
-    pattern3 = r'ชื่อผลิตภัณฑ์[:\s]+([^\n]+)'
-    matches3 = re.findall(pattern3, answer)
-    products.extend(matches3)
-    
-    # Clean up and deduplicate
-    cleaned_products = []
-    seen = set()
-    for product in products:
-        # Remove extra whitespace and special chars
-        cleaned = re.sub(r'\s+', ' ', product.strip())
-        cleaned = re.sub(r'^[•\-\*\d\.]+\s*', '', cleaned)
-        
-        # Skip if too short or already seen
-        if len(cleaned) > 5 and cleaned not in seen:
-            seen.add(cleaned)
-            cleaned_products.append(cleaned)
-    
-    return cleaned_products[:10]  # Max 10 products
-
 def extract_keywords_from_question(question: str) -> dict:
     """Extract main keywords from question with categories"""
     question_lower = question.lower()

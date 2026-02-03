@@ -11,7 +11,7 @@ Responsibilities:
 import logging
 import json
 import re
-from typing import Optional, List, Dict, Any
+from typing import List, Dict
 
 from app.services.agents import IntentType, QueryAnalysis
 

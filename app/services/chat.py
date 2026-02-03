@@ -4,7 +4,6 @@ from difflib import SequenceMatcher
 from typing import List, Dict, Optional, Tuple
 from app.services.services import openai_client, supabase_client
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
-from app.services.knowledge_base import answer_question_with_knowledge
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product_recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
 from app.services.disease_search import search_diseases_by_text, build_context_from_diseases
@@ -234,51 +233,6 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
     return None
 
 
-def validate_knowledge_results(results: List[Dict], product_name: str, plant_type: str = None) -> List[Dict]:
-    """
-    ตรวจสอบว่าผลลัพธ์ตรงกับชื่อสินค้าที่ถามหรือไม่
-    กรองเฉพาะผลที่มีชื่อสินค้าตรงกัน และ prioritize ตาม plant type
-    """
-    if not product_name or not results:
-        return results
-
-    product_lower = product_name.lower()
-    aliases = ICP_PRODUCT_NAMES.get(product_name, [product_name])
-
-    # กรองผลที่มีชื่อสินค้าตรง
-    matched = []
-    for r in results:
-        title = (r.get('title') or '').lower()
-        content = (r.get('content') or '').lower()
-
-        # ตรวจสอบว่ามีชื่อสินค้าใน title หรือ content
-        for alias in aliases:
-            if alias.lower() in title or alias.lower() in content:
-                matched.append(r)
-                break
-
-    # ถ้ามี plant_type → จัดเรียงให้ผลที่ตรง plant อยู่บนสุด
-    if plant_type and matched:
-        plant_lower = plant_type.lower()
-        # แยกเป็น 2 กลุ่ม: ตรง plant vs ไม่ตรง
-        with_plant = []
-        without_plant = []
-        for r in matched:
-            title = (r.get('title') or '').lower()
-            if plant_lower in title:
-                with_plant.append(r)
-            else:
-                without_plant.append(r)
-
-        # ถ้ามีผลที่ตรง plant → ใช้เฉพาะนั้น
-        if with_plant:
-            return with_plant
-        # ถ้าไม่มี → ใช้ทั้งหมดที่ match product
-        return without_plant if without_plant else matched
-
-    return matched
-
-
 def is_product_question(message: str) -> bool:
     """ตรวจสอบว่าเป็นคำถามเกี่ยวกับสินค้า/ผลิตภัณฑ์หรือไม่"""
     message_lower = message.lower()
@@ -391,119 +345,6 @@ async def generate_embedding(text: str) -> List[float]:
     except Exception as e:
         logger.error(f"Failed to generate embedding: {e}")
         return []
-
-
-async def vector_search_knowledge(query: str, top_k: int = 5, validate_product: bool = True, problem_type: str = None) -> Tuple[List[Dict], Optional[str]]:
-    """
-    Vector search จากตาราง knowledge พร้อมกรองตาม category
-
-    Args:
-        query: คำถาม
-        top_k: จำนวนผลลัพธ์สูงสุด
-        validate_product: ตรวจสอบว่าชื่อสินค้าตรงกับผลลัพธ์หรือไม่
-        problem_type: 'disease', 'insect', หรือ None
-
-    Returns:
-        Tuple[results, product_not_found_message]
-    """
-    if not supabase_client or not openai_client:
-        return [], None
-
-    try:
-        # ตรวจสอบว่าคำถามถามเกี่ยวกับสินค้าตัวไหน และพืชอะไร
-        # Extract เสมอ เพื่อกรองผลลัพธ์ให้ตรงกับสินค้าที่ถาม
-        product_in_question = extract_product_name_from_question(query)
-        plant_in_question = extract_plant_type_from_question(query)
-
-        # ตรวจจับประเภทปัญหาถ้าไม่ได้ระบุ
-        if problem_type is None:
-            problem_type = detect_problem_type(query)
-
-        query_embedding = await generate_embedding(query)
-        if not query_embedding:
-            return [], None
-
-        result = supabase_client.rpc(
-            'match_knowledge',
-            {
-                'query_embedding': query_embedding,
-                'match_threshold': 0.20,
-                'match_count': top_k * 10  # ดึงมามากขึ้นเพื่อกรองตาม category
-            }
-        ).execute()
-
-        if not result.data:
-            if product_in_question:
-                return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล"
-            return [], None
-
-        logger.info(f"✓ Found {len(result.data)} knowledge docs via vector search (problem_type={problem_type})")
-
-        # กรองตาม category ตามประเภทปัญหา
-        filtered_results = result.data
-
-        # กำหนด category mapping
-        CATEGORY_MAPPING = {
-            'disease': ['fungicide'],
-            'insect': ['insecticide'],
-            'nutrient': ['fertilizer', 'growth_regulator', 'enhancer'],
-            'weed': ['herbicide']
-        }
-
-        if problem_type in CATEGORY_MAPPING:
-            target_categories = CATEGORY_MAPPING[problem_type]
-
-            filtered = []
-            for doc in result.data:
-                category = (doc.get('category') or '').lower()
-
-                # ตรวจสอบว่า category ตรงกับที่ต้องการ
-                if any(cat in category for cat in target_categories):
-                    filtered.append(doc)
-
-            if filtered:
-                filtered_results = filtered
-                logger.info(f"✓ Filtered to {len(filtered_results)} {problem_type}-related docs")
-            else:
-                # ถ้าไม่เจอ category ที่ตรง → ลองใช้ผลทั้งหมด
-                logger.info(f"⚠️ No {problem_type} category found, using all results")
-
-        # ถ้าถามเกี่ยวกับสินค้าเฉพาะ → กรองเฉพาะสินค้าที่ตรงกับชื่อ
-        if product_in_question:
-            validated_results = validate_knowledge_results(filtered_results, product_in_question, plant_in_question)
-
-            if validated_results:
-                logger.info(f"✓ Validated: {len(validated_results)} results match product '{product_in_question}'")
-                return validated_results[:top_k], None
-            else:
-                # ถ้าไม่เจอสินค้าที่ตรงกัน
-                if validate_product:
-                    # Strict mode: return error
-                    logger.warning(f"⚠️ ถามเกี่ยวกับ '{product_in_question}' แต่ไม่พบข้อมูลตรง")
-                    return [], f"ไม่พบข้อมูลเกี่ยวกับ \"{product_in_question}\" ในฐานข้อมูล กรุณาตรวจสอบชื่อสินค้าอีกครั้ง"
-                else:
-                    # Relaxed mode: return top results anyway
-                    logger.info(f"ℹ️ ไม่พบ '{product_in_question}' ตรงๆ ใช้ผลลัพธ์จาก vector search")
-                    return filtered_results[:top_k], None
-
-        # กรองตาม plant_type ถ้ามี
-        if plant_in_question:
-            plant_filtered = []
-            for doc in filtered_results:
-                plant_type = (doc.get('plant_type') or '').lower()
-                title = (doc.get('title') or '').lower()
-                if plant_in_question.lower() in plant_type or plant_in_question.lower() in title:
-                    plant_filtered.append(doc)
-
-            if plant_filtered:
-                filtered_results = plant_filtered
-                logger.info(f"✓ Filtered to {len(filtered_results)} docs for plant '{plant_in_question}'")
-
-        return filtered_results[:top_k], None
-
-    except Exception as e:
-        logger.error(f"Knowledge vector search failed: {e}")
-        return [], None
 
 
 async def vector_search_products(query: str, top_k: int = 5) -> List[Dict]:

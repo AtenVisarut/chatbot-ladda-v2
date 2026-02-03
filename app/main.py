@@ -5,7 +5,7 @@ import json
 import time
 import os
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -67,7 +67,7 @@ from app.services.memory import (
 )
 from app.services.disease_detection import smart_detect_disease
 from app.services.product_recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
-from app.services.response_generator import generate_final_response, generate_text_response, generate_diagnosis_with_stage_question
+from app.services.response_generator import generate_text_response
 # Q&A Chat Service - Vector Search from products, diseases, knowledge tables
 from app.services.chat import handle_natural_conversation
 from app.services.context_handler import (
@@ -81,12 +81,6 @@ from app.utils.line_helpers import (
     get_image_content_from_line,
     reply_line,
     push_line
-)
-from app.utils.question_templates import (
-    get_initial_questions_message,
-    get_analyzing_with_info_message,
-    get_skip_analysis_message,
-    should_skip_questions
 )
 from app.utils.rate_limiter import (
     check_user_rate_limit,
@@ -213,12 +207,6 @@ async def login(request: Request, login_data: LoginRequest):
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login")
-
-async def get_current_admin(request: Request):
-    user = request.session.get("user")
-    if not user or user != "admin":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return user
 
 # ============================================================================#
 # API Endpoints

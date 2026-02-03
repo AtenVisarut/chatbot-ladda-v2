@@ -10,7 +10,8 @@ Responsibilities:
 
 import logging
 import asyncio
-from typing import List, Dict, Optional, Any
+import re
+from typing import List, Dict
 
 from app.services.agents import (
     QueryAnalysis,
@@ -148,7 +149,7 @@ class RetrievalAgent:
         # Build retrieval tasks based on required sources
         for source in query_analysis.required_sources:
             for query in query_analysis.expanded_queries:
-                if source == "knowledge" or source == "products":
+                if source == "products":
                     tasks.append(self._search_products(query, top_k, query_analysis))
                 elif source == "diseases":
                     tasks.append(self._search_diseases(query, top_k))
@@ -399,7 +400,6 @@ class RetrievalAgent:
             logger.info(f"    Rerank response: {ranking_text}")
 
             # Parse ranking
-            import re
             numbers = re.findall(r'\d+', ranking_text)
             ranking_indices = [int(n) - 1 for n in numbers if 0 < int(n) <= len(docs)]
 

@@ -9,7 +9,6 @@ Responsibilities:
 """
 
 import logging
-from typing import Optional
 
 from app.services.agents import (
     QueryAnalysis,
@@ -24,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 LOW_CONFIDENCE_THRESHOLD = 0.5
-SHOW_CITATIONS = False  # Whether to show citation references in answer
 
 
 class ResponseGeneratorAgent:
@@ -70,10 +68,6 @@ class ResponseGeneratorAgent:
             # Add low confidence indicator if needed
             if grounding_result.confidence < LOW_CONFIDENCE_THRESHOLD:
                 answer = self._add_low_confidence_note(answer)
-
-            # Add citation references if enabled
-            if SHOW_CITATIONS and grounding_result.citations:
-                answer = self._add_citation_references(answer, grounding_result)
 
             return AgenticRAGResponse(
                 answer=answer,
@@ -165,28 +159,3 @@ class ResponseGeneratorAgent:
             answer += note
         return answer
 
-    def _add_citation_references(self, answer: str, grounding_result: GroundingResult) -> str:
-        """Add citation references at the end of answer"""
-        if not grounding_result.citations:
-            return answer
-
-        citation_lines = ["\n\nอ้างอิง:"]
-        for i, cit in enumerate(grounding_result.citations[:3], 1):
-            citation_lines.append(f"[{i}] {cit.doc_title}")
-
-        return answer + "\n".join(citation_lines)
-
-
-async def format_response_for_intent(
-    intent: IntentType,
-    grounded_answer: str,
-    entities: dict
-) -> str:
-    """
-    Format the grounded answer based on intent type
-
-    This ensures consistent formatting across different question types
-    """
-
-    # Already formatted by grounding agent, just return
-    return grounded_answer
