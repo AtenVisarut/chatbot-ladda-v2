@@ -245,13 +245,13 @@ class RetrievalAgent:
             if not embedding:
                 return []
 
-            # Determine category filter based on intent
+            # Determine category filter based on intent (use Thai names matching products table)
             category_filter = None
             intent_category_map = {
-                IntentType.DISEASE_TREATMENT: "fungicide",
-                IntentType.PEST_CONTROL: "insecticide",
-                IntentType.WEED_CONTROL: "herbicide",
-                IntentType.NUTRIENT_SUPPLEMENT: "fertilizer",
+                IntentType.DISEASE_TREATMENT: "ป้องกันโรค",
+                IntentType.PEST_CONTROL: "กำจัดแมลง",
+                IntentType.WEED_CONTROL: "กำจัดวัชพืช",
+                IntentType.NUTRIENT_SUPPLEMENT: "ปุ๋ยและสารบำรุง",
             }
             if query_analysis.intent in intent_category_map:
                 category_filter = intent_category_map[query_analysis.intent]
@@ -279,10 +279,10 @@ class RetrievalAgent:
                 if similarity < self.vector_threshold:
                     continue
 
-                # Filter by category if specified
+                # Filter by category if specified (field is product_category in DB)
                 if category_filter:
-                    item_category = (item.get('category') or '').lower()
-                    if category_filter.lower() not in item_category:
+                    item_category = (item.get('product_category') or item.get('category') or '')
+                    if category_filter not in item_category:
                         continue
 
                 doc = RetrievedDocument(
@@ -299,7 +299,7 @@ class RetrievalAgent:
                         'active_ingredient': item.get('active_ingredient'),
                         'target_pest': item.get('target_pest'),
                         'applicable_crops': item.get('applicable_crops'),
-                        'category': item.get('category'),
+                        'category': item.get('product_category') or item.get('category'),
                         'how_to_use': item.get('how_to_use'),
                         'usage_rate': item.get('usage_rate'),
                     }

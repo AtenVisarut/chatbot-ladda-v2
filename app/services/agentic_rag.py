@@ -106,7 +106,7 @@ class AgenticRAG:
             # =================================================================
             # Stage 1: Query Understanding
             # =================================================================
-            query_analysis = await self.query_agent.analyze(query)
+            query_analysis = await self.query_agent.analyze(query, context=context)
 
             # Handle greeting intent directly
             if query_analysis.intent == IntentType.GREETING:

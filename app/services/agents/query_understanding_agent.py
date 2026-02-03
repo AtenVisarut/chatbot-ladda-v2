@@ -27,9 +27,13 @@ class QueryUnderstandingAgent:
     def __init__(self, openai_client=None):
         self.openai_client = openai_client
 
-    async def analyze(self, query: str) -> QueryAnalysis:
+    async def analyze(self, query: str, context: str = "") -> QueryAnalysis:
         """
         Analyze user query to extract intent, entities, and generate expanded queries
+
+        Args:
+            query: Current user message
+            context: Conversation history for understanding follow-up messages
 
         Returns:
             QueryAnalysis with intent, entities, expanded_queries, required_sources
@@ -42,7 +46,7 @@ class QueryUnderstandingAgent:
                 return self._fallback_analysis(query)
 
             # Use LLM for semantic understanding
-            result = await self._llm_analyze(query)
+            result = await self._llm_analyze(query, context=context)
             logger.info(f"QueryUnderstandingAgent: intent={result.intent}, confidence={result.confidence:.2f}")
             return result
 
@@ -50,10 +54,18 @@ class QueryUnderstandingAgent:
             logger.error(f"QueryUnderstandingAgent error: {e}", exc_info=True)
             return self._fallback_analysis(query)
 
-    async def _llm_analyze(self, query: str) -> QueryAnalysis:
-        """Use LLM for semantic query analysis"""
+    async def _llm_analyze(self, query: str, context: str = "") -> QueryAnalysis:
+        """Use LLM for semantic query analysis with conversation context"""
 
-        prompt = f"""วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
+        context_section = ""
+        if context:
+            context_section = f"""บริบทการสนทนาก่อนหน้า:
+{context[:1000]}
+
+"""
+
+        prompt = f"""{context_section}วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
+ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ ให้ใช้บริบทการสนทนาก่อนหน้าเพื่อเข้าใจว่าผู้ใช้หมายถึงอะไร
 
 คำถาม: "{query}"
 
