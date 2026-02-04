@@ -172,6 +172,120 @@ class RetrievalAgent:
             logger.error(f"Fallback keyword search error: {e}")
             return []
 
+    async def _supplementary_priority_search(
+        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 5
+    ) -> List[RetrievedDocument]:
+        """Search specifically for Skyrocket/Expand products when main search missed them"""
+        if not self.supabase:
+            return []
+
+        # Check if we already have Skyrocket/Expand docs
+        existing_priority = [
+            d for d in existing_docs
+            if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')
+        ]
+        if existing_priority:
+            return []  # Already have priority products, no need
+
+        try:
+            # Build keywords from query analysis entities + expanded queries
+            keywords = []
+            entities = query_analysis.entities
+            for key in ['pest_name', 'disease_name', 'plant_type', 'symptom']:
+                val = entities.get(key)
+                if val:
+                    if isinstance(val, list):
+                        keywords.extend(val)
+                    else:
+                        keywords.append(str(val))
+
+            # Also extract from expanded queries (LLM-generated)
+            for eq in query_analysis.expanded_queries[:3]:
+                # Split by spaces (expanded queries usually have spaces)
+                parts = eq.split()
+                for p in parts:
+                    if len(p) >= 3 and p not in keywords:
+                        keywords.append(p)
+
+            # Deduplicate and limit
+            seen = set()
+            unique_kw = []
+            for kw in keywords:
+                if kw not in seen and len(kw) >= 2:
+                    seen.add(kw)
+                    unique_kw.append(kw)
+            keywords = unique_kw[:6]
+
+            if not keywords:
+                return []
+
+            logger.info(f"    Supplementary priority search keywords: {keywords}")
+
+            # Search Skyrocket/Expand products matching keywords in target_pest or selling_point
+            or_conditions = []
+            for kw in keywords:
+                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.append(f"selling_point.ilike.%{kw}%")
+                or_conditions.append(f"common_name_th.ilike.%{kw}%")
+                or_conditions.append(f"active_ingredient.ilike.%{kw}%")
+
+            or_filter = ",".join(or_conditions)
+
+            result = self.supabase.table('products') \
+                .select('*') \
+                .in_('strategy_group', ['Skyrocket', 'Expand']) \
+                .or_(or_filter) \
+                .limit(top_k) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            existing_ids = {d.id for d in existing_docs}
+            docs = []
+            for item in result.data:
+                doc_id = str(item.get('id', ''))
+                if doc_id in existing_ids:
+                    continue  # Skip duplicates
+
+                common_th = item.get('common_name_th') or ''
+                doc = RetrievedDocument(
+                    id=doc_id,
+                    title=item.get('product_name', ''),
+                    content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"ชื่อสารไทย: {common_th}\n"
+                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
+                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
+                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}\n"
+                           f"จุดเด่น: {(item.get('selling_point') or '')[:200]}",
+                    source="products",
+                    similarity_score=0.55,
+                    metadata={
+                        'product_name': item.get('product_name'),
+                        'common_name_th': common_th,
+                        'active_ingredient': item.get('active_ingredient'),
+                        'target_pest': item.get('target_pest'),
+                        'applicable_crops': item.get('applicable_crops'),
+                        'category': item.get('product_category') or item.get('category'),
+                        'how_to_use': item.get('how_to_use'),
+                        'usage_rate': item.get('usage_rate'),
+                        'usage_period': item.get('usage_period'),
+                        'selling_point': item.get('selling_point'),
+                        'action_characteristics': item.get('action_characteristics'),
+                        'absorption_method': item.get('absorption_method'),
+                        'strategy_group': item.get('strategy_group'),
+                    }
+                )
+                docs.append(doc)
+
+            if docs:
+                logger.info(f"    Supplementary priority search: {len(docs)} Skyrocket/Expand docs found")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Supplementary priority search error: {e}")
+            return []
+
     async def _enrich_strategy_group(self, docs: List[RetrievedDocument]):
         """Fetch strategy_group from DB for docs that don't have it (e.g. from RPC)"""
         if not self.supabase:
@@ -245,6 +359,15 @@ class RetrievalAgent:
             # Stage 1.8: Enrich strategy_group for docs missing it (RPC doesn't return it)
             await self._enrich_strategy_group(all_docs)
 
+            # Stage 1.9: Supplementary search for Skyrocket/Expand if none found
+            if not direct_lookup_ids:
+                priority_docs = await self._supplementary_priority_search(
+                    query_analysis, all_docs, top_k
+                )
+                if priority_docs:
+                    all_docs.extend(priority_docs)
+                    logger.info(f"  - Supplementary priority search added: {len(priority_docs)} docs")
+
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")
 
@@ -291,6 +414,17 @@ class RetrievalAgent:
                 # Re-sort by boosted rerank_score
                 reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
                 logger.info(f"  - Applied strategy group score boost")
+
+            # Stage 3.7: Promote best Skyrocket/Expand to position 1
+            if not direct_lookup_ids:
+                all_priority = [d for d in reranked_docs if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
+                if all_priority:
+                    best_priority = all_priority[0]
+                    current_pos = reranked_docs.index(best_priority)
+                    if current_pos > 0:
+                        reranked_docs.remove(best_priority)
+                        reranked_docs.insert(0, best_priority)
+                        logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy_group')}) from pos {current_pos + 1} to 1")
 
             # Stage 4: Filter by rerank threshold
             filtered_docs = [
