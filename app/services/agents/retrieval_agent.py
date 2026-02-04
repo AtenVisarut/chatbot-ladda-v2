@@ -84,6 +84,10 @@ class RetrievalAgent:
                         'how_to_use': item.get('how_to_use'),
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
+                        'selling_point': item.get('selling_point'),
+                        'label_color_band': item.get('label_color_band'),
+                        'action_characteristics': item.get('action_characteristics'),
+                        'absorption_method': item.get('absorption_method'),
                     }
                 )
                 docs.append(doc)
@@ -146,6 +150,10 @@ class RetrievalAgent:
                         'how_to_use': item.get('how_to_use'),
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
+                        'selling_point': item.get('selling_point'),
+                        'label_color_band': item.get('label_color_band'),
+                        'action_characteristics': item.get('action_characteristics'),
+                        'absorption_method': item.get('absorption_method'),
                     }
                 )
                 docs.append(doc)
@@ -363,6 +371,10 @@ class RetrievalAgent:
                         'how_to_use': item.get('how_to_use'),
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
+                        'selling_point': item.get('selling_point'),
+                        'label_color_band': item.get('label_color_band'),
+                        'action_characteristics': item.get('action_characteristics'),
+                        'absorption_method': item.get('absorption_method'),
                     }
                 )
                 docs.append(doc)

@@ -136,6 +136,14 @@ class ResponseGeneratorAgent:
                 part += f"  วิธีใช้: {str(meta['how_to_use'])[:200]}\n"
             if meta.get('usage_period'):
                 part += f"  ช่วงการใช้: {str(meta['usage_period'])[:150]}\n"
+            if meta.get('selling_point'):
+                part += f"  จุดเด่น: {str(meta['selling_point'])[:150]}\n"
+            if meta.get('action_characteristics'):
+                part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])[:150]}\n"
+            if meta.get('absorption_method'):
+                part += f"  การดูดซึม: {str(meta['absorption_method'])[:100]}\n"
+            if meta.get('label_color_band'):
+                part += f"  แถบสีข้างฉลาก: {meta['label_color_band']}\n"
             product_context_parts.append(part)
 
         product_context = "\n".join(product_context_parts)
