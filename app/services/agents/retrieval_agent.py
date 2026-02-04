@@ -254,7 +254,7 @@ class RetrievalAgent:
 
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
             if not direct_lookup_ids:  # Only when not asking about specific product
-                strategy_bonus = {'Skyrocket': 0.15, 'Expand': 0.10, 'Natural': 0.0, 'Standard': -0.10}
+                strategy_bonus = {'Skyrocket': 0.15, 'Expand': 0.10, 'Natural': 0.0, 'Standard': -0.05}
                 for doc in reranked_docs:
                     sg = doc.metadata.get('strategy_group', '')
                     bonus = strategy_bonus.get(sg, 0.0)
