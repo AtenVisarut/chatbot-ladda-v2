@@ -144,8 +144,6 @@ class ResponseGeneratorAgent:
                 part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])[:150]}\n"
             if meta.get('absorption_method'):
                 part += f"  การดูดซึม: {str(meta['absorption_method'])[:100]}\n"
-            if meta.get('label_color_band'):
-                part += f"  แถบสีข้างฉลาก: {meta['label_color_band']}\n"
             product_context_parts.append(part)
 
         product_context = "\n".join(product_context_parts)
