@@ -118,9 +118,18 @@ class ResponseGeneratorAgent:
         if not self.openai_client:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
+        # Filter: remove Standard products if Skyrocket/Expand alternatives exist
+        docs_to_use = retrieval_result.documents[:5]
+        priority_docs = [d for d in docs_to_use if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
+        if priority_docs:
+            # Keep Skyrocket/Expand + Natural, exclude Standard
+            docs_to_use = [d for d in docs_to_use if d.metadata.get('strategy_group') != 'Standard']
+            if not docs_to_use:
+                docs_to_use = retrieval_result.documents[:5]  # fallback
+
         # Build product data context from retrieval results
         product_context_parts = []
-        for i, doc in enumerate(retrieval_result.documents[:5], 1):
+        for i, doc in enumerate(docs_to_use, 1):
             meta = doc.metadata
             part = f"[สินค้า {i}] {meta.get('product_name', doc.title)}"
             if meta.get('active_ingredient'):

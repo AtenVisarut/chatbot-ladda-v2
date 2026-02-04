@@ -172,6 +172,31 @@ class RetrievalAgent:
             logger.error(f"Fallback keyword search error: {e}")
             return []
 
+    async def _enrich_strategy_group(self, docs: List[RetrievedDocument]):
+        """Fetch strategy_group from DB for docs that don't have it (e.g. from RPC)"""
+        if not self.supabase:
+            return
+
+        # Find docs missing strategy_group
+        missing_ids = [doc.id for doc in docs if not doc.metadata.get('strategy_group') and doc.id]
+        if not missing_ids:
+            return
+
+        try:
+            result = self.supabase.table('products') \
+                .select('id, strategy_group') \
+                .in_('id', [int(i) for i in missing_ids if i.isdigit()]) \
+                .execute()
+
+            if result.data:
+                sg_map = {str(r['id']): r['strategy_group'] for r in result.data if r.get('strategy_group')}
+                for doc in docs:
+                    if doc.id in sg_map and not doc.metadata.get('strategy_group'):
+                        doc.metadata['strategy_group'] = sg_map[doc.id]
+                logger.info(f"  - Enriched strategy_group for {len(sg_map)} docs")
+        except Exception as e:
+            logger.warning(f"Strategy group enrichment failed: {e}")
+
     async def retrieve(
         self,
         query_analysis: QueryAnalysis,
@@ -216,6 +241,9 @@ class RetrievalAgent:
                 all_docs.extend(fallback_docs)
                 if fallback_docs:
                     logger.info(f"  - Fallback keyword search found: {len(fallback_docs)} docs")
+
+            # Stage 1.8: Enrich strategy_group for docs missing it (RPC doesn't return it)
+            await self._enrich_strategy_group(all_docs)
 
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")
