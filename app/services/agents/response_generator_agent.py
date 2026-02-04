@@ -126,6 +126,8 @@ class ResponseGeneratorAgent:
             if meta.get('active_ingredient'):
                 part += f" (สารสำคัญ: {meta['active_ingredient']})"
             part += "\n"
+            if meta.get('common_name_th'):
+                part += f"  ชื่อสารไทย: {meta['common_name_th']}\n"
             if meta.get('category'):
                 part += f"  ประเภท: {meta['category']}\n"
             if meta.get('target_pest'):

@@ -65,10 +65,12 @@ class RetrievalAgent:
 
             docs = []
             for item in result.data:
+                common_th = item.get('common_name_th') or ''
                 doc = RetrievedDocument(
                     id=str(item.get('id', '')),
                     title=item.get('product_name', ''),
                     content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"ชื่อสารไทย: {common_th}\n"
                            f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
                            f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
                            f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
@@ -77,6 +79,7 @@ class RetrievalAgent:
                     rerank_score=1.0,
                     metadata={
                         'product_name': item.get('product_name'),
+                        'common_name_th': common_th,
                         'active_ingredient': item.get('active_ingredient'),
                         'target_pest': item.get('target_pest'),
                         'applicable_crops': item.get('applicable_crops'),
@@ -85,7 +88,6 @@ class RetrievalAgent:
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
                         'selling_point': item.get('selling_point'),
-                        'label_color_band': item.get('label_color_band'),
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                     }
@@ -118,6 +120,7 @@ class RetrievalAgent:
                 or_conditions.append(f"product_name.ilike.%{kw}%")
                 or_conditions.append(f"target_pest.ilike.%{kw}%")
                 or_conditions.append(f"active_ingredient.ilike.%{kw}%")
+                or_conditions.append(f"common_name_th.ilike.%{kw}%")
 
             or_filter = ",".join(or_conditions)
 
@@ -132,10 +135,12 @@ class RetrievalAgent:
 
             docs = []
             for item in result.data:
+                common_th = item.get('common_name_th') or ''
                 doc = RetrievedDocument(
                     id=str(item.get('id', '')),
                     title=item.get('product_name', ''),
                     content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"ชื่อสารไทย: {common_th}\n"
                            f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
                            f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
                            f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
@@ -143,6 +148,7 @@ class RetrievalAgent:
                     similarity_score=0.5,
                     metadata={
                         'product_name': item.get('product_name'),
+                        'common_name_th': common_th,
                         'active_ingredient': item.get('active_ingredient'),
                         'target_pest': item.get('target_pest'),
                         'applicable_crops': item.get('applicable_crops'),
@@ -151,7 +157,6 @@ class RetrievalAgent:
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
                         'selling_point': item.get('selling_point'),
-                        'label_color_band': item.get('label_color_band'),
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                     }
@@ -359,10 +364,12 @@ class RetrievalAgent:
 
                 # Category filter removed - let reranker handle relevance instead
 
+                common_th = item.get('common_name_th') or ''
                 doc = RetrievedDocument(
                     id=str(item.get('id', '')),
                     title=item.get('product_name', ''),
                     content=f"สินค้า: {item.get('product_name', '')}\n"
+                           f"ชื่อสารไทย: {common_th}\n"
                            f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
                            f"ใช้กำจัด: {item.get('target_pest', '')[:200] if item.get('target_pest') else ''}\n"
                            f"พืชที่ใช้ได้: {item.get('applicable_crops', '')[:200] if item.get('applicable_crops') else ''}",
@@ -370,6 +377,7 @@ class RetrievalAgent:
                     similarity_score=similarity,
                     metadata={
                         'product_name': item.get('product_name'),
+                        'common_name_th': common_th,
                         'active_ingredient': item.get('active_ingredient'),
                         'target_pest': item.get('target_pest'),
                         'applicable_crops': item.get('applicable_crops'),
@@ -378,7 +386,6 @@ class RetrievalAgent:
                         'usage_rate': item.get('usage_rate'),
                         'usage_period': item.get('usage_period'),
                         'selling_point': item.get('selling_point'),
-                        'label_color_band': item.get('label_color_band'),
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                     }
