@@ -510,8 +510,23 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     except Exception as track_err:
                         logger.warning(f"Analytics tracking failed: {track_err}")
 
-                    # Add assistant response to memory
-                    await add_to_memory(user_id, "assistant", answer)
+                    # Add assistant response to memory with product metadata
+                    memory_metadata = {}
+                    detected_products = []
+                    try:
+                        for pname, aliases in ICP_PRODUCT_NAMES.items():
+                            for alias in aliases:
+                                if alias.lower() in answer.lower():
+                                    detected_products.append({"product_name": pname})
+                                    break
+                        if detected_products:
+                            memory_metadata = {
+                                "type": "product_recommendation",
+                                "products": detected_products[:3]
+                            }
+                    except Exception:
+                        pass
+                    await add_to_memory(user_id, "assistant", answer, metadata=memory_metadata)
                     return answer
             else:
                 logger.warning("AgenticRAG not available")
