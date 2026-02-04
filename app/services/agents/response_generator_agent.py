@@ -146,6 +146,8 @@ class ResponseGeneratorAgent:
                 part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])[:150]}\n"
             if meta.get('absorption_method'):
                 part += f"  การดูดซึม: {str(meta['absorption_method'])[:100]}\n"
+            if meta.get('strategy_group'):
+                part += f"  Strategy Group: {meta['strategy_group']}\n"
             product_context_parts.append(part)
 
         product_context = "\n".join(product_context_parts)
