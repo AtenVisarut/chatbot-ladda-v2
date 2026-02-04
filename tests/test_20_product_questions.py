@@ -181,7 +181,7 @@ TEST_QUESTIONS = [
 
 async def run_single_test(question_data: dict) -> dict:
     """Run a single test question and return result"""
-    from app.services.chat import answer_qa_with_vector_search
+    from app.services.agentic_rag import get_agentic_rag
 
     q_id = question_data["id"]
     question = question_data["question"]
@@ -195,7 +195,9 @@ async def run_single_test(question_data: dict) -> dict:
     print(f"{'─'*60}")
 
     try:
-        answer = await answer_qa_with_vector_search(question)
+        rag = get_agentic_rag()
+        response = await rag.process(question, context="", user_id="test-20q")
+        answer = response.answer or ""
 
         # Check results
         has_expected = expected.lower() in answer.lower() if expected else True

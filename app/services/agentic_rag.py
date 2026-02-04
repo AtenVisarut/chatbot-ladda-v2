@@ -140,7 +140,10 @@ class AgenticRAG:
                 return response
 
             # Handle unknown intent with low confidence
-            if query_analysis.intent == IntentType.UNKNOWN and query_analysis.confidence < 0.3:
+            # But if query contains product-related keywords, still try retrieval
+            product_keywords = ["ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "กำจัด", "ฉีด", "พ่น", "ผสม", "อัตรา"]
+            has_product_keywords = any(kw in query for kw in product_keywords)
+            if query_analysis.intent == IntentType.UNKNOWN and query_analysis.confidence < 0.3 and not has_product_keywords:
                 logger.info("Low confidence unknown intent, routing to general chat")
                 return AgenticRAGResponse(
                     answer=None,  # Signal to use general chat
@@ -152,6 +155,9 @@ class AgenticRAG:
                     query_analysis=query_analysis,
                     processing_time_ms=(time.time() - start_time) * 1000
                 )
+            elif query_analysis.intent == IntentType.UNKNOWN and has_product_keywords:
+                logger.info("Unknown intent but has product keywords, forcing retrieval")
+                query_analysis.required_sources = ["products"]
 
             # =================================================================
             # Stage 2: Retrieval

@@ -136,7 +136,9 @@ required_sources ที่เป็นไปได้:
 - products: ตารางสินค้า (ข้อมูลสินค้า วิธีใช้ อัตราผสม สารสำคัญ)
 - diseases: ข้อมูลโรคพืช
 
-กฎสำคัญสำหรับ expanded_queries:
+กฎสำคัญ:
+- ถ้าคำถามมีคำว่า "ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "แก้ยังไง", "ฉีดอะไร", "พ่นอะไร" → ต้องเป็น product-related intent (ห้ามเป็น unknown)
+- ถ้าคำถามพูดถึงอาการพืช/สภาพพืช (เช่น ใบเพสลาด, ใบไหม้, ใบเหลือง, ดอกร่วง, ผลร่วง, รากเน่า) → จัดเป็น disease_treatment หรือ nutrient_supplement
 - ห้ามสร้าง query ภาษาอังกฤษ (ฐานข้อมูลเป็นภาษาไทย)
 - สร้างคำค้นหาภาษาไทยเท่านั้น
 - รวมชื่อสินค้า + พืช + ปัญหา ในรูปแบบต่างๆ
@@ -149,6 +151,8 @@ required_sources ที่เป็นไปได้:
 5. "แมลงในข้าว กำจัดยังไง" → intent=pest_control, plant_type="ข้าว", expanded_queries=["กำจัดแมลง ข้าว", "ยาฆ่าแมลง ข้าว", "แมลงศัตรูข้าว"]
 6. "ข้าวเป็นราน้ำค้าง" → intent=disease_treatment, plant_type="ข้าว", disease_name="ราน้ำค้าง", expanded_queries=["ราน้ำค้าง ข้าว", "ป้องกันราน้ำค้าง", "ราน้ำค้าง"]
 7. "โมเดิน 50 อัตราผสมเท่าไหร่" → intent=usage_instruction, product_name="โมเดิน", expanded_queries=["โมเดิน อัตราผสม", "โมเดิน 50 วิธีใช้", "โมเดิน"]
+8. "ใบเพสลาด ใช้สารอะไรรักษา" → intent=nutrient_supplement, plant_type="ทุเรียน", expanded_queries=["ใบเพสลาด ทุเรียน", "สารชะลอการเจริญเติบโต ทุเรียน", "เพสลาด"]
+9. "ทุเรียนใบเหลือง ใช้ยาอะไร" → intent=disease_treatment, plant_type="ทุเรียน", expanded_queries=["ทุเรียน ใบเหลือง", "โรคทุเรียน", "ยารักษาทุเรียน"]
 """
 
         response = await self.openai_client.chat.completions.create(
