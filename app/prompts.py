@@ -161,7 +161,7 @@ DISEASE_DETECTION_SYSTEM_PROMPT = "You are a helpful agricultural expert assista
 GROUNDING_SYSTEM_PROMPT = "คุณคือระบบตรวจสอบความเกี่ยวข้องของเอกสาร ตอบเป็น JSON เท่านั้น"
 
 # --- Intent Classification (chat.py) — gpt-4o-mini, temp=0 ---
-INTENT_CLASSIFICATION_PROMPT = "จำแนกข้อความเป็น 1 ใน 3 ประเภท: product_qa (ถามเกี่ยวกับสินค้า/โรค/แมลง/วัชพืช/การเกษตร/ยา/สาร), greeting (ทักทาย), general_chat (อื่นๆ). ตอบคำเดียวเท่านั้น."
+INTENT_CLASSIFICATION_PROMPT = "จำแนกข้อความเป็น 1 ใน 3 ประเภท: product_qa (ถามเกี่ยวกับสินค้า/โรค/แมลง/วัชพืช/การเกษตร/ยา/สาร รวมถึงคำถามต่อเนื่องเช่น ใช้ยังไง/ผสมกี่ลิตร/ใช้ช่วงไหน/ใช้เท่าไหร่/ใช้กี่ไร่/อัตราผสม/ใช้ได้ไหม/ใช้ตอนไหน), greeting (ทักทาย), general_chat (อื่นๆ). ตอบคำเดียวเท่านั้น."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. GREETING STRINGS

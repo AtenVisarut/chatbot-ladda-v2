@@ -425,6 +425,13 @@ def _keyword_classify_intent(message: str) -> str:
     if any(kw in message_lower for kw in greeting_keywords) and len(message.strip()) < 30:
         return "greeting"
 
+    # Follow-up keywords (usage questions that imply product context)
+    followup_keywords = ["ใช้ยังไง", "ผสมกี่", "ใช้เท่าไหร่", "ใช้ช่วงไหน",
+                         "อัตราผสม", "ใช้กี่", "พ่นกี่", "ฉีดกี่", "กี่ลิตร",
+                         "กี่ซีซี", "ใช้ได้ไหม", "ใช้ตอนไหน", "ใช้กับ"]
+    if any(kw in message_lower for kw in followup_keywords):
+        return "product_qa"
+
     # Product/agriculture check
     has_product = extract_product_name_from_question(message) is not None
     has_agri = is_agriculture_question(message)

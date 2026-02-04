@@ -226,7 +226,7 @@ class ResponseGeneratorAgent:
         context_section = ""
         if context:
             context_section = f"""บริบทการสนทนาก่อนหน้า:
-{context[:500]}
+{context[:1500]}
 
 (ถ้าผู้ใช้ถามต่อจากบทสนทนาก่อนหน้า ให้อ้างอิงสินค้าที่พูดถึงก่อนหน้านี้)
 

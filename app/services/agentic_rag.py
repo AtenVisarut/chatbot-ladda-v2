@@ -111,10 +111,14 @@ class AgenticRAG:
                 from app.services.chat import extract_product_name_from_question, detect_problem_type
                 detected_product = extract_product_name_from_question(query)
                 # If no product in current query, try extracting from context (follow-up questions)
+                # Search line-by-line from bottom (most recent first) to find the latest product
                 if not detected_product and context:
-                    detected_product = extract_product_name_from_question(context)
-                    if detected_product:
-                        logger.info(f"  - Product from context: {detected_product}")
+                    context_lines = context.strip().split('\n')
+                    for line in reversed(context_lines):
+                        detected_product = extract_product_name_from_question(line)
+                        if detected_product:
+                            logger.info(f"  - Product from context (most recent): {detected_product}")
+                            break
                 if detected_product:
                     hints['product_name'] = detected_product
                 detected_problem = detect_problem_type(query)

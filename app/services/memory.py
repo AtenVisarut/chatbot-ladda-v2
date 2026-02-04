@@ -359,6 +359,23 @@ async def get_conversation_summary(user_id: str) -> dict:
                     if "วิธีใช้สินค้า" not in topics:
                         topics.append("วิธีใช้สินค้า")
 
+        # Fallback: if no products found via metadata, scan assistant message text
+        if not products_mentioned:
+            try:
+                from app.services.chat import ICP_PRODUCT_NAMES
+                for msg in result.data:
+                    if msg["role"] != "assistant":
+                        continue
+                    content_lower = msg.get("content", "").lower()
+                    for product_name, aliases in ICP_PRODUCT_NAMES.items():
+                        for alias in aliases:
+                            if alias.lower() in content_lower and product_name not in products_mentioned:
+                                products_mentioned.append(product_name)
+                    if products_mentioned:
+                        break  # got products from most recent assistant message
+            except ImportError:
+                logger.warning("Could not import ICP_PRODUCT_NAMES for fallback product extraction")
+
         summary = {
             "topics": topics[:5],
             "products_mentioned": products_mentioned[:10],
