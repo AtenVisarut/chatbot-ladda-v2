@@ -144,14 +144,13 @@ class ResponseGeneratorAgent:
         if not self.openai_client:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
-        # Filter: remove Standard products if Skyrocket/Expand alternatives exist
+        # Keep all products (including Standard) — just sort by strategy_group priority
         docs_to_use = retrieval_result.documents[:5]
-        priority_docs = [d for d in docs_to_use if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
-        if priority_docs:
-            # Keep Skyrocket/Expand + Natural, exclude Standard
-            docs_to_use = [d for d in docs_to_use if d.metadata.get('strategy_group') != 'Standard']
-            if not docs_to_use:
-                docs_to_use = retrieval_result.documents[:5]  # fallback
+
+        # Sort by strategy_group priority: Skyrocket > Expand > Natural > Standard
+        # ensures Skyrocket/Expand appear first in product context sent to LLM
+        _STRATEGY_ORDER = {'Skyrocket': 0, 'Expand': 1, 'Natural': 2, 'Standard': 3}
+        docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy_group', ''), 3))
 
         # Filter: when a crop-specific product exists, remove non-specific variants of same family
         # e.g., if พรีดิคท์ 25 is for ทุเรียน specifically, remove พรีดิคท์ 10% and 15

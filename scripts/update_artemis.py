@@ -2,7 +2,13 @@
 Update/Upsert อาร์เทมีส (Artemis) product in Supabase
 """
 import os
+import sys
+import io
 import json
+
+# Fix Windows console encoding
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from openai import OpenAI
@@ -30,23 +36,52 @@ def update_artemis():
         "product_name": "อาร์เทมีส",
         "active_ingredient": "ไดฟีโนโคนาโซล + อะซ๊อคซีสโตรบิน (DIFENOCONAZOLE + AZOXYSTROBIN 12.5%+20% W/V SC)",
         "product_category": "ป้องกันโรค",
-        "target_pest": "โรคใบจุดสีน้ำตาล โรคใบขีดสีน้ำตาล โรคเมล็ดด่าง ในนาข้าว",
-        "applicable_crops": "นาข้าว ไม้ผล",
-        "how_to_use": "ผสมน้ำตามอัตราที่แนะนำ แล้วทำการฉีดพ่นที่ต้น ให้ทั่วบริเวณทรงพุ่ม",
-        "usage_rate": "ในไม้ผล(ทุเรียน) ใช้ 200 ซีซีต่อ 200 ลิตร ในนาข้าว ใช้ 50 ซีซีต่อไร่",
-        "usage_period": "",
+        "target_pest": (
+            "(นาข้าว) โรคกาบใบแห้ง ใบขีดสีน้ำตาล เมล็ดด่าง เน่าคอรวง\n"
+            "(ข้าวโพด) โรคใบไหม้แผลใหญ่\n"
+            "(หอม กระเทียม) โรคหอมเลื้อย ใบจุดสีม่วง\n"
+            "(ทุเรียน) แอนแทรคโนส ใบจุด ราสนิม ผลเน่า ใบติด ราสีชมพู"
+        ),
+        "applicable_crops": "นาข้าว ทุเรียน ข้าวโพด หอม กระเทียม ผัก ผลไม้",
+        "how_to_use": (
+            "(นาข้าว) ใช้ 50 ซีซี/ไร่ พ่นช่วงข้าวแตกกอ-ออกรวง ใช้ได้กับโดรน พ่นแม่นยำทั่วแปลง\n"
+            "(ทุเรียน) ใช้ 10 ซีซี/น้ำ 20 ลิตร ฉีดพ่นทุก 7-10 วัน หรือตามการระบาดของโรค ฉีดพ่นให้ทั่วทรงพุ่ม"
+        ),
+        "usage_rate": (
+            "(นาข้าว) 50 ซีซี/ไร่ (1 ขวด ใช้ได้ถึง 20 ไร่)\n"
+            "(ทุเรียน) 10 ซีซี/น้ำ 20 ลิตร ฉีดพ่นทุก 7-10 วัน หรือตามการระบาดของโรค"
+        ),
+        "usage_period": (
+            "(นาข้าว) พ่นช่วงข้าวแตกกอ-ออกรวง ในข้าวระยะตั้งท้อง เพื่อป้องกันโรคก่อนที่จะระบาด\n"
+            "(ทุเรียน) ฉีดพ่นทุก 7-10 วัน หรือตามการระบาดของโรค"
+        ),
+        "selling_point": (
+            "สารป้องกันกำจัดเชื้อราออกฤทธิ์ดูดซึม ผสม 2 พลังบวก (ไดฟีโนโคนาโซล+อะซอกซีสโตรบิน) | "
+            "ป้องกันและรักษากว้างขวาง | ปลอดภัยต่อดอกและผลอ่อน | "
+            "ใช้ได้ทั้งในนาข้าว ข้าวโพด หอม และไม้ผล เช่น ทุเรียน | "
+            "แก้ปัญหาโรคใบติด ราสีชมพู และแอนแทรคโนสได้อย่างมีประสิทธิภาพสูง | "
+            "ดูดซึมเร็ว ออกฤทธิ์ไว | ปกป้องได้ทุกระยะการเติบโต | "
+            "ใช้ได้กับโดรน พ่นแม่นยำทั่วแปลง | "
+            "ใช้แล้วใบเขียว ผิวนวล ผลสะอาด | "
+            "สูตรเย็นปลอดภัยต่อดอกและผลอ่อน"
+        ),
+        "action_characteristics": "ออกฤทธิ์แบบดูดซึม (Systemic) ดูดซึมเร็ว ออกฤทธิ์ไว ป้องกันกำจัดเชื้อราได้กว้าง",
+        "package_size": "1 ลิตร",
         "link_product": "http://system.icpladda.com/CDN//difeno_azoxystrobin_%E0%B8%AD%E0%B8%B2%E0%B8%A3%E0%B9%8C%E0%B9%80%E0%B8%97%E0%B8%A1%E0%B8%B4%E0%B8%AA_07042025_213519.pdf",
         "pathogen_type": "เชื้อรา",
     }
 
-    # Generate embedding
+    # Generate embedding — ต้องครอบคลุมทุกพืช+โรค เพื่อให้ semantic search หาเจอ
     embedding_text = (
         f"ชื่อสินค้า: อาร์เทมีส | "
-        f"ประเภท: ยากำจัดเชื้อรา โรคพืช | "
-        f"สารสำคัญ: ไดฟีโนโคนาโซล + อะซ๊อคซีสโตรบิน | "
-        f"ศัตรูพืชที่กำจัดได้: โรคใบจุดสีน้ำตาล โรคใบขีดสีน้ำตาล โรคเมล็ดด่าง ในนาข้าว | "
-        f"ใช้ได้กับพืช: นาข้าว ไม้ผล ทุเรียน | "
-        f"กลุ่มสาร: Fungicide"
+        f"ประเภท: ยาป้องกันกำจัดเชื้อรา โรคพืช Fungicide | "
+        f"สารสำคัญ: ไดฟีโนโคนาโซล + อะซ๊อคซีสโตรบิน Difenoconazole Azoxystrobin | "
+        f"โรคในนาข้าว: กาบใบแห้ง ใบขีดสีน้ำตาล เมล็ดด่าง เน่าคอรวง | "
+        f"โรคในข้าวโพด: ใบไหม้แผลใหญ่ | "
+        f"โรคในหอม กระเทียม: หอมเลื้อย ใบจุดสีม่วง | "
+        f"โรคในทุเรียน: แอนแทรคโนส ใบจุด ราสนิม ผลเน่า ใบติด ราสีชมพู | "
+        f"ใช้ได้กับพืช: นาข้าว ทุเรียน ข้าวโพด หอม กระเทียม ผัก ผลไม้ | "
+        f"จุดเด่น: ดูดซึมเร็ว ปกป้องยาวนาน สูตรเย็นปลอดภัยต่อดอกและผลอ่อน ใช้ได้กับโดรน"
     )
 
     print("Generating embedding...")
@@ -74,15 +109,20 @@ def update_artemis():
         print(f"Inserted successfully! id={result.data[0]['id']}")
 
     # Verify
-    verify = supabase.table("products").select("id, product_name, active_ingredient, target_pest, usage_rate").eq("product_name", "อาร์เทมีส").execute()
+    verify = supabase.table("products").select(
+        "id, product_name, active_ingredient, target_pest, applicable_crops, "
+        "usage_rate, usage_period, how_to_use, selling_point, "
+        "action_characteristics, package_size, pathogen_type"
+    ).eq("product_name", "อาร์เทมีส").execute()
     if verify.data:
         row = verify.data[0]
         print(f"\nVerification:")
-        print(f"  id: {row['id']}")
-        print(f"  product_name: {row['product_name']}")
-        print(f"  active_ingredient: {row['active_ingredient']}")
-        print(f"  target_pest: {row['target_pest']}")
-        print(f"  usage_rate: {row['usage_rate']}")
+        for key in ["id", "product_name", "active_ingredient", "target_pest",
+                     "applicable_crops", "usage_rate", "usage_period",
+                     "how_to_use", "selling_point", "action_characteristics",
+                     "package_size", "pathogen_type"]:
+            val = row.get(key, "N/A")
+            print(f"  {key}: {val}")
 
 
 if __name__ == "__main__":
