@@ -1,0 +1,194 @@
+================================================================================
+CHANGELOG — 2026-02-04
+Prompt Architecture Refactoring: รวม Prompt เข้า 1 ไฟล์กลาง (app/prompts.py)
+================================================================================
+
+สรุป:
+  ย้าย system prompts, greetings, error messages, CTA strings ที่กระจายอยู่ใน
+  6 ไฟล์ มารวมไว้ที่ app/prompts.py ไฟล์เดียว เพื่อลด duplication และให้
+  ปรับจูน prompt ได้ง่ายขึ้น
+
+  ** ไม่มีการเปลี่ยน behavior / model / temperature / flow ใดๆ **
+
+================================================================================
+1. ไฟล์ใหม่
+================================================================================
+
+  app/prompts.py
+    - รวม prompt + string constants ทั้งหมดไว้ 6 sections:
+
+    Section 1: BASE PERSONA
+      PERSONA_BASE          — บุคลิก "น้องลัดดา" (ใช้ร่วมกันทุก context)
+      PERSONA_RULES         — ข้อห้าม + กฎเหล็ก (ใช้ร่วมกันทุก context)
+
+    Section 2: CONTEXT-SPECIFIC PROMPTS
+      GENERAL_CHAT_PROMPT              — General chat (gpt-4o, temp=0.7)
+      PRODUCT_QA_PROMPT                — Product Q&A (gpt-4o-mini, temp=0.1)
+      KNOWLEDGE_RAG_SYSTEM_PROMPT      — Knowledge RAG system msg (gpt-4o-mini)
+      KNOWLEDGE_RAG_USER_TEMPLATE      — Knowledge RAG user msg template
+      GENERAL_KNOWLEDGE_SYSTEM_PROMPT  — General knowledge system msg (gpt-4o-mini)
+      GENERAL_KNOWLEDGE_USER_TEMPLATE  — General knowledge user msg template
+      DISEASE_DETECTION_SYSTEM_PROMPT  — Disease detection (gpt-4o, temp=0.7)
+      GROUNDING_SYSTEM_PROMPT          — Document verification (gpt-4o-mini, temp=0)
+      INTENT_CLASSIFICATION_PROMPT     — Intent classifier (gpt-4o-mini, temp=0)
+
+    Section 3: GREETINGS
+      GREETINGS             — list ข้อความทักทาย 3 รายการ (เดิมซ้ำ 2 ที่)
+
+    Section 4: ERROR STRINGS
+      ERROR_GENERIC              — "น้องลัดดามึนหัวนิดหน่อย..."
+      ERROR_PROCESSING           — "เกิดข้อผิดพลาดในการประมวลผล..."
+      ERROR_NO_DATA              — "ไม่พบข้อมูลในฐานข้อมูล"
+      ERROR_DB_UNAVAILABLE       — "ระบบฐานข้อมูลไม่พร้อมใช้งาน"
+      ERROR_AI_UNAVAILABLE       — "ระบบ AI ไม่พร้อมใช้งาน"
+      ERROR_NO_RELEVANT_DOCS     — "ไม่พบข้อมูลที่เกี่ยวข้อง"
+      ERROR_GROUNDING_FAILED     — "เกิดข้อผิดพลาดในการประมวลผล"
+      ERROR_QUESTION_PROCESSING  — "เกิดข้อผิดพลาดในการประมวลผลคำถาม..."
+
+    Section 5: CTA & TEMPLATES
+      PRODUCT_CTA            — "ถ้าบอกขนาดถังพ่น..." (เดิมซ้ำ 2 ที่)
+      LOW_CONFIDENCE_NOTE    — หมายเหตุคำตอบอาจไม่ครบถ้วน
+      get_no_data_response() — function สร้าง no-data response ตาม intent
+                               รองรับ: product_inquiry, disease_treatment,
+                               pest_control, weed_control, usage_instruction, other
+
+    Section 6: WELCOME MESSAGE
+      WELCOME_MESSAGE        — ข้อความต้อนรับ user ใหม่
+
+  tests/test_prompts_refactor.py
+    - 12 test cases ตรวจสอบ:
+      greetings, welcome consistency, product CTA, persona+rules in prompt,
+      strict rules in product QA, JSON in grounding, template placeholders,
+      error messages, no-data response ทุก intent, entity substitution,
+      persona reuse, module imports
+
+================================================================================
+2. ไฟล์ที่แก้ไข
+================================================================================
+
+  app/services/chat.py
+    - ลบ: inline system prompt (36 บรรทัด)
+    - ลบ: inline greetings list (3 รายการ)
+    - ลบ: inline error message "ขออภัยค่ะ น้องลัดดามึนหัวนิดหน่อย..."
+    - ลบ: inline intent classification prompt
+    - เพิ่ม: import GENERAL_CHAT_PROMPT, GREETINGS, ERROR_GENERIC,
+             INTENT_CLASSIFICATION_PROMPT จาก app.prompts
+
+  app/services/agents/response_generator_agent.py
+    - ลบ: inline system prompt (17 บรรทัด)
+    - ลบ: inline greetings list (3 รายการ, ซ้ำกับ chat.py)
+    - ลบ: inline no-data response templates (6 กรณี ~40 บรรทัด)
+    - ลบ: inline CTA string "ถ้าบอกขนาดถังพ่น..." (ซ้ำกับ grounding_agent.py)
+    - ลบ: inline error messages 2 จุด
+    - ลบ: inline low confidence note
+    - เพิ่ม: import PRODUCT_QA_PROMPT, GREETINGS, PRODUCT_CTA,
+             ERROR_PROCESSING, ERROR_NO_DATA, LOW_CONFIDENCE_NOTE,
+             get_no_data_response จาก app.prompts
+    - แก้: _generate_no_data_response() เรียก get_no_data_response() แทน
+
+  app/services/agents/grounding_agent.py
+    - ลบ: inline system prompt "คุณคือระบบตรวจสอบความเกี่ยวข้องของเอกสาร..."
+    - ลบ: inline CTA string "ถ้าบอกขนาดถังพ่น..." (ซ้ำกับ response_generator_agent.py)
+    - ลบ: inline error messages 3 จุด
+    - เพิ่ม: import GROUNDING_SYSTEM_PROMPT, PRODUCT_CTA,
+             ERROR_NO_RELEVANT_DOCS, ERROR_GROUNDING_FAILED,
+             ERROR_NO_DATA จาก app.prompts
+
+  app/services/knowledge_base.py
+    - ลบ: inline general knowledge system prompt + user template (15 บรรทัด)
+    - ลบ: inline knowledge RAG system prompt + user template (22 บรรทัด)
+    - ลบ: inline error messages 4 จุด (DB, AI, processing)
+    - เพิ่ม: import KNOWLEDGE_RAG_SYSTEM_PROMPT, KNOWLEDGE_RAG_USER_TEMPLATE,
+             GENERAL_KNOWLEDGE_SYSTEM_PROMPT, GENERAL_KNOWLEDGE_USER_TEMPLATE,
+             ERROR_DB_UNAVAILABLE, ERROR_AI_UNAVAILABLE,
+             ERROR_QUESTION_PROCESSING จาก app.prompts
+
+  app/services/response_generator.py
+    - ลบ: inline system prompt "You are a helpful agricultural expert assistant."
+    - เพิ่ม: import DISEASE_DETECTION_SYSTEM_PROMPT จาก app.prompts
+
+  app/utils/text_messages.py
+    - ลบ: inline welcome message (8 บรรทัด)
+    - เพิ่ม: import WELCOME_MESSAGE จาก app.prompts
+    - แก้: get_welcome_text() return WELCOME_MESSAGE แทน
+
+================================================================================
+3. Duplication ที่แก้ไขแล้ว
+================================================================================
+
+  ก่อน                                          หลัง
+  ─────────────────────────────────────────────  ──────────────────────────
+  Greetings ซ้ำ 2 ที่ (chat.py +                GREETINGS ใน prompts.py
+    response_generator_agent.py)                   ที่เดียว
+
+  CTA "ถ้าบอกขนาดถังพ่น..." ซ้ำ 2 ที่           PRODUCT_CTA ใน prompts.py
+    (response_generator_agent.py +                 ที่เดียว
+    grounding_agent.py)
+
+  Welcome message ซ้ำ implicit                   WELCOME_MESSAGE ใน prompts.py
+    (text_messages.py hardcoded)                   ที่เดียว
+
+  Error "ขออภัยค่ะ" กระจาย 16+ จุด              ERROR_* constants ใน prompts.py
+    ใน 6 ไฟล์                                      8 ตัว, import ไปใช้
+
+  Persona rules กระจาย                          PERSONA_BASE + PERSONA_RULES
+    (chat.py มี, agent อื่นไม่มี)                  compose เข้า prompt ที่ต้องใช้
+
+================================================================================
+4. ผลทดสอบ (Phase 1)
+================================================================================
+
+  py_compile: 7/7 ไฟล์ผ่าน (prompts.py + 6 ไฟล์ที่แก้)
+  pytest:     12/12 tests PASSED (tests/test_prompts_refactor.py)
+
+================================================================================
+5. Phase 2 — ปรับ Prompt ตาม prompt_ladda.md
+================================================================================
+
+  อ้างอิง: .claude/prompt_ladda.md (บุคลิกทางการของน้องลัดดา)
+
+  การเปลี่ยนแปลงใน app/prompts.py:
+
+  PERSONA_BASE:
+    - อายุ: 25-28 → 23 ปี
+    - บุคลิก: "สาวบ้านนอก อีสาน ร่าเริง" → "พี่สาวที่อบอุ่น สุภาพ มืออาชีพ อารมณ์ดี"
+    - เพิ่ม: "ตอบเป็นภาษาไทยเท่านั้น"
+    - เพิ่ม: "ห้ามใช้สรรพนามโรแมนติกทุกประเภท"
+    - เพิ่ม: แทนตัวเองว่า "น้องลัดดา" เสมอ
+    - ลดจำนวน emoji เหลือ 1-2 ตัวต่อย่อหน้า (จากเดิมไม่จำกัด)
+
+  PERSONA_RULES:
+    - เพิ่มกฎ: หน่วย "มล." แทน "cc/ซีซี" เสมอ
+    - เพิ่มกฎ: แนะนำสินค้าได้ไม่เกิน 1-3 ตัว
+    - เพิ่มกฎ: ห้ามขอตัวอย่างภาพ
+    - เพิ่มกฎ: หากคุยต่อเนื่อง ไม่ต้องทักทายซ้ำ
+    - เพิ่มกฎ: ตรวจชื่อสินค้าสะกดผิด → ยืนยันชื่อที่ถูกต้อง
+    - เพิ่มกฎ: ห้ามบอกว่า "ดึงจากตาราง" → ใช้ "จากข้อมูลสินค้า"
+    - ปรับกฎปุ๋ย: เดิม "ไม่ตอบเรื่องปุ๋ย" → ใหม่ "ปุ๋ยเคมีทั่วไปที่ไม่มีใน
+      ข้อมูลสินค้า → แจ้งว่าไม่มีข้อมูล แต่ถ้ามีสินค้าหมวด 'ปุ๋ยและสารบำรุง'
+      ที่ตรง → แนะนำได้"
+
+  PRODUCT_QA_PROMPT:
+    - เพิ่ม: กฎคำนวณอัตราการใช้ (Dosage Calculation)
+      * ยึดอัตราจาก products เป็นหลัก
+      * ถ้า products ให้ "ต่อเนื้อที่" แล้วผู้ใช้ให้ "ปริมาณน้ำ" → คำนวณอัตโนมัติ
+      * ปัดทศนิยม: < 10 มล. → แสดง 1 ทศนิยม (ปัดขึ้น)
+      * ห้ามคิดสูตรเองถ้า products ไม่ระบุ
+    - เพิ่ม: ลำดับความสำคัญ 8 ข้อ (ความถูกต้อง > ชื่อสินค้า > ภาษาง่าย > ...)
+    - เพิ่ม: กฎ "เมื่อข้อมูลไม่ครบ/ไม่พบ" ถามกลับสุภาพ
+
+  ERROR & NO-DATA MESSAGES:
+    - ทั้งหมด: "ฐานข้อมูล" → "ข้อมูลสินค้า"
+    - เพิ่ม emoji ในข้อความ error ตามสไตล์ prompt_ladda.md
+
+  WELCOME_MESSAGE:
+    - "ฉันน้องลัดดา" → "น้องลัดดา" (ลดสรรพนาม "ฉัน")
+
+================================================================================
+6. ผลทดสอบ (Phase 2)
+================================================================================
+
+  py_compile: 7/7 ไฟล์ผ่าน
+  pytest:     12/12 tests PASSED (tests/test_prompts_refactor.py)
+
+================================================================================

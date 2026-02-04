@@ -4,6 +4,15 @@ from typing import List, Dict, Optional
 from app.services.services import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import clean_knowledge_text, post_process_answer
+from app.prompts import (
+    KNOWLEDGE_RAG_SYSTEM_PROMPT,
+    KNOWLEDGE_RAG_USER_TEMPLATE,
+    GENERAL_KNOWLEDGE_SYSTEM_PROMPT,
+    GENERAL_KNOWLEDGE_USER_TEMPLATE,
+    ERROR_DB_UNAVAILABLE,
+    ERROR_AI_UNAVAILABLE,
+    ERROR_QUESTION_PROCESSING,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +30,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
             return cached_answer
         
         if not supabase_client:
-            return "ขออภัยค่ะ ระบบฐานข้อมูลไม่พร้อมใช้งานในขณะนี้"
+            return ERROR_DB_UNAVAILABLE
         
         relevant_docs = []
         
@@ -83,34 +92,23 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
         # แต่ห้ามแนะนำชื่อสินค้าเฉพาะ
         if not unique_docs:
             logger.info("No relevant docs found, using general knowledge")
-            prompt = f"""คุณคือผู้เชี่ยวชาญด้านการเกษตรของไทย 20ปี
-
-คำถาม: {question}
-
-บริบทการสนทนา:
-{context}
-
-**ข้อกำหนดสำคัญ**:
-1. ตอบคำถามอย่างกระชับ เป็นกันเอง และถูกต้องตามหลักวิชาการ
-2. **ห้ามแนะนำชื่อผลิตภัณฑ์/ยา/สารเคมีเฉพาะเจาะจง** เช่น ทริสโซล, เบนโนมิล, ฟอสอีทิลอะลูมิเนียม เป็นต้น
-3. ถ้าถามเรื่องสินค้า/ผลิตภัณฑ์ → บอกให้พิมพ์ "ดูผลิตภัณฑ์" เพื่อดูแคตตาล็อกสินค้า ICP Ladda
-4. แนะนำได้เฉพาะ **ประเภทของสาร** เช่น "ยาฆ่าเชื้อรา", "ยาฆ่าแมลง" แต่ห้ามระบุชื่อสินค้า
-5. แนะนำวิธีการทั่วไป เช่น การตัดแต่งกิ่ง, การจัดการน้ำ, การใช้ปุ๋ย
-
-ตอบคำถาม:"""
+            prompt = GENERAL_KNOWLEDGE_USER_TEMPLATE.format(
+                question=question,
+                context=context
+            )
 
             if openai_client:
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o-mini",  # Text-only queries use cheaper model
                     messages=[
-                        {"role": "system", "content": "คุณคือผู้เชี่ยวชาญด้านการเกษตร ห้ามแนะนำชื่อสินค้าหรือยาเฉพาะเจาะจง เพราะอาจไม่ตรงกับสินค้าในระบบ"},
+                        {"role": "system", "content": GENERAL_KNOWLEDGE_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.5
                 )
                 answer = post_process_answer(response.choices[0].message.content)
             else:
-                answer = "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
+                answer = ERROR_AI_UNAVAILABLE
 
             # Cache result
             # Use "knowledge" as cache type
@@ -124,34 +122,16 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
             knowledge_context += f"\n[เอกสาร {idx}] {doc.get('title', '')}: {cleaned_content}\n"
         
         # Generate answer with RAG
-        prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
-
-คำถาม: {question}
-
-ข้อมูลอ้างอิง:
-{knowledge_context}
-
-**รูปแบบการตอบ** (สำคัญมาก):
-- ตอบสั้นกระชับ ไม่เกิน 5-6 บรรทัด
-- แนะนำสินค้าแค่ 2-3 ตัวเลือกที่ดีที่สุด
-- แต่ละตัวเลือกขึ้นบรรทัดใหม่
-- ใช้รูปแบบนี้:
-
-[ชื่อสินค้า]
-• ประโยชน์: ...
-• อัตราใช้: ...
-
-- ลงท้ายด้วยคำแนะนำสั้นๆ
-- ใช้ภาษาเป็นกันเอง ไม่ต้องใส่ emoji
-- ห้ามใช้ markdown (**, ##, ```)
-
-ตอบ:"""
+        prompt = KNOWLEDGE_RAG_USER_TEMPLATE.format(
+            question=question,
+            knowledge_context=knowledge_context
+        )
 
         if openai_client:
             response = await openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "คุณคือน้องลัดดา ตอบสั้นกระชับ แนะนำแค่ 2-3 ตัวเลือก แต่ละตัวขึ้นบรรทัดใหม่ ห้ามใช้ markdown"},
+                    {"role": "system", "content": KNOWLEDGE_RAG_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=400,
@@ -169,5 +149,5 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 
     except Exception as e:
         logger.error(f"Error answering question: {e}", exc_info=True)
-        return "ขออภัยค่ะ เกิดข้อผิดพลาดในการประมวลผลคำถาม กรุณาลองใหม่อีกครั้งนะคะ"
+        return ERROR_QUESTION_PROCESSING
 

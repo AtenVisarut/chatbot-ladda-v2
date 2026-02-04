@@ -21,6 +21,13 @@ from app.services.agents import (
     QueryAnalysis,
     IntentType
 )
+from app.prompts import (
+    GROUNDING_SYSTEM_PROMPT,
+    PRODUCT_CTA,
+    ERROR_NO_RELEVANT_DOCS,
+    ERROR_GROUNDING_FAILED,
+    ERROR_NO_DATA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +70,7 @@ class GroundingAgent:
                     confidence=0.0,
                     citations=[],
                     ungrounded_claims=["ไม่พบข้อมูลในฐานข้อมูล"],
-                    suggested_answer="ขออภัยค่ะ ไม่พบข้อมูลที่เกี่ยวข้องในฐานข้อมูลค่ะ",
+                    suggested_answer=ERROR_NO_RELEVANT_DOCS,
                     grounding_notes="No documents retrieved"
                 )
 
@@ -90,7 +97,7 @@ class GroundingAgent:
                 confidence=0.0,
                 citations=[],
                 ungrounded_claims=[str(e)],
-                suggested_answer="ขออภัยค่ะ เกิดข้อผิดพลาดในการประมวลผล",
+                suggested_answer=ERROR_GROUNDING_FAILED,
                 grounding_notes=f"Error: {str(e)}"
             )
 
@@ -183,7 +190,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             messages=[
                 {
                     "role": "system",
-                    "content": "คุณคือระบบตรวจสอบความเกี่ยวข้องของเอกสาร ตอบเป็น JSON เท่านั้น"
+                    "content": GROUNDING_SYSTEM_PROMPT
                 },
                 {"role": "user", "content": prompt}
             ],
@@ -240,7 +247,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 confidence=0.0,
                 citations=[],
                 ungrounded_claims=["ไม่พบข้อมูล"],
-                suggested_answer="ขออภัยค่ะ ไม่พบข้อมูลในฐานข้อมูล",
+                suggested_answer=ERROR_NO_DATA,
                 grounding_notes="Fallback: no documents"
             )
 
@@ -262,7 +269,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 answer_parts.append(f"   - อัตราใช้: {doc.metadata['usage_rate']}")
             answer_parts.append("")
 
-        answer_parts.append("\nถ้าบอกขนาดถังพ่น น้องลัดดาช่วยคำนวณอัตราให้ได้ค่ะ")
+        answer_parts.append(f"\n{PRODUCT_CTA}")
 
         # Build citations
         citations = []

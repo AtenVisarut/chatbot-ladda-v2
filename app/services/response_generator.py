@@ -9,6 +9,7 @@ from app.utils.text_messages import (
     get_growth_stage_question_text
 )
 from app.services.product_recommendation import get_search_query_for_disease
+from app.prompts import DISEASE_DETECTION_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ async def generate_final_response(
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful agricultural expert assistant."},
+                {"role": "system", "content": DISEASE_DETECTION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
