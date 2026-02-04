@@ -190,11 +190,13 @@ class RetrievalAgent:
 
             # Stage 0: Direct product lookup if entity has product_name
             all_docs = []
+            direct_lookup_ids = set()
             product_name = query_analysis.entities.get('product_name')
             if product_name:
                 direct_docs = await self._direct_product_lookup(product_name)
                 if direct_docs:
                     all_docs.extend(direct_docs)
+                    direct_lookup_ids = {doc.id for doc in direct_docs}
                     logger.info(f"  - Direct lookup found: {len(direct_docs)} docs")
 
             # Stage 1: Parallel retrieval from multiple sources
@@ -236,10 +238,18 @@ class RetrievalAgent:
                 # Sort by similarity score if no LLM
                 reranked_docs = sorted(unique_docs, key=lambda x: x.similarity_score, reverse=True)
 
+            # Stage 3.5: Boost direct lookup docs to top (user asked about specific product)
+            if direct_lookup_ids:
+                boosted = [doc for doc in reranked_docs if doc.id in direct_lookup_ids]
+                others = [doc for doc in reranked_docs if doc.id not in direct_lookup_ids]
+                reranked_docs = boosted + others
+                logger.info(f"  - Boosted {len(boosted)} direct lookup docs to top")
+
             # Stage 4: Filter by rerank threshold
             filtered_docs = [
                 doc for doc in reranked_docs
                 if doc.rerank_score >= self.rerank_threshold or doc.similarity_score >= self.vector_threshold
+                or doc.id in direct_lookup_ids
             ]
 
             # Ensure we have at least some results

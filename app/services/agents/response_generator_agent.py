@@ -49,7 +49,8 @@ class ResponseGeneratorAgent:
         self,
         query_analysis: QueryAnalysis,
         retrieval_result: RetrievalResult,
-        grounding_result: GroundingResult
+        grounding_result: GroundingResult,
+        context: str = ""
     ) -> AgenticRAGResponse:
         """
         Generate final response from pipeline results using LLM
@@ -72,7 +73,7 @@ class ResponseGeneratorAgent:
 
             # Generate answer from verified product data using LLM
             answer = await self._generate_llm_response(
-                query_analysis, retrieval_result, grounding_result
+                query_analysis, retrieval_result, grounding_result, context
             )
 
             # Post-process answer (remove markdown artifacts)
@@ -109,7 +110,8 @@ class ResponseGeneratorAgent:
         self,
         query_analysis: QueryAnalysis,
         retrieval_result: RetrievalResult,
-        grounding_result: GroundingResult
+        grounding_result: GroundingResult,
+        context: str = ""
     ) -> str:
         """Generate formatted response using LLM with verified product data"""
 
@@ -152,7 +154,17 @@ class ResponseGeneratorAgent:
         relevant = grounding_result.relevant_products
         relevant_str = ", ".join(relevant) if relevant else "(ทั้งหมดที่ค้นพบ)"
 
-        prompt = f"""คำถาม: "{query_analysis.original_query}"
+        # Build context section for follow-up questions
+        context_section = ""
+        if context:
+            context_section = f"""บริบทการสนทนาก่อนหน้า:
+{context[:500]}
+
+(ถ้าผู้ใช้ถามต่อจากบทสนทนาก่อนหน้า ให้อ้างอิงสินค้าที่พูดถึงก่อนหน้านี้)
+
+"""
+
+        prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 

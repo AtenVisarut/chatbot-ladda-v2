@@ -110,6 +110,11 @@ class AgenticRAG:
             try:
                 from app.services.chat import extract_product_name_from_question, detect_problem_type
                 detected_product = extract_product_name_from_question(query)
+                # If no product in current query, try extracting from context (follow-up questions)
+                if not detected_product and context:
+                    detected_product = extract_product_name_from_question(context)
+                    if detected_product:
+                        logger.info(f"  - Product from context: {detected_product}")
                 if detected_product:
                     hints['product_name'] = detected_product
                 detected_problem = detect_problem_type(query)
@@ -181,7 +186,8 @@ class AgenticRAG:
             response = await self.response_agent.generate(
                 query_analysis=query_analysis,
                 retrieval_result=retrieval_result,
-                grounding_result=grounding_result
+                grounding_result=grounding_result,
+                context=context
             )
 
             response.processing_time_ms = (time.time() - start_time) * 1000
