@@ -186,7 +186,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 4. confidence สูง (>0.8) ถ้าสินค้าตรงกับคำถามเป๊ะ"""
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",
@@ -194,8 +194,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0,
-            max_tokens=500
+            max_completion_tokens=4000
         )
 
         response_text = response.choices[0].message.content.strip()

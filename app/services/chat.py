@@ -391,7 +391,7 @@ async def classify_message_intent(message: str) -> str:
             return _keyword_classify_intent(message)
 
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",
@@ -399,8 +399,7 @@ async def classify_message_intent(message: str) -> str:
                 },
                 {"role": "user", "content": message}
             ],
-            temperature=0,
-            max_tokens=20
+            max_completion_tokens=2000
         )
 
         result = response.choices[0].message.content.strip().lower()
@@ -522,13 +521,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
 ตอบกลับอย่างเป็นธรรมชาติ เหมือนคุยกับเพื่อน:"""
 
         response = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=300,
-            temperature=0.7
+            max_completion_tokens=4000
         )
         answer = post_process_answer(response.choices[0].message.content)
 

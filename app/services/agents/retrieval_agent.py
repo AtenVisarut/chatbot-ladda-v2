@@ -292,13 +292,9 @@ class RetrievalAgent:
         all_docs = []
         tasks = []
 
-        # Build retrieval tasks based on required sources
-        for source in query_analysis.required_sources:
-            for query in query_analysis.expanded_queries:
-                if source == "products":
-                    tasks.append(self._search_products(query, top_k, query_analysis))
-                elif source == "diseases":
-                    tasks.append(self._search_diseases(query, top_k))
+        # Build retrieval tasks — products table only
+        for query in query_analysis.expanded_queries:
+            tasks.append(self._search_products(query, top_k, query_analysis))
 
         # Execute all searches in parallel
         if tasks:
@@ -534,13 +530,12 @@ class RetrievalAgent:
 ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เช่น: 3,1,5,2,4"""
 
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5",
                 messages=[
                     {"role": "system", "content": "ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0,
-                max_tokens=100
+                max_completion_tokens=2000
             )
 
             ranking_text = response.choices[0].message.content.strip()

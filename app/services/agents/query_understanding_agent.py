@@ -132,9 +132,8 @@ intent_type ที่เป็นไปได้:
 - greeting: ทักทาย (เช่น "สวัสดี", "ดีจ้า")
 - unknown: ไม่เกี่ยวกับเกษตร
 
-required_sources ที่เป็นไปได้:
-- products: ตารางสินค้า (ข้อมูลสินค้า วิธีใช้ อัตราผสม สารสำคัญ)
-- diseases: ข้อมูลโรคพืช
+required_sources:
+- ใช้ ["products"] เสมอ (ข้อมูลสินค้าเป็นแหล่งหลักเพียงแหล่งเดียว)
 
 กฎสำคัญ:
 - ถ้าคำถามมีคำว่า "ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "แก้ยังไง", "ฉีดอะไร", "พ่นอะไร" → ต้องเป็น product-related intent (ห้ามเป็น unknown)
@@ -156,7 +155,7 @@ required_sources ที่เป็นไปได้:
 """
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",
@@ -164,8 +163,7 @@ required_sources ที่เป็นไปได้:
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,
-            max_tokens=500
+            max_completion_tokens=4000
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -203,12 +201,8 @@ required_sources ที่เป็นไปได้:
             if not expanded_queries:
                 expanded_queries = [query]
 
-            # Get required sources — always include "products" (primary data source)
-            required_sources = data.get("required_sources", ["products"])
-            if not required_sources:
-                required_sources = self._determine_sources(intent)
-            if "products" not in required_sources:
-                required_sources.insert(0, "products")
+            # Force products-only source (products table is the sole data source)
+            required_sources = ["products"]
 
             return QueryAnalysis(
                 original_query=query,
@@ -299,17 +293,7 @@ required_sources ที่เป็นไปได้:
         )
 
     def _determine_sources(self, intent: IntentType) -> List[str]:
-        """Determine which data sources to query based on intent"""
-        source_map = {
-            IntentType.PRODUCT_INQUIRY: ["products"],
-            IntentType.PRODUCT_RECOMMENDATION: ["products"],
-            IntentType.DISEASE_TREATMENT: ["products", "diseases"],
-            IntentType.PEST_CONTROL: ["products"],
-            IntentType.WEED_CONTROL: ["products"],
-            IntentType.NUTRIENT_SUPPLEMENT: ["products"],
-            IntentType.USAGE_INSTRUCTION: ["products"],
-            IntentType.GENERAL_AGRICULTURE: ["products", "diseases"],
-            IntentType.GREETING: [],
-            IntentType.UNKNOWN: ["products"],
-        }
-        return source_map.get(intent, ["products"])
+        """Determine which data sources to query based on intent — products only"""
+        if intent == IntentType.GREETING:
+            return []
+        return ["products"]

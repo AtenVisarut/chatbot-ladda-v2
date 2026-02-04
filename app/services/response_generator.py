@@ -240,13 +240,12 @@ async def generate_final_response(
 
         # Call GPT
         response = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5",
             messages=[
                 {"role": "system", "content": DISEASE_DETECTION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=1000
+            max_completion_tokens=8000
         )
 
         final_response = response.choices[0].message.content.strip()
