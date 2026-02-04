@@ -1,6 +1,43 @@
 import re
 from typing import List, Dict
 
+# Allowed emojis: 😊 (U+1F60A) and 🌱 (U+1F331)
+_ALLOWED_EMOJIS = {'\U0001F60A', '\U0001F331'}
+
+# Unicode ranges covering most emoji (simplified but effective)
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F300-\U0001F5FF"  # Misc Symbols and Pictographs
+    "\U0001F680-\U0001F6FF"  # Transport and Map
+    "\U0001F1E0-\U0001F1FF"  # Flags
+    "\U0001F900-\U0001F9FF"  # Supplemental Symbols
+    "\U0001FA00-\U0001FA6F"  # Chess Symbols
+    "\U0001FA70-\U0001FAFF"  # Symbols Extended-A
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U000024C2-\U0001F251"  # Enclosed characters
+    "\U0000FE0F"             # Variation Selector
+    "\U00002600-\U000026FF"  # Misc Symbols (☀️⚠️⚡ etc.)
+    "\U00002700-\U000027BF"  # Dingbats
+    "\U0000200D"             # ZWJ
+    "\U00002B50"             # Star
+    "\U0000203C\U00002049"   # Exclamation marks
+    "\U000023E9-\U000023F3"  # Media symbols
+    "\U000023F8-\U000023FA"  # Media symbols
+    "]+",
+    flags=re.UNICODE
+)
+
+def _strip_banned_emojis(text: str) -> str:
+    """Remove all emojis except 😊 and 🌱"""
+    def _replace(match):
+        chars = match.group()
+        # Keep only allowed emojis from the matched span
+        kept = ''.join(c for c in chars if c in _ALLOWED_EMOJIS)
+        return kept
+    return _EMOJI_PATTERN.sub(_replace, text)
+
+
 def post_process_answer(answer: str) -> str:
     """Post-process Gemini answer for better quality"""
     if not answer:
@@ -43,8 +80,8 @@ def post_process_answer(answer: str) -> str:
     answer = answer.replace('ต้', 'ต้')
     answer = answer.replace('ต', 'ต')
     
-    # 8. Ensure emoji spacing (include common emojis used in responses)
-    answer = re.sub(r'([🌱🐛🍄💊⚠️✅📚💡🎯📋🔍😊🌾💚🦠⚖️📅🔢📊🏷️💬🔗])([ก-๙A-Za-z])', r'\1 \2', answer)
+    # 8. Strip all emojis except 😊 and 🌱
+    answer = _strip_banned_emojis(answer)
 
     # 9. Normalize dividers to standard format
     answer = re.sub(r'^[-=─]{3,}$', '━━━━━━━━━━━━━━━', answer, flags=re.MULTILINE)
