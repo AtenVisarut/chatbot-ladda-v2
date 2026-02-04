@@ -95,12 +95,13 @@ async def rerank_products_with_llm(
 ตอบ:"""
 
         response = await openai_client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เท่านั้น"},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=2000
+            temperature=0,
+            max_tokens=100
         )
 
         ranking_text = response.choices[0].message.content.strip()

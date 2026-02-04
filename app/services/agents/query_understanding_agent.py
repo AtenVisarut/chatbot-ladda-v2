@@ -155,7 +155,7 @@ required_sources:
 """
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-5",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system",
@@ -163,7 +163,8 @@ required_sources:
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=4000
+            temperature=0.1,
+            max_tokens=500
         )
 
         response_text = response.choices[0].message.content.strip()

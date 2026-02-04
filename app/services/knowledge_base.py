@@ -99,7 +99,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 
             if openai_client:
                 response = await openai_client.chat.completions.create(
-                    model="gpt-5",
+                    model="gpt-4o",
                     messages=[
                         {"role": "system", "content": GENERAL_KNOWLEDGE_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}
@@ -128,12 +128,13 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 
         if openai_client:
             response = await openai_client.chat.completions.create(
-                model="gpt-5",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": KNOWLEDGE_RAG_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=4000
+                max_tokens=400,
+                temperature=0.5
             )
             answer = post_process_answer(response.choices[0].message.content)
         else:

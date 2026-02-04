@@ -179,12 +179,13 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-5",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=8000
+                temperature=0.1,
+                max_tokens=700
             )
             return response.choices[0].message.content.strip()
         except Exception as e:

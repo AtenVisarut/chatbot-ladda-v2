@@ -2027,12 +2027,13 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-5",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are a strict product assistant. ONLY recommend products from the provided list. Never create or suggest products not in the list."},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=8000
+                temperature=0.1,
+                max_tokens=800
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")
@@ -2639,12 +2640,13 @@ async def answer_product_question(question: str, keywords: dict) -> str:
 
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-5",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an agricultural product expert."},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=8000
+                temperature=0.1,
+                max_tokens=800
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")
