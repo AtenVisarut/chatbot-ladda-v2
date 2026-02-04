@@ -112,23 +112,26 @@ class AgenticRAG:
                 detected_product = extract_product_name_from_question(query)
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
-                    # Strategy 1: Check [สินค้าที่แนะนำไปแล้ว] section first (most reliable)
-                    for line in context.split('\n'):
-                        if 'สินค้าที่แนะนำ' in line:
-                            for product_name in ICP_PRODUCT_NAMES.keys():
-                                if product_name in line:
-                                    detected_product = product_name
-                                    logger.info(f"  - Product from summary section: {detected_product}")
-                                    break
+                    # Strategy 1: Search recent conversation lines bottom-up (most recent first)
+                    context_lines = context.strip().split('\n')
+                    for line in reversed(context_lines):
+                        # Skip summary section lines
+                        if line.startswith('[') and ']' in line:
+                            continue
+                        detected_product = extract_product_name_from_question(line)
+                        if detected_product:
+                            logger.info(f"  - Product from context (most recent): {detected_product}")
                             break
 
-                    # Strategy 2: Search line-by-line from bottom (most recent first)
+                    # Strategy 2: Fallback to [สินค้าที่แนะนำไปแล้ว] section
                     if not detected_product:
-                        context_lines = context.strip().split('\n')
-                        for line in reversed(context_lines):
-                            detected_product = extract_product_name_from_question(line)
-                            if detected_product:
-                                logger.info(f"  - Product from context (most recent): {detected_product}")
+                        for line in context.split('\n'):
+                            if 'สินค้าที่แนะนำ' in line:
+                                for product_name in ICP_PRODUCT_NAMES.keys():
+                                    if product_name in line:
+                                        detected_product = product_name
+                                        logger.info(f"  - Product from summary section: {detected_product}")
+                                        break
                                 break
                 if detected_product:
                     hints['product_name'] = detected_product

@@ -81,10 +81,21 @@ class ResponseGeneratorAgent:
                         has_crop_specific_top = True
                         logger.info(f"  - Crop-specific override: {top_doc.title} is at position 1")
 
-                if not retrieval_result.documents or (
-                    grounding_result.confidence < 0.2 and not has_crop_specific_top
+                # Check if a specific product was asked about AND found in DB
+                has_product_in_query = bool(query_analysis.entities.get('product_name'))
+                has_documents = bool(retrieval_result.documents)
+
+                if not has_documents or (
+                    grounding_result.confidence < 0.2
+                    and not has_crop_specific_top
+                    and not (has_product_in_query and has_documents)
                 ):
                     return self._generate_no_data_response(query_analysis)
+
+                # Product found but grounding failed — let LLM explain using actual data
+                if has_product_in_query and has_documents:
+                    logger.info(f"  - Product-specific override: bypassing grounding for '{query_analysis.entities.get('product_name')}'")
+                    # LLM will use the product data to explain (e.g. "ราเซอร์ใช้กำจัดวัชพืช ใช้ได้กับ...")
 
             # Generate answer from verified product data using LLM
             answer = await self._generate_llm_response(
