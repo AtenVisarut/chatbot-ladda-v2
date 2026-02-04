@@ -11,6 +11,8 @@ Responsibilities:
 import logging
 import asyncio
 import re
+import hashlib
+import time
 from typing import List, Dict
 
 from app.services.agents import (
@@ -19,6 +21,7 @@ from app.services.agents import (
     RetrievalResult,
     IntentType
 )
+from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,33 @@ DEFAULT_VECTOR_THRESHOLD = 0.25  # Lowered from 0.35 for better recall
 DEFAULT_RERANK_THRESHOLD = 0.50
 DEFAULT_TOP_K = 10
 MIN_RELEVANT_DOCS = 3
+
+# ============================================================================
+# Embedding LRU Cache — avoids re-computing identical embeddings
+# ============================================================================
+_EMBEDDING_CACHE_MAX = 500
+_EMBEDDING_CACHE_TTL = 3600  # 1 hour
+_embedding_cache: Dict[str, dict] = {}  # key -> {"embedding": [...], "ts": float}
+
+
+def _get_cached_embedding(text: str):
+    """Return cached embedding list or None"""
+    key = hashlib.md5(text.encode()).hexdigest()
+    entry = _embedding_cache.get(key)
+    if entry and (time.time() - entry["ts"]) < _EMBEDDING_CACHE_TTL:
+        return entry["embedding"]
+    return None
+
+
+def _set_cached_embedding(text: str, embedding: list):
+    """Store embedding in cache, evict oldest if full"""
+    key = hashlib.md5(text.encode()).hexdigest()
+    if len(_embedding_cache) >= _EMBEDDING_CACHE_MAX:
+        # Evict oldest 10%
+        sorted_keys = sorted(_embedding_cache, key=lambda k: _embedding_cache[k]["ts"])
+        for k in sorted_keys[:max(1, len(sorted_keys) // 10)]:
+            del _embedding_cache[k]
+    _embedding_cache[key] = {"embedding": embedding, "ts": time.time()}
 
 
 class RetrievalAgent:
@@ -456,7 +486,10 @@ class RetrievalAgent:
                                 best_priority = d
                                 logger.info(f"  - Crop-specific match: {d.title} (crops: {crops[:50]})")
                                 break
-                    current_pos = reranked_docs.index(best_priority)
+                    try:
+                        current_pos = reranked_docs.index(best_priority)
+                    except ValueError:
+                        current_pos = -1
                     if current_pos > 0:
                         reranked_docs.remove(best_priority)
                         reranked_docs.insert(0, best_priority)
@@ -699,14 +732,21 @@ class RetrievalAgent:
             return []
 
     async def _generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for search query"""
+        """Generate embedding for search query (with LRU cache)"""
+        # Check cache first
+        cached = _get_cached_embedding(text)
+        if cached is not None:
+            return cached
+
         try:
             response = await self.openai_client.embeddings.create(
-                model="text-embedding-3-small",
+                model=EMBEDDING_MODEL,
                 input=text,
                 encoding_format="float"
             )
-            return response.data[0].embedding
+            embedding = response.data[0].embedding
+            _set_cached_embedding(text, embedding)
+            return embedding
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             return []
@@ -783,7 +823,7 @@ class RetrievalAgent:
 ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เช่น: 3,1,5,2,4"""
 
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=LLM_MODEL_RERANKING,
                 messages=[
                     {"role": "system", "content": "ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma"},
                     {"role": "user", "content": prompt}

@@ -27,7 +27,8 @@ from app.config import (
     MAX_CACHE_SIZE,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
-    SECRET_KEY
+    SECRET_KEY,
+    EMBEDDING_MODEL
 )
 
 # Import services
@@ -249,6 +250,81 @@ async def clear_cache_endpoint(request: Request):
     await clear_all_caches()
     return {"status": "success", "message": "All caches cleared"}
 
+
+# ============================================================================#
+# Admin: Regenerate Product Embeddings
+# ============================================================================#
+
+@app.post("/admin/regenerate-embeddings")
+async def regenerate_embeddings_endpoint(request: Request):
+    """
+    Regenerate embeddings for products after data changes.
+    Body (optional): {"product_name": "อาร์เทมีส"}  — regenerate one product
+    Body empty or {}                                  — regenerate ALL products
+    """
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if not openai_client or not supabase_client:
+        raise HTTPException(status_code=503, detail="OpenAI or Supabase not available")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    product_name = body.get("product_name")
+
+    # Fetch products to regenerate
+    if product_name:
+        result = supabase_client.table('products').select('*').ilike('product_name', f'%{product_name}%').execute()
+    else:
+        result = supabase_client.table('products').select('*').execute()
+
+    if not result.data:
+        return {"status": "error", "message": f"ไม่พบสินค้า: {product_name}" if product_name else "ไม่พบสินค้าในระบบ"}
+
+    products = result.data
+    success_count = 0
+    errors = []
+
+    for product in products:
+        try:
+            text_parts = [
+                f"ชื่อสินค้า: {product['product_name']}",
+                f"สารสำคัญ: {product.get('active_ingredient', '')}",
+                f"ศัตรูพืชที่กำจัดได้: {product.get('target_pest', '')}",
+                f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
+                f"กลุ่มสาร: {product.get('product_group', '')}",
+            ]
+            text = " | ".join([p for p in text_parts if p])
+
+            resp = await openai_client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=text
+            )
+            embedding = resp.data[0].embedding
+
+            supabase_client.table('products').update({
+                'embedding': embedding
+            }).eq('id', product['id']).execute()
+
+            success_count += 1
+        except Exception as e:
+            errors.append(f"{product['product_name']}: {str(e)}")
+
+    # Clear caches so new embeddings take effect immediately
+    await clear_all_caches()
+
+    return {
+        "status": "success",
+        "regenerated": success_count,
+        "total": len(products),
+        "errors": errors if errors else None,
+        "cache_cleared": True
+    }
+
+
 # ============================================================================#
 # Dashboard Endpoints
 # ============================================================================#
@@ -306,9 +382,15 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
     body_str = body.decode('utf-8')
 
     # Verify signature
-    if not verify_line_signature(body, x_line_signature):
-        logger.warning("Invalid signature")
-        raise HTTPException(status_code=400, detail="Invalid signature")
+    try:
+        if not verify_line_signature(body, x_line_signature):
+            logger.warning("Invalid signature")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+    except HTTPException:
+        raise
+    except Exception as sig_err:
+        logger.error(f"Signature verification error: {sig_err}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Signature verification failed")
 
     # Parse events
     try:
@@ -326,26 +408,26 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
 
 async def _process_webhook_events(events: list):
-    """Process webhook events in background task"""
+    """Process webhook events in background task (per-event error isolation)"""
     start_time = time.time()
     try:
         for event in events:
             event_type = event.get("type")
             reply_token = event.get("replyToken")
             user_id = event.get("source", {}).get("userId")
-            
+
             if not reply_token or not user_id:
                 continue
-            
+
             # Check rate limit
             if not await check_user_rate_limit(user_id):
                 await reply_line(reply_token, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ ⏳")
                 continue
-            
+
             # Ensure user exists (auto-register new users)
             from app.services.user_service import ensure_user_exists
             await ensure_user_exists(user_id)
-            
+
             # 1. Handle Follow Event (Welcome Message)
             if event_type == "follow":
                 logger.info(f"User {user_id} followed the bot")
@@ -688,6 +770,12 @@ async def _process_webhook_events(events: list):
 
     except Exception as e:
         logger.error(f"Background webhook error: {e}", exc_info=True)
+        # Try to send error reply if we have a valid reply_token
+        try:
+            if 'reply_token' in dir() and reply_token:
+                await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะคะ")
+        except Exception:
+            pass  # reply_token may have expired
 
 if __name__ == "__main__":
     # อ่าน Port จาก Environment Variable ที่ Cloud Platform (Fly.io/Vercel) ส่งมา 

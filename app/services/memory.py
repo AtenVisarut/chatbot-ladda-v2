@@ -1,8 +1,18 @@
 import logging
+import asyncio
 from app.services.services import supabase_client
 from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW
 
 logger = logging.getLogger(__name__)
+
+# Lock to prevent concurrent cleanup_old_memory for the same user
+_cleanup_locks: dict = {}
+
+def _get_cleanup_lock(user_id: str) -> asyncio.Lock:
+    """Get or create a per-user asyncio lock for memory cleanup"""
+    if user_id not in _cleanup_locks:
+        _cleanup_locks[user_id] = asyncio.Lock()
+    return _cleanup_locks[user_id]
 
 async def add_to_memory(user_id: str, role: str, content: str, metadata: dict = None):
     """Add message to conversation memory in Supabase"""
@@ -73,35 +83,40 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
         return ""
 
 async def cleanup_old_memory(user_id: str):
-    """Keep only last N messages per user"""
-    try:
-        if not supabase_client:
-            return
-        
-        # Get all message IDs for this user, ordered by created_at desc
-        result = supabase_client.table('conversation_memory')\
-            .select('id')\
-            .eq('user_id', user_id)\
-            .order('created_at', desc=True)\
-            .execute()
-        
-        if not result.data or len(result.data) <= MAX_MEMORY_MESSAGES:
-            return
-        
-        # Get IDs to delete (keep only last MAX_MEMORY_MESSAGES)
-        ids_to_keep = [msg['id'] for msg in result.data[:MAX_MEMORY_MESSAGES]]
-        ids_to_delete = [msg['id'] for msg in result.data[MAX_MEMORY_MESSAGES:]]
-        
-        if ids_to_delete:
-            # Delete old messages
-            supabase_client.table('conversation_memory')\
-                .delete()\
-                .in_('id', ids_to_delete)\
+    """Keep only last N messages per user (per-user lock prevents race conditions)"""
+    lock = _get_cleanup_lock(user_id)
+    if lock.locked():
+        # Another cleanup is already running for this user — skip
+        return
+
+    async with lock:
+        try:
+            if not supabase_client:
+                return
+
+            # Get all message IDs for this user, ordered by created_at desc
+            result = supabase_client.table('conversation_memory')\
+                .select('id')\
+                .eq('user_id', user_id)\
+                .order('created_at', desc=True)\
                 .execute()
-            logger.info(f"✓ Cleaned up {len(ids_to_delete)} old messages for user {user_id[:8]}...")
-            
-    except Exception as e:
-        logger.error(f"Failed to cleanup old memory: {e}")
+
+            if not result.data or len(result.data) <= MAX_MEMORY_MESSAGES:
+                return
+
+            # Get IDs to delete (keep only last MAX_MEMORY_MESSAGES)
+            ids_to_delete = [msg['id'] for msg in result.data[MAX_MEMORY_MESSAGES:]]
+
+            if ids_to_delete:
+                # Delete old messages
+                supabase_client.table('conversation_memory')\
+                    .delete()\
+                    .in_('id', ids_to_delete)\
+                    .execute()
+                logger.info(f"✓ Cleaned up {len(ids_to_delete)} old messages for user {user_id[:8]}...")
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup old memory: {e}")
 
 async def clear_memory(user_id: str):
     """Clear all conversation memory for user"""
@@ -399,8 +414,8 @@ async def get_enhanced_context(user_id: str) -> str:
     ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
     """
     try:
-        # Get conversation context
-        context = await get_conversation_context(user_id, limit=15)
+        # Get conversation context (use config value)
+        context = await get_conversation_context(user_id, limit=MEMORY_CONTEXT_WINDOW)
 
         # Get conversation summary
         summary = await get_conversation_summary(user_id)

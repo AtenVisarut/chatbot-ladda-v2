@@ -56,6 +56,18 @@ USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
 # Set to "0" to disable (legacy functions have been removed)
 USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 
+# ============================================================================#
+# LLM MODEL NAMES (centralized — change once, applies everywhere)
+# ============================================================================#
+LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
+LLM_MODEL_INTENT = os.getenv("LLM_MODEL_INTENT", "gpt-4o")
+LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o")
+LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o")
+LLM_MODEL_GROUNDING = os.getenv("LLM_MODEL_GROUNDING", "gpt-4o")
+LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
+LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+
 AGENTIC_RAG_CONFIG = {
     # Vector search threshold (lowered to 0.25 for better recall)
     "VECTOR_THRESHOLD": float(os.getenv("AGENTIC_VECTOR_THRESHOLD", "0.25")),

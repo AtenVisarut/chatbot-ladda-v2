@@ -19,8 +19,14 @@ logger = logging.getLogger(__name__)
 # - L2: Supabase (fallback ~50-200ms)
 
 class InMemoryCache:
-    """Thread-safe in-memory cache with TTL support"""
-    
+    """Thread-safe in-memory cache with TTL support.
+
+    Uses threading.Lock (not asyncio.Lock) intentionally:
+    all operations inside the lock are fast CPU-bound dict access
+    with no I/O or await, so blocking is negligible (<1ms).
+    This also allows synchronous callers (e.g. rate-limiting) to use it.
+    """
+
     def __init__(self, max_size: int = 1000):
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()

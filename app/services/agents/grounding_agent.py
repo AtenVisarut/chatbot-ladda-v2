@@ -28,6 +28,7 @@ from app.prompts import (
     ERROR_GROUNDING_FAILED,
     ERROR_NO_DATA,
 )
+from app.config import LLM_MODEL_GROUNDING
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +198,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 6. สินค้า Strategy Skyrocket/Expand เกี่ยวข้องมากกว่า Standard เสมอ"""
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL_GROUNDING,
             messages=[
                 {
                     "role": "system",

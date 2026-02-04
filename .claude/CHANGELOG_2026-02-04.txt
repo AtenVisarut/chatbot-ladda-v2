@@ -192,3 +192,108 @@ Prompt Architecture Refactoring: รวม Prompt เข้า 1 ไฟล์ก
   pytest:     12/12 tests PASSED (tests/test_prompts_refactor.py)
 
 ================================================================================
+7. Fix: Context Memory สำหรับคำถามต่อเนื่อง (Follow-up)
+================================================================================
+
+  ปัญหา:
+    เมื่อ user ถามต่อเนื่อง เช่น "ฟอซาเรียม ใช้สารอะไร" → Bot แนะนำอาร์เทมีส
+    แล้วถาม "ใช้ช่วงไหน" → Bot เปลี่ยนไปตอบเรื่องสินค้าอื่น (เช่น ทูโฟฟอส)
+
+  Commit 1 (8d2355a): แก้ไข 6 ไฟล์
+  ────────────────────────────────────────
+
+    app/services/agentic_rag.py (Stage 0)
+      - แก้: ค้น product จาก context ทีละบรรทัด reversed (ล่าสุดก่อน)
+        แทนที่จะค้นทั้ง context string ซึ่งเจอสินค้าตัวแรกใน dict order
+
+    app/services/memory.py (get_conversation_summary)
+      - เพิ่ม: fallback ดึงชื่อสินค้าจาก text ของ assistant messages
+        เมื่อ metadata-based extraction ไม่พบ (เดิมหา metadata.type ==
+        "product_recommendation" ซึ่งไม่เคยถูกเซ็ตจาก text Q&A flow)
+
+    app/services/agents/query_understanding_agent.py
+      - แก้ prompt: เจาะจงมากขึ้นสำหรับ follow-up
+        "ดูบริบทก่อนหน้าเพื่อหาสินค้าที่แนะนำล่าสุด → ใส่ใน
+        entities.product_name → intent=usage_instruction"
+
+    app/services/agents/response_generator_agent.py
+      - แก้: context window 500 → 1500 chars
+
+    app/services/chat.py (_keyword_classify_intent)
+      - เพิ่ม: 13 follow-up keywords ("ใช้ยังไง", "ผสมกี่", "กี่ลิตร"
+        ฯลฯ) → classify เป็น product_qa
+
+    app/prompts.py (INTENT_CLASSIFICATION_PROMPT)
+      - เพิ่ม: follow-up patterns ใน LLM intent classification prompt
+
+  Commit 2 (ab815bc): แก้ root causes ที่ลึกกว่า — 3 ไฟล์
+  ────────────────────────────────────────
+
+    app/services/chat.py (handle_natural_conversation)
+      - แก้: บันทึก metadata สินค้าเมื่อ AgenticRAG ตอบ
+        auto-detect ชื่อสินค้าจาก answer → save metadata
+        {type: "product_recommendation", products: [...]}
+        (เดิมเซ็ต metadata เฉพาะ image flow เท่านั้น)
+
+    app/config.py
+      - แก้: MEMORY_CONTENT_PREVIEW 300 → 800 chars
+        (เดิม 300 ตัดข้อความ bot → ชื่อสินค้าหายจาก context)
+
+    app/services/agents/response_generator_agent.py
+      - แก้ prompt: "ถ้าถามต่อเนื่อง ต้องตอบสินค้าตัวเดิม ห้ามเปลี่ยน
+        ถ้าสินค้าไม่เหมาะ ให้บอกตรงๆ แทนที่จะแนะนำสินค้าอื่น"
+
+  ผลทดสอบ (tests/test_followup_context.py):
+    Test A — Keyword Intent:        10/10 PASSED
+    Test B — Context Extraction:    ทำงานถูกต้อง (เดิมได้ ทูโฟฟอส → ใหม่ได้ อาร์เทมีส)
+    Test C — Full Pipeline:         5/5 PASSED
+      1. ฟอซาเรียม → "ใช้ช่วงไหน"           อาร์เทมีส → อาร์เทมีส ✓
+      2. เพลี้ยไฟ → "ผสมกี่ลิตร"             โมเดิน → โมเดิน ✓
+      3. กกในนาข้าว → "20ไร่ใช้เท่าไหร่"     อาร์ดอน → อาร์ดอน ✓
+      4. รากเน่า → "ใช้ช่วงน้ำท่วมได้ไหม"    คาริสมา → คาริสมา ✓
+      5. แกนเตอร์ → "ใช้กับข้าวโพดได้ไหม"    แกนเตอร์ → แกนเตอร์ ✓
+
+================================================================================
+8. Feat: เพิ่ม package_size ใน product responses + คำนวณจำนวนขวด/ถุง
+================================================================================
+
+  Commit (7f49789): แก้ไข 2 ไฟล์
+
+    app/services/agents/retrieval_agent.py
+      - เพิ่ม: package_size ใน metadata ทั้ง 4 จุด retrieval:
+        * _direct_product_lookup()
+        * _search_products() (vector search)
+        * _fallback_keyword_search()
+        * _supplementary_priority_search()
+      - เพิ่ม: package_size ใน _enrich_strategy_group() query + logic
+
+    app/services/agents/response_generator_agent.py
+      - เพิ่ม: "ขนาดบรรจุ" ใน product context ที่ส่งให้ LLM
+      - เพิ่ม prompt: "ถ้าผู้ใช้ถามปริมาณสำหรับพื้นที่ และมีข้อมูลขนาดบรรจุ
+        ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อ"
+      - เพิ่ม: ขนาดบรรจุ ใน fallback answer
+
+  ผลทดสอบ:
+    นาแดน 10 ไร่     → ใช้ 30-50 กก. → กระสอบ 15 กก. → ซื้อ 2-4 กระสอบ ✓
+    โค-ราซ 5 ไร่      → ใช้ 500-750 มล. → ขวด 1 ลิตร → ซื้อ 1 ขวด ✓
+    กก 20 ไร่ (อาร์ดอน) → ใช้ 4,000 มล. → ขวด 1 ลิตร → ซื้อ 4 ขวด ✓
+
+================================================================================
+9. Doc: สร้าง chatagent.md — สรุป Chat Agent & Agentic RAG Architecture
+================================================================================
+
+  ไฟล์: .claude/chatagent.md
+
+  เนื้อหา:
+    - ภาพรวม 4-Agent Pipeline (Stage 0-4)
+    - Main Chat Flow (chat.py) — intent routing, helpers
+    - Agent 1: QueryUnderstandingAgent — intent, entities, expanded queries
+    - Agent 2: RetrievalAgent — 6-stage pipeline, score boosting, thresholds
+    - Agent 3: GroundingAgent — verify relevance, citations
+    - Agent 4: ResponseGeneratorAgent — product context, prompt, fallback
+    - Memory System — storage, enhanced context format, config
+    - LINE Webhook — text flow vs image flow, quick commands
+    - LLM Models Summary — gpt-4o ทุก component, text-embedding-3-small
+    - Design Patterns — lazy import, async parallel, fallback chain ฯลฯ
+
+================================================================================

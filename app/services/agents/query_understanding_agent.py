@@ -14,6 +14,7 @@ import re
 from typing import List, Dict
 
 from app.services.agents import IntentType, QueryAnalysis
+from app.config import LLM_MODEL_QUERY_UNDERSTANDING
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,9 @@ class QueryUnderstandingAgent:
         context_section = ""
         if context:
             context_section = f"""บริบทการสนทนาก่อนหน้า:
-{context[:2000]}
+{context[:4000]}
+
+สำคัญ: ถ้าคำถามเป็นการถามต่อเนื่อง (เช่น "ใช้กับพืชนี้ได้ไหม" "ตัวไหนเหมาะกับ..." "ใช้ช่วงไหน") ต้องดูว่าก่อนหน้านี้พูดถึงสินค้าตัวไหน แล้วใส่ชื่อสินค้านั้นใน entities.product_name เสมอ
 
 """
 
@@ -158,7 +161,7 @@ required_sources:
 """
 
         response = await self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL_QUERY_UNDERSTANDING,
             messages=[
                 {
                     "role": "system",

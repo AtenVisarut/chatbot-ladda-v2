@@ -20,6 +20,7 @@ from app.services.agents import (
     IntentType
 )
 from app.utils.text_processing import post_process_answer
+from app.config import LLM_MODEL_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
     GREETINGS,
@@ -261,7 +262,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
         try:
             response = await self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=LLM_MODEL_RESPONSE_GEN,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
