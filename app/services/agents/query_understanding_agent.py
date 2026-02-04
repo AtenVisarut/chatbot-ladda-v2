@@ -203,10 +203,12 @@ required_sources ที่เป็นไปได้:
             if not expanded_queries:
                 expanded_queries = [query]
 
-            # Get required sources
+            # Get required sources — always include "products" (primary data source)
             required_sources = data.get("required_sources", ["products"])
             if not required_sources:
                 required_sources = self._determine_sources(intent)
+            if "products" not in required_sources:
+                required_sources.insert(0, "products")
 
             return QueryAnalysis(
                 original_query=query,
