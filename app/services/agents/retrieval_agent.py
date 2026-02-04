@@ -256,12 +256,22 @@ class RetrievalAgent:
 
             or_filter = ",".join(or_conditions)
 
-            result = self.supabase.table('products') \
+            # Apply category filter if intent requires specific product type
+            intent_cat_map = {
+                IntentType.DISEASE_TREATMENT: "ป้องกันโรค",
+                IntentType.PEST_CONTROL: "กำจัดแมลง",
+                IntentType.WEED_CONTROL: "กำจัดวัชพืช",
+            }
+            cat_filter = intent_cat_map.get(query_analysis.intent)
+
+            query_builder = self.supabase.table('products') \
                 .select('*') \
                 .in_('strategy_group', ['Skyrocket', 'Expand']) \
                 .or_(or_filter) \
-                .limit(top_k) \
-                .execute()
+                .limit(top_k)
+            if cat_filter:
+                query_builder = query_builder.ilike('product_category', f'%{cat_filter}%')
+            result = query_builder.execute()
 
             if not result.data:
                 return []
@@ -442,6 +452,26 @@ class RetrievalAgent:
                 reranked_docs = boosted + others
                 logger.info(f"  - Boosted {len(boosted)} direct lookup docs to top")
 
+            # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
+            intent_category_map = {
+                IntentType.DISEASE_TREATMENT: ["ป้องกันโรค", "fungicide"],
+                IntentType.PEST_CONTROL: ["กำจัดแมลง", "insecticide"],
+                IntentType.WEED_CONTROL: ["กำจัดวัชพืช", "herbicide"],
+            }
+            expected_categories = intent_category_map.get(query_analysis.intent)
+
+            # Stage 3.55: Category-Intent alignment penalty
+            # If user asks about disease, penalize non-fungicide products (e.g. PGR)
+            if not direct_lookup_ids:
+                if expected_categories:
+                    for doc in reranked_docs:
+                        cat = str(doc.metadata.get('category') or '').lower()
+                        if cat and not any(ec.lower() in cat for ec in expected_categories):
+                            penalty = -0.30
+                            doc.rerank_score = max(0.0, doc.rerank_score + penalty)
+                            logger.info(f"  - Category mismatch penalty {penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
+                    reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
+
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
             if not direct_lookup_ids:  # Only when not asking about specific product
                 strategy_bonus = {'Skyrocket': 0.15, 'Expand': 0.10, 'Natural': 0.0, 'Standard': -0.05}
@@ -456,10 +486,16 @@ class RetrievalAgent:
 
             # Stage 3.65: Crop-specific boost — if user asks about specific plant,
             # prioritize products whose applicable_crops is specific to that plant
+            # BUT only if category matches intent (no boost for PGR when asking about disease)
             if not direct_lookup_ids:
                 plant_type = query_analysis.entities.get('plant_type', '')
                 if plant_type:
                     for doc in reranked_docs:
+                        # Skip crop-specific boost for category-mismatched products
+                        if expected_categories:
+                            cat = str(doc.metadata.get('category') or '').lower()
+                            if cat and not any(ec.lower() in cat for ec in expected_categories):
+                                continue
                         crops = str(doc.metadata.get('applicable_crops') or '')
                         selling = str(doc.metadata.get('selling_point') or '')
                         # "เน้นสำหรับ(ทุเรียน)" or "เฉพาะทุเรียน" → strong match
@@ -472,8 +508,18 @@ class RetrievalAgent:
 
             # Stage 3.7: Promote best Skyrocket/Expand to position 1
             # Prefer product whose applicable_crops specifically matches user's plant_type
+            # BUT only promote category-matched products when intent is specific
             if not direct_lookup_ids:
                 all_priority = [d for d in reranked_docs if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
+                # Filter by category alignment if intent requires specific category
+                if expected_categories and all_priority:
+                    category_matched = [
+                        d for d in all_priority
+                        if not str(d.metadata.get('category') or '').lower()
+                        or any(ec.lower() in str(d.metadata.get('category') or '').lower() for ec in expected_categories)
+                    ]
+                    if category_matched:
+                        all_priority = category_matched
                 if all_priority:
                     best_priority = all_priority[0]
                     # If user mentions specific plant, prefer crop-specific product
