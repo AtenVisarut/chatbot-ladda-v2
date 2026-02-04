@@ -164,7 +164,7 @@ class AgenticRAG:
             # =================================================================
             retrieval_result = await self.retrieval_agent.retrieve(
                 query_analysis=query_analysis,
-                top_k=self.config.get('MIN_RELEVANT_DOCS', 5)
+                top_k=self.config.get('RETRIEVAL_TOP_K', 10)
             )
 
             # =================================================================

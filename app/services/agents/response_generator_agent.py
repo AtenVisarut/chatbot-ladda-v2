@@ -67,9 +67,23 @@ class ResponseGeneratorAgent:
             if query_analysis.intent == IntentType.GREETING:
                 return self._generate_greeting_response(query_analysis)
 
-            # Handle no data case
-            if not grounding_result.is_grounded and not retrieval_result.documents:
-                return self._generate_no_data_response(query_analysis)
+            # Handle no data case — grounding says not relevant
+            if not grounding_result.is_grounded:
+                # Check if retrieval promoted a crop-specific product (override grounding)
+                has_crop_specific_top = False
+                plant_type = query_analysis.entities.get('plant_type', '')
+                if plant_type and retrieval_result.documents:
+                    top_doc = retrieval_result.documents[0]
+                    crops = str(top_doc.metadata.get('applicable_crops') or '')
+                    selling = str(top_doc.metadata.get('selling_point') or '')
+                    if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                        has_crop_specific_top = True
+                        logger.info(f"  - Crop-specific override: {top_doc.title} is at position 1")
+
+                if not retrieval_result.documents or (
+                    grounding_result.confidence < 0.2 and not has_crop_specific_top
+                ):
+                    return self._generate_no_data_response(query_analysis)
 
             # Generate answer from verified product data using LLM
             answer = await self._generate_llm_response(
@@ -127,6 +141,38 @@ class ResponseGeneratorAgent:
             if not docs_to_use:
                 docs_to_use = retrieval_result.documents[:5]  # fallback
 
+        # Filter: when a crop-specific product exists, remove non-specific variants of same family
+        # e.g., if พรีดิคท์ 25 is for ทุเรียน specifically, remove พรีดิคท์ 10% and 15
+        plant_type_filter = query_analysis.entities.get('plant_type', '')
+        if plant_type_filter:
+            crop_specific_families = {}
+            for doc in docs_to_use:
+                crops = str(doc.metadata.get('applicable_crops') or '')
+                selling = str(doc.metadata.get('selling_point') or '')
+                product_name = doc.metadata.get('product_name', doc.title)
+                if plant_type_filter in crops and ('เน้นสำหรับ' in crops or f'{plant_type_filter}อันดับ' in selling):
+                    # Extract product family name (first word, e.g. "พรีดิคท์" from "พรีดิคท์ 25")
+                    family_key = product_name.split()[0] if ' ' in product_name else product_name
+                    crop_specific_families[family_key] = product_name
+
+            if crop_specific_families:
+                filtered = []
+                for doc in docs_to_use:
+                    product_name = doc.metadata.get('product_name', doc.title)
+                    crops = str(doc.metadata.get('applicable_crops') or '')
+                    selling = str(doc.metadata.get('selling_point') or '')
+                    is_crop_specific = plant_type_filter in crops and (
+                        'เน้นสำหรับ' in crops or f'{plant_type_filter}อันดับ' in selling
+                    )
+                    if not is_crop_specific:
+                        family_key = product_name.split()[0] if ' ' in product_name else product_name
+                        if family_key in crop_specific_families:
+                            logger.info(f"  - Removed non-specific variant: {product_name} (family: {family_key})")
+                            continue  # Skip non-specific variant
+                    filtered.append(doc)
+                if filtered:
+                    docs_to_use = filtered
+
         # Build product data context from retrieval results
         product_context_parts = []
         for i, doc in enumerate(docs_to_use, 1):
@@ -161,8 +207,19 @@ class ResponseGeneratorAgent:
 
         product_context = "\n".join(product_context_parts)
 
-        # Relevant products from grounding
-        relevant = grounding_result.relevant_products
+        # Relevant products from grounding — inject crop-specific products from retrieval
+        relevant = list(grounding_result.relevant_products)
+        plant_type = query_analysis.entities.get('plant_type', '')
+        if plant_type and docs_to_use:
+            for doc in docs_to_use[:3]:
+                crops = str(doc.metadata.get('applicable_crops') or '')
+                selling = str(doc.metadata.get('selling_point') or '')
+                product_name = doc.metadata.get('product_name', doc.title)
+                if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                    if product_name not in relevant:
+                        relevant.insert(0, product_name)
+                        logger.info(f"  - Injected crop-specific product into relevant: {product_name}")
+                    break
         relevant_str = ", ".join(relevant) if relevant else "(ทั้งหมดที่ค้นพบ)"
 
         # Build context section for follow-up questions
@@ -175,6 +232,17 @@ class ResponseGeneratorAgent:
 
 """
 
+        # Build crop-specific note if applicable
+        crop_note = ""
+        if plant_type and docs_to_use:
+            for doc in docs_to_use[:3]:
+                crops = str(doc.metadata.get('applicable_crops') or '')
+                selling = str(doc.metadata.get('selling_point') or '')
+                pname = doc.metadata.get('product_name', doc.title)
+                if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                    crop_note = f"\nหมายเหตุ: {pname} เป็นสินค้าที่เน้นสำหรับ{plant_type}โดยเฉพาะ ให้แนะนำเป็นตัวแรก\n"
+                    break
+
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
@@ -183,7 +251,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-
+{crop_note}
 สร้างคำตอบจากข้อมูลด้านบนเท่านั้น"""
 
         system_prompt = PRODUCT_QA_PROMPT

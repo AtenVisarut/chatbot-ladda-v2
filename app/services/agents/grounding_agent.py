@@ -115,6 +115,9 @@ class GroundingAgent:
                 'usage_rate': doc.metadata.get('usage_rate'),
                 'target_pest': doc.metadata.get('target_pest'),
                 'category': doc.metadata.get('category'),
+                'applicable_crops': doc.metadata.get('applicable_crops'),
+                'selling_point': doc.metadata.get('selling_point'),
+                'strategy_group': doc.metadata.get('strategy_group'),
             }
             summaries.append(summary)
         return summaries
@@ -138,11 +141,17 @@ class GroundingAgent:
                 if summary.get('chemical_name'):
                     part += f" (สารสำคัญ: {summary['chemical_name']})"
                 part += "\n"
+            if summary.get('applicable_crops'):
+                part += f"พืชที่ใช้ได้: {str(summary['applicable_crops'])[:150]}\n"
+            if summary.get('selling_point'):
+                part += f"จุดเด่น: {str(summary['selling_point'])[:150]}\n"
             if summary.get('usage_rate'):
                 part += f"อัตราใช้: {summary['usage_rate']}\n"
             if summary.get('target_pest'):
                 target = str(summary['target_pest'])[:150]
                 part += f"ใช้กำจัด: {target}\n"
+            if summary.get('strategy_group'):
+                part += f"Strategy Group: {summary['strategy_group']}\n"
             if summary.get('content'):
                 part += f"เนื้อหา: {summary['content']}\n"
             context_parts.append(part)
@@ -183,7 +192,9 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 1. is_grounded=true ถ้ามีสินค้าอย่างน้อย 1 ตัวที่เกี่ยวข้องกับคำถาม
 2. relevant_products ต้องมีเฉพาะสินค้าที่ตรงกับคำถามจริงๆ
 3. ถ้าถามเฉพาะสินค้า X แต่ไม่พบ X → is_grounded=false
-4. confidence สูง (>0.8) ถ้าสินค้าตรงกับคำถามเป๊ะ"""
+4. confidence สูง (>0.8) ถ้าสินค้าตรงกับคำถามเป๊ะ
+5. ถ้าสินค้าหลายตัวคล้ายกัน (เช่น ต่างความเข้มข้น) ให้เลือกตัวที่ "พืชที่ใช้ได้" ระบุเน้นพืชที่ผู้ใช้ถามถึงเป็นลำดับแรก
+6. สินค้า Strategy Skyrocket/Expand เกี่ยวข้องมากกว่า Standard เสมอ"""
 
         response = await self.openai_client.chat.completions.create(
             model="gpt-4o",

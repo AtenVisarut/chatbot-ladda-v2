@@ -175,23 +175,15 @@ class RetrievalAgent:
     async def _supplementary_priority_search(
         self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 5
     ) -> List[RetrievedDocument]:
-        """Search specifically for Skyrocket/Expand products when main search missed them"""
+        """Search for Skyrocket/Expand products matching query entities (always runs)"""
         if not self.supabase:
             return []
-
-        # Check if we already have Skyrocket/Expand docs
-        existing_priority = [
-            d for d in existing_docs
-            if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')
-        ]
-        if existing_priority:
-            return []  # Already have priority products, no need
 
         try:
             # Build keywords from query analysis entities + expanded queries
             keywords = []
             entities = query_analysis.entities
-            for key in ['pest_name', 'disease_name', 'plant_type', 'symptom']:
+            for key in ['pest_name', 'disease_name', 'plant_type', 'symptom', 'growth_stage']:
                 val = entities.get(key)
                 if val:
                     if isinstance(val, list):
@@ -228,6 +220,7 @@ class RetrievalAgent:
                 or_conditions.append(f"selling_point.ilike.%{kw}%")
                 or_conditions.append(f"common_name_th.ilike.%{kw}%")
                 or_conditions.append(f"active_ingredient.ilike.%{kw}%")
+                or_conditions.append(f"applicable_crops.ilike.%{kw}%")
 
             or_filter = ",".join(or_conditions)
 
@@ -287,29 +280,40 @@ class RetrievalAgent:
             return []
 
     async def _enrich_strategy_group(self, docs: List[RetrievedDocument]):
-        """Fetch strategy_group from DB for docs that don't have it (e.g. from RPC)"""
+        """Fetch strategy_group, selling_point, applicable_crops from DB for docs missing them (e.g. from RPC)"""
         if not self.supabase:
             return
 
-        # Find docs missing strategy_group
-        missing_ids = [doc.id for doc in docs if not doc.metadata.get('strategy_group') and doc.id]
+        # Find docs missing strategy_group or selling_point (RPC doesn't return these)
+        missing_ids = [
+            doc.id for doc in docs
+            if doc.id and (not doc.metadata.get('strategy_group') or not doc.metadata.get('selling_point'))
+        ]
         if not missing_ids:
             return
 
         try:
             result = self.supabase.table('products') \
-                .select('id, strategy_group') \
-                .in_('id', [int(i) for i in missing_ids if i.isdigit()]) \
+                .select('id, strategy_group, selling_point, applicable_crops') \
+                .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
                 .execute()
 
             if result.data:
-                sg_map = {str(r['id']): r['strategy_group'] for r in result.data if r.get('strategy_group')}
+                enrich_map = {str(r['id']): r for r in result.data}
+                enriched = 0
                 for doc in docs:
-                    if doc.id in sg_map and not doc.metadata.get('strategy_group'):
-                        doc.metadata['strategy_group'] = sg_map[doc.id]
-                logger.info(f"  - Enriched strategy_group for {len(sg_map)} docs")
+                    if doc.id in enrich_map:
+                        r = enrich_map[doc.id]
+                        if r.get('strategy_group') and not doc.metadata.get('strategy_group'):
+                            doc.metadata['strategy_group'] = r['strategy_group']
+                        if r.get('selling_point') and not doc.metadata.get('selling_point'):
+                            doc.metadata['selling_point'] = r['selling_point']
+                        if r.get('applicable_crops') and not doc.metadata.get('applicable_crops'):
+                            doc.metadata['applicable_crops'] = r['applicable_crops']
+                        enriched += 1
+                logger.info(f"  - Enriched metadata for {enriched} docs (from {len(enrich_map)} DB rows)")
         except Exception as e:
-            logger.warning(f"Strategy group enrichment failed: {e}")
+            logger.warning(f"Metadata enrichment failed: {e}")
 
     async def retrieve(
         self,
@@ -415,11 +419,38 @@ class RetrievalAgent:
                 reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
                 logger.info(f"  - Applied strategy group score boost")
 
+            # Stage 3.65: Crop-specific boost — if user asks about specific plant,
+            # prioritize products whose applicable_crops is specific to that plant
+            if not direct_lookup_ids:
+                plant_type = query_analysis.entities.get('plant_type', '')
+                if plant_type:
+                    for doc in reranked_docs:
+                        crops = str(doc.metadata.get('applicable_crops') or '')
+                        selling = str(doc.metadata.get('selling_point') or '')
+                        # "เน้นสำหรับ(ทุเรียน)" or "เฉพาะทุเรียน" → strong match
+                        if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                            doc.rerank_score = min(1.0, doc.rerank_score + 0.20)
+                            logger.info(f"  - Crop-specific boost +0.20 for {doc.title} (crops: {crops[:50]})")
+                        elif plant_type in crops:
+                            doc.rerank_score = min(1.0, doc.rerank_score + 0.05)
+                    reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
+
             # Stage 3.7: Promote best Skyrocket/Expand to position 1
+            # Prefer product whose applicable_crops specifically matches user's plant_type
             if not direct_lookup_ids:
                 all_priority = [d for d in reranked_docs if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
                 if all_priority:
                     best_priority = all_priority[0]
+                    # If user mentions specific plant, prefer crop-specific product
+                    plant_type = query_analysis.entities.get('plant_type', '')
+                    if plant_type:
+                        for d in all_priority:
+                            crops = str(d.metadata.get('applicable_crops') or '')
+                            selling = str(d.metadata.get('selling_point') or '')
+                            if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                                best_priority = d
+                                logger.info(f"  - Crop-specific match: {d.title} (crops: {crops[:50]})")
+                                break
                     current_pos = reranked_docs.index(best_priority)
                     if current_pos > 0:
                         reranked_docs.remove(best_priority)
@@ -436,6 +467,30 @@ class RetrievalAgent:
             # Ensure we have at least some results
             if len(filtered_docs) < MIN_RELEVANT_DOCS and len(reranked_docs) > 0:
                 filtered_docs = reranked_docs[:MIN_RELEVANT_DOCS]
+
+            # Stage 4.5: Ensure crop-specific priority product is in results
+            if not direct_lookup_ids:
+                plant_type = query_analysis.entities.get('plant_type', '')
+                if plant_type:
+                    # Check if a crop-specific product is already in filtered_docs
+                    has_crop_specific = False
+                    for d in filtered_docs:
+                        crops = str(d.metadata.get('applicable_crops') or '')
+                        selling = str(d.metadata.get('selling_point') or '')
+                        if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                            has_crop_specific = True
+                            break
+
+                    if not has_crop_specific:
+                        # Search full reranked list for crop-specific product
+                        for d in reranked_docs:
+                            crops = str(d.metadata.get('applicable_crops') or '')
+                            selling = str(d.metadata.get('selling_point') or '')
+                            if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                                if d not in filtered_docs:
+                                    filtered_docs.insert(0, d)
+                                    logger.info(f"  - Rescued crop-specific product: {d.title} to pos 1")
+                                break
 
             total_after_rerank = len(filtered_docs)
             avg_similarity = sum(d.similarity_score for d in filtered_docs) / len(filtered_docs) if filtered_docs else 0
@@ -683,6 +738,10 @@ class RetrievalAgent:
                     text += f" | สินค้า: {doc.metadata['product_name']}"
                 if doc.metadata.get('target_pest'):
                     text += f" | ใช้กำจัด: {str(doc.metadata['target_pest'])[:80]}"
+                if doc.metadata.get('applicable_crops'):
+                    text += f" | พืช: {str(doc.metadata['applicable_crops'])[:80]}"
+                if doc.metadata.get('selling_point'):
+                    text += f" | จุดเด่น: {str(doc.metadata['selling_point'])[:80]}"
                 if doc.metadata.get('category'):
                     text += f" | ประเภท: {doc.metadata['category']}"
                 if doc.metadata.get('strategy_group'):
@@ -713,6 +772,7 @@ class RetrievalAgent:
 2. ประเภทสินค้าตรงกับปัญหาหรือไม่
 3. พืช/ศัตรูพืชที่ระบุตรงกันหรือไม่
 4. สินค้า Strategy Skyrocket/Expand ให้ลำดับสูงกว่า Standard
+5. ถ้าสินค้าหลายตัวคล้ายกัน ให้เลือกตัวที่ "พืช" ระบุเน้นพืชตรงกับคำถาม (เช่น "เน้นสำหรับ(ทุเรียน)" ตรงกว่า "มะม่วง, ทุเรียน")
 
 ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เช่น: 3,1,5,2,4"""
 
