@@ -201,6 +201,8 @@ class ResponseGeneratorAgent:
                 part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])[:150]}\n"
             if meta.get('absorption_method'):
                 part += f"  การดูดซึม: {str(meta['absorption_method'])[:100]}\n"
+            if meta.get('package_size'):
+                part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
             if meta.get('strategy_group'):
                 part += f"  Strategy Group: {meta['strategy_group']}\n"
             product_context_parts.append(part)
@@ -252,7 +254,8 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
 {crop_note}
-สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)"""
+สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
+ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย"""
 
         system_prompt = PRODUCT_QA_PROMPT
 
@@ -292,6 +295,8 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 parts.append(f"   - ใช้กำจัด: {str(meta['target_pest'])[:100]}")
             if meta.get('usage_rate'):
                 parts.append(f"   - อัตราใช้: {meta['usage_rate']}")
+            if meta.get('package_size'):
+                parts.append(f"   - ขนาดบรรจุ: {meta['package_size']}")
             parts.append("")
 
         parts.append(f"\n{PRODUCT_CTA}")

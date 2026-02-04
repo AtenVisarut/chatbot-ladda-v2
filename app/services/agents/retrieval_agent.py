@@ -91,6 +91,7 @@ class RetrievalAgent:
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                         'strategy_group': item.get('strategy_group'),
+                        'package_size': item.get('package_size'),
                     }
                 )
                 docs.append(doc)
@@ -161,6 +162,7 @@ class RetrievalAgent:
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                         'strategy_group': item.get('strategy_group'),
+                        'package_size': item.get('package_size'),
                     }
                 )
                 docs.append(doc)
@@ -267,6 +269,7 @@ class RetrievalAgent:
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                         'strategy_group': item.get('strategy_group'),
+                        'package_size': item.get('package_size'),
                     }
                 )
                 docs.append(doc)
@@ -294,7 +297,7 @@ class RetrievalAgent:
 
         try:
             result = self.supabase.table('products') \
-                .select('id, strategy_group, selling_point, applicable_crops') \
+                .select('id, strategy_group, selling_point, applicable_crops, package_size') \
                 .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
                 .execute()
 
@@ -310,6 +313,8 @@ class RetrievalAgent:
                             doc.metadata['selling_point'] = r['selling_point']
                         if r.get('applicable_crops') and not doc.metadata.get('applicable_crops'):
                             doc.metadata['applicable_crops'] = r['applicable_crops']
+                        if r.get('package_size') and not doc.metadata.get('package_size'):
+                            doc.metadata['package_size'] = r['package_size']
                         enriched += 1
                 logger.info(f"  - Enriched metadata for {enriched} docs (from {len(enrich_map)} DB rows)")
         except Exception as e:
@@ -620,6 +625,7 @@ class RetrievalAgent:
                         'action_characteristics': item.get('action_characteristics'),
                         'absorption_method': item.get('absorption_method'),
                         'strategy_group': item.get('strategy_group'),
+                        'package_size': item.get('package_size'),
                     }
                 )
                 docs.append(doc)
