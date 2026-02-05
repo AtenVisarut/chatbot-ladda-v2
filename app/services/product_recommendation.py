@@ -589,47 +589,48 @@ def get_required_category(disease_name: str) -> tuple:
 
     Returns: (category, category_th) หรือ (None, None) ถ้าไม่แน่ใจ
 
-    หมายเหตุ: category ต้องตรงกับค่าใน DB (ภาษาไทย)
-    - ป้องกันโรค (โรคจากเชื้อรา)
-    - กำจัดแมลง (แมลง/ศัตรูพืช)
-    - กำจัดวัชพืช (วัชพืช)
+    หมายเหตุ: category ต้องตรงกับค่าใน DB (English)
+    - Fungicide (โรคจากเชื้อรา)
+    - Insecticide (แมลง/ศัตรูพืช)
+    - Herbicide (วัชพืช)
     """
     disease_lower = disease_name.lower()
 
-    # ตรวจสอบว่าเป็นโรคจากเชื้อรา → ป้องกันโรค
+    # ตรวจสอบว่าเป็นโรคจากเชื้อรา → Fungicide
     for keyword in FUNGAL_KEYWORDS:
         if keyword.lower() in disease_lower:
-            logger.info(f"🏷️ โรค '{disease_name}' → ต้องใช้ ป้องกันโรค")
-            return ("ป้องกันโรค", "ยาป้องกันโรค")
+            logger.info(f"🏷️ โรค '{disease_name}' → ต้องใช้ Fungicide")
+            return ("Fungicide", "ยาป้องกันโรค")
 
-    # ตรวจสอบว่าเป็นแมลง/ศัตรูพืช → กำจัดแมลง
+    # ตรวจสอบว่าเป็นแมลง/ศัตรูพืช → Insecticide
     for keyword in INSECT_KEYWORDS:
         if keyword.lower() in disease_lower:
-            logger.info(f"🏷️ ปัญหา '{disease_name}' → ต้องใช้ กำจัดแมลง")
-            return ("กำจัดแมลง", "ยากำจัดแมลง")
+            logger.info(f"🏷️ ปัญหา '{disease_name}' → ต้องใช้ Insecticide")
+            return ("Insecticide", "ยากำจัดแมลง")
 
-    # ตรวจสอบว่าเป็นวัชพืช → กำจัดวัชพืช
+    # ตรวจสอบว่าเป็นวัชพืช → Herbicide
     for keyword in WEED_KEYWORDS:
         if keyword.lower() in disease_lower:
-            logger.info(f"🏷️ ปัญหา '{disease_name}' → ต้องใช้ กำจัดวัชพืช")
-            return ("กำจัดวัชพืช", "ยากำจัดวัชพืช")
+            logger.info(f"🏷️ ปัญหา '{disease_name}' → ต้องใช้ Herbicide")
+            return ("Herbicide", "ยากำจัดวัชพืช")
 
     return (None, None)
 
 
 # Category synonyms - ชื่อต่างกันแต่หมายถึงประเภทเดียวกัน
 CATEGORY_SYNONYMS = {
-    "กำจัดแมลง": ["กำจัดแมลง", "ยาฆ่าแมลง", "ยากำจัดแมลง", "insecticide"],
-    "ป้องกันโรค": ["ป้องกันโรค", "ยาป้องกันโรค", "ยาฆ่าเชื้อรา", "fungicide"],
-    "กำจัดวัชพืช": ["กำจัดวัชพืช", "ยาฆ่าหญ้า", "ยากำจัดวัชพืช", "herbicide"],
-    "ปุ๋ยและสารบำรุง": ["ปุ๋ยและสารบำรุง", "ปุ๋ย", "สารบำรุง", "fertilizer"],
+    "Insecticide": ["Insecticide", "insecticide", "กำจัดแมลง", "ยาฆ่าแมลง", "ยากำจัดแมลง"],
+    "Fungicide": ["Fungicide", "fungicide", "ป้องกันโรค", "ยาป้องกันโรค", "ยาฆ่าเชื้อรา"],
+    "Herbicide": ["Herbicide", "herbicide", "กำจัดวัชพืช", "ยาฆ่าหญ้า", "ยากำจัดวัชพืช"],
+    "PGR": ["PGR", "pgr", "สารเร่งการเจริญเติบโต", "สารควบคุมการเจริญเติบโต"],
+    "Fertilizer": ["Fertilizer", "fertilizer", "ปุ๋ยและสารบำรุง", "ปุ๋ย", "สารบำรุง"],
 }
 
 
 def normalize_category(category: str) -> str:
     """
     แปลง category ให้เป็นชื่อมาตรฐาน
-    เช่น "ยาฆ่าแมลง" → "กำจัดแมลง"
+    เช่น "ยาฆ่าแมลง" → "Insecticide", "กำจัดแมลง" → "Insecticide"
     """
     if not category:
         return "unknown"
@@ -646,7 +647,7 @@ def get_product_category(product: dict) -> str:
     """
     ระบุประเภทสินค้าจาก field product_category ใน DB
 
-    Returns: "ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง" หรือ "unknown"
+    Returns: "Fungicide", "Insecticide", "Herbicide", "PGR", "Fertilizer" หรือ "unknown"
     """
     # อ่านจาก field product_category ใน DB (แม่นยำ 100%)
     db_category = product.get("product_category")
@@ -686,7 +687,7 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
             matched_products.append(product)
         else:
             # ตรวจสอบว่าเป็นประเภทที่ผิดชัดเจนหรือไม่
-            wrong_categories = {"ป้องกันโรค", "กำจัดแมลง", "กำจัดวัชพืช", "ปุ๋ยและสารบำรุง"} - {required_category}
+            wrong_categories = {"Fungicide", "Insecticide", "Herbicide", "PGR", "Fertilizer"} - {required_category}
             if product_category in wrong_categories:
                 wrong_category_products.append(product.get('product_name'))
             # ถ้าเป็น unknown → ตรวจสอบเพิ่มเติมจาก active ingredient
@@ -700,7 +701,7 @@ def filter_products_by_category(products: List[Dict], required_category: str) ->
                 is_insecticide = any(i in active for i in insecticide_ingredients)
 
                 # ถ้าต้องการยาป้องกันโรค แต่ active ingredient เป็นยาฆ่าหญ้า/แมลง → กรองออก
-                if required_category == "ป้องกันโรค" and (is_herbicide or is_insecticide):
+                if required_category == "Fungicide" and (is_herbicide or is_insecticide):
                     wrong_category_products.append(product.get('product_name'))
                     continue
                 # ถ้าไม่แน่ใจและไม่ใช่ประเภทที่ผิดชัดเจน → ไม่เอา (เข้มงวดขึ้น)
@@ -1519,9 +1520,9 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
 
         vector_search_query, pest_name, disease_treatment_query = get_search_query_for_disease(disease_name, pest_type)
 
-        # ถ้าโรคมีพาหะ (เช่น โรคจู๋) → ต้องการ กำจัดแมลง
+        # ถ้าโรคมีพาหะ (เช่น โรคจู๋) → ต้องการ Insecticide
         if pest_name:
-            required_category = "กำจัดแมลง"
+            required_category = "Insecticide"
             required_category_th = "ยากำจัดแมลง"
 
         if pest_name:
@@ -2305,7 +2306,7 @@ async def retrieve_products_with_matching_score(
         # 1.2 ถ้าโรคมีพาหะ → ค้นหายาฆ่าแมลงด้วย
         if pest_name:
             logger.info(f"📦 Direct Query for pest: {pest_name}")
-            pest_results = await query_products_by_target_pest(pest_name, required_category="กำจัดแมลง")
+            pest_results = await query_products_by_target_pest(pest_name, required_category="Insecticide")
             if pest_results:
                 for p in pest_results:
                     p['_direct_match'] = True
@@ -2365,9 +2366,9 @@ async def retrieve_products_with_matching_score(
         # Filter by product category (ป้องกันโรค/กำจัดแมลง/กำจัดวัชพืช)
         required_category, required_category_th = get_required_category(disease_name)
 
-        # ถ้าโรคมีพาหะ → ต้องการ กำจัดแมลง
+        # ถ้าโรคมีพาหะ → ต้องการ Insecticide
         if pest_name:
-            required_category = "กำจัดแมลง"
+            required_category = "Insecticide"
             required_category_th = "ยากำจัดแมลง"
 
         if required_category and all_results:

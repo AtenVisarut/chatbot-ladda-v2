@@ -145,14 +145,16 @@ def get_pathogen_type(active_ingredient: str, product_category: str) -> str:
     """Determine pathogen_type from active_ingredient and product_category"""
     if not active_ingredient:
         # Fallback to product_category
-        if product_category == "กำจัดแมลง":
+        if product_category in ("Insecticide", "กำจัดแมลง"):
             return "insect"
-        elif product_category == "กำจัดวัชพืช":
+        elif product_category in ("Herbicide", "กำจัดวัชพืช"):
             return "herbicide"
-        elif product_category == "ป้องกันโรค":
+        elif product_category in ("Fungicide", "ป้องกันโรค"):
             return "fungi"  # Default for disease prevention
-        elif product_category == "ปุ๋ยและสารบำรุง":
+        elif product_category in ("Fertilizer", "ปุ๋ยและสารบำรุง"):
             return "fertilizer"
+        elif product_category in ("PGR",):
+            return "pgr"
         return "unknown"
 
     ai_lower = active_ingredient.lower()

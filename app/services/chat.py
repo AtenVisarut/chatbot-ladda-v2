@@ -378,10 +378,10 @@ async def vector_search_products(query: str, top_k: int = 5) -> List[Dict]:
 # Mapping: problem_type → product_category ใน products table
 # =============================================================================
 PROBLEM_TYPE_TO_PRODUCT_CATEGORY = {
-    'disease': 'ป้องกันโรค',
-    'insect': 'กำจัดแมลง',
-    'nutrient': 'ปุ๋ยและสารบำรุง',
-    'weed': 'กำจัดวัชพืช'
+    'disease': 'Fungicide',
+    'insect': 'Insecticide',
+    'nutrient': 'Fertilizer',
+    'weed': 'Herbicide'
 }
 
 

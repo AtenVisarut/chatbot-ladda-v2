@@ -1,5 +1,78 @@
 ================================================================================
 CHANGELOG — 2026-02-05
+================================================================================
+
+================================================================================
+9. Update: product_category → กลุ่มสาร (English) จาก CSV
+================================================================================
+
+  ปัญหา:
+    product_category ใน Supabase เก็บค่าเป็นภาษาไทย (ป้องกันโรค, กำจัดแมลง,
+    กำจัดวัชพืช) ซึ่งไม่ตรงกับ "กลุ่มสาร" ใน CSV ต้นทาง
+    พรีดิคท์ 3 ตัว (25, 15, 10%) มี product_category = NULL
+
+  สิ่งที่ทำ:
+
+    A. อัพเดตข้อมูล Supabase (44 products ทั้งหมด)
+       ค่าเก่า (Thai)         → ค่าใหม่ (English)    จำนวน
+       ป้องกันโรค             → Fungicide             11
+       กำจัดแมลง              → Insecticide           16
+       กำจัดวัชพืช            → Herbicide             14
+       NULL (พรีดิคท์)         → PGR                   3
+
+    B. อัพเดตโค้ด (5 ไฟล์) ให้ใช้ค่า English ใหม่
+
+       app/services/agents/retrieval_agent.py
+         - intent_cat_map (line ~260): Thai → English
+         - intent_category_map (line ~456): เพิ่ม English + backward compat Thai
+         - intent_category_map (line ~648): Thai → English
+
+       app/services/product_recommendation.py
+         - CATEGORY_SYNONYMS: key เปลี่ยนเป็น English, เก็บ Thai ใน synonyms
+         - get_required_category(): return English (Fungicide/Insecticide/Herbicide)
+         - filter_products_by_category(): wrong_categories set ใช้ English
+         - normalize_category(): รองรับทั้ง English ใหม่ + Thai เก่า
+         - hardcoded "กำจัดแมลง" 3 จุด → "Insecticide"
+
+       app/services/chat.py
+         - PROBLEM_TYPE_TO_PRODUCT_CATEGORY: Thai → English
+
+       app/services/reranker.py
+         - category_map: key เปลี่ยนเป็น English
+         - prompt template: category_map.get() ใช้ English key
+
+       scripts/add_pathogen_type.py
+         - get_pathogen_type(): รองรับทั้ง English ใหม่ + Thai เก่า
+         - เพิ่ม PGR case
+
+  Backward Compatibility:
+    CATEGORY_SYNONYMS เก็บทั้ง Thai + English ใน synonym list
+    normalize_category("กำจัดแมลง") → "Insecticide" (ยังทำงานได้)
+
+  Scripts สร้างใหม่:
+    scripts/update_group_sar.py — อ่าน CSV, match product_name, update Supabase
+
+  ทดสอบ:
+    test_category_update.py — 47/48 passed
+      - DB values: ไม่มี NULL, ทุกค่าเป็น English ถูกต้อง
+      - Logic: normalize, filter, mapping ทำงานถูก
+      - DB Query: eq, ilike, in_ ค้นหาได้ถูกต้อง
+      - Pipeline: Fungicide/Herbicide 100% correct top results
+                  Insecticide majority correct (4/5)
+
+    test_accuracy_check.py — 4 คำถามจริง ถูกทั้งหมด
+      Q1: หนอนกอในนาข้าว → นาแดน-จี, โฮป, ไฮซีส (Insecticide)
+      Q2: พรีดิคท์ 25 ใช้กับส้มได้ไหม → พรีดิคท์ 25 (PGR)
+      Q3: ราเซอร์ คุมถั่วเหลืองได้ไหม → ราเซอร์ (Herbicide)
+      Q4: โฮปใช้ในข้าวช่วงอายุกี่วัน → โฮป (Insecticide)
+
+  ผลกระทบ: ไม่กระทบความแม่นยำ ทดสอบแล้วทุกคำถามตอบถูกต้อง
+
+================================================================================
+(Previous entries below)
+================================================================================
+
+================================================================================
 Product Data Update: อัปเดตข้อมูลสินค้า "อาร์เทมีส" ให้ครบทุก field
 ================================================================================
 

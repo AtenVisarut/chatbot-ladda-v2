@@ -258,9 +258,9 @@ class RetrievalAgent:
 
             # Apply category filter if intent requires specific product type
             intent_cat_map = {
-                IntentType.DISEASE_TREATMENT: "ป้องกันโรค",
-                IntentType.PEST_CONTROL: "กำจัดแมลง",
-                IntentType.WEED_CONTROL: "กำจัดวัชพืช",
+                IntentType.DISEASE_TREATMENT: "Fungicide",
+                IntentType.PEST_CONTROL: "Insecticide",
+                IntentType.WEED_CONTROL: "Herbicide",
             }
             cat_filter = intent_cat_map.get(query_analysis.intent)
 
@@ -454,9 +454,9 @@ class RetrievalAgent:
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             intent_category_map = {
-                IntentType.DISEASE_TREATMENT: ["ป้องกันโรค", "fungicide"],
-                IntentType.PEST_CONTROL: ["กำจัดแมลง", "insecticide"],
-                IntentType.WEED_CONTROL: ["กำจัดวัชพืช", "herbicide"],
+                IntentType.DISEASE_TREATMENT: ["Fungicide", "fungicide", "ป้องกันโรค"],
+                IntentType.PEST_CONTROL: ["Insecticide", "insecticide", "กำจัดแมลง"],
+                IntentType.WEED_CONTROL: ["Herbicide", "herbicide", "กำจัดวัชพืช"],
             }
             expected_categories = intent_category_map.get(query_analysis.intent)
 
@@ -643,13 +643,13 @@ class RetrievalAgent:
             if not embedding:
                 return []
 
-            # Determine category filter based on intent (use Thai names matching products table)
+            # Determine category filter based on intent (English values matching products table)
             category_filter = None
             intent_category_map = {
-                IntentType.DISEASE_TREATMENT: "ป้องกันโรค",
-                IntentType.PEST_CONTROL: "กำจัดแมลง",
-                IntentType.WEED_CONTROL: "กำจัดวัชพืช",
-                IntentType.NUTRIENT_SUPPLEMENT: "ปุ๋ยและสารบำรุง",
+                IntentType.DISEASE_TREATMENT: "Fungicide",
+                IntentType.PEST_CONTROL: "Insecticide",
+                IntentType.WEED_CONTROL: "Herbicide",
+                IntentType.NUTRIENT_SUPPLEMENT: "Fertilizer",
             }
             if query_analysis.intent in intent_category_map:
                 category_filter = intent_category_map[query_analysis.intent]

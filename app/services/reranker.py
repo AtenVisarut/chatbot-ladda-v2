@@ -61,16 +61,16 @@ async def rerank_products_with_llm(
         category_constraint = ""
         if required_category and required_category_th:
             category_map = {
-                "ป้องกันโรค": "ยาป้องกันโรค (เช่น propiconazole, difenoconazole, azoxystrobin)",
-                "กำจัดแมลง": "ยากำจัดแมลง (เช่น cartap, cypermethrin, imidacloprid)",
-                "กำจัดวัชพืช": "ยากำจัดวัชพืช (เช่น bispyribac, glyphosate, pretilachlor)"
+                "Fungicide": "ยาป้องกันโรค (เช่น propiconazole, difenoconazole, azoxystrobin)",
+                "Insecticide": "ยากำจัดแมลง (เช่น cartap, cypermethrin, imidacloprid)",
+                "Herbicide": "ยากำจัดวัชพืช (เช่น bispyribac, glyphosate, pretilachlor)"
             }
             category_constraint = f"""
 
 ⚠️ สำคัญมาก: คำค้นหานี้ต้องการ **{required_category_th}** เท่านั้น!
-- ถ้าเป็นโรคพืช/เชื้อรา → เลือกเฉพาะ {category_map.get('ป้องกันโรค')}
-- ถ้าเป็นแมลง/หนอน/เพลี้ย → เลือกเฉพาะ {category_map.get('กำจัดแมลง')}
-- ถ้าเป็นวัชพืช/หญ้า → เลือกเฉพาะ {category_map.get('กำจัดวัชพืช')}
+- ถ้าเป็นโรคพืช/เชื้อรา → เลือกเฉพาะ {category_map.get('Fungicide')}
+- ถ้าเป็นแมลง/หนอน/เพลี้ย → เลือกเฉพาะ {category_map.get('Insecticide')}
+- ถ้าเป็นวัชพืช/หญ้า → เลือกเฉพาะ {category_map.get('Herbicide')}
 
 ❌ ห้ามจัดอันดับสินค้าที่ไม่ใช่ {required_category_th} ให้อยู่ลำดับต้นๆ"""
 
