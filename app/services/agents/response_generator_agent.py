@@ -248,6 +248,25 @@ class ResponseGeneratorAgent:
 
 """
 
+        # Validate disease-product match: check if queried disease is in any product's target_pest
+        disease_mismatch_note = ""
+        disease_name = query_analysis.entities.get('disease_name', '')
+        if disease_name and query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
+            # Check if any product's target_pest mentions the disease
+            disease_found_in_products = False
+            for doc in docs_to_use:
+                target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                if disease_name.lower() in target_pest:
+                    disease_found_in_products = True
+                    break
+            if not disease_found_in_products:
+                disease_mismatch_note = f"""
+[คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" (target_pest) ของสินค้าใดเลย
+→ ห้ามแนะนำสินค้าใดๆ สำหรับโรคนี้ เพราะไม่มีข้อมูลว่าสินค้าเหล่านี้รักษาโรคนี้ได้
+→ ให้ตอบว่า: "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าในระบบที่ระบุว่ารักษาโรค{disease_name}ได้โดยตรง แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
+"""
+                logger.warning(f"Disease '{disease_name}' NOT found in any product's target_pest — will block recommendation")
+
         # Build crop-specific note if applicable
         crop_note = ""
         if plant_type and docs_to_use:
@@ -267,7 +286,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}
+{crop_note}{disease_mismatch_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
 ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย"""
 
