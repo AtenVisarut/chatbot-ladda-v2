@@ -3,6 +3,130 @@ CHANGELOG — 2026-02-05
 ================================================================================
 
 ================================================================================
+14. Fix: Disease Fallback Search + Grounding Override สำหรับโรคหายาก
+================================================================================
+
+  ปัญหา:
+    Bot ตอบ "ฟิวสาเรียม ใช้ยาอะไร" ไม่ได้ (ตอบว่า "ยังไม่พบตัวที่เหมาะ")
+    แม้ว่าอาร์เทมีสจะมี "ฟิวซาเรียม" อยู่ใน target_pest แล้ว (จาก fix ข้อ 13)
+
+  Root Causes (3 ชั้น):
+    1. Vector similarity ต่ำเกินไป (0.187 < threshold 0.25)
+       — embedding ของ Artemis มีข้อมูลเยอะ ทำให้ Fusarium ถูก "เจือจาง"
+    2. Keyword search ไม่ทำงาน — tsvector tokenize ภาษาไทยผิด
+       (ได้ 'ฟิวซเรียม' แทน 'ฟิวซาเรียม')
+    3. Grounding Agent reject (confidence=0.0) → Response Generator
+       return "ไม่พบ" แทนที่จะส่งต่อให้ LLM ตอบ
+
+  แก้ไข (3 ไฟล์):
+
+    app/services/agents/retrieval_agent.py
+      - เพิ่ม _search_by_target_pest(): fallback ค้นหา target_pest โดยตรง
+        เมื่อ vector search ไม่เจอสินค้าที่ตรงกับโรค
+      - เพิ่ม _extract_disease_from_query(): ดึงชื่อโรคจาก query text
+        เมื่อ Agent 1 ไม่ได้ extract disease_name entity
+      - Logic: ถ้า intent=DISEASE_TREATMENT + docs ไม่มีโรคนั้นใน target_pest
+        → ค้นหา target_pest ILIKE '%variant%' → merge เข้า docs
+
+    app/services/agents/response_generator_agent.py
+      - เพิ่ม disease override: เมื่อ grounding=False + confidence<0.2
+        แต่ disease_name ตรงกับ target_pest ของสินค้า → bypass grounding rejection
+      - คล้ายกับ crop-specific override ที่มีอยู่แล้ว
+
+    app/utils/text_processing.py
+      - เพิ่ม 2 spelling variants ใน _SPELLING_VARIANTS:
+        "แอนแทคโนส" → "แอนแทรคโนส" (ขาด ร)
+        "ฟิวสาเรียม" → "ฟิวซาเรียม" (ส แทน ซ)
+
+  ทดสอบ:
+    Q1: "ฟิวสาเรียม ใช้ยาอะไรรักษาครับ" → แนะนำอาร์เทมีส ✓
+    Q2: "แอนแทคโนสมียารักษาไหม" → แนะนำอาร์เทมีส + โค-ราซ + ไซม๊อกซิเมท ✓
+    Regression test: 16/20 passed (เท่าเดิม, ไม่มี regression)
+
+  Commit: 5e6ac1f
+
+================================================================================
+13. Fix: เพิ่ม Fusarium ใน Artemis target_pest + embedding + variants
+================================================================================
+
+  ปัญหา:
+    Bot ตอบเรื่อง "ฟิวซาเรียม" ไม่ได้ เพราะไม่มีสินค้าที่ระบุว่ารักษา
+    โรค Fusarium ใน target_pest ทั้งที่อาร์เทมีส (ไดฟีโนโคนาโซล + อะซ๊อคซีสโตรบิน)
+    สามารถรักษาโรคนี้ได้
+
+  แก้ไข:
+
+    scripts/add_fusarium_to_artemis.py (สร้างใหม่)
+      - อัปเดต target_pest ของอาร์เทมีส (id=263) เพิ่ม:
+        (ทุเรียน) ... ฟิวซาเรียม
+        (ทั่วไป) โรคเชื้อราฟิวซาเรียม (Fusarium)
+      - Regenerate embedding ด้วย Fusarium keywords:
+        "โรคเชื้อรา: ฟิวซาเรียม Fusarium โรคเหี่ยว โรคเน่า wilt"
+      - ผลลัพธ์: embedding 1536 dimensions, verified ใน Supabase
+
+    app/utils/text_processing.py
+      - เพิ่ม Fusarium spelling variants:
+        "ฟิวซาเลี่ยม" → "ฟิวซาเรียม"
+        "ฟิวเซอเรียม" → "ฟิวซาเรียม"
+        "ฟูซาเรียม" → "ฟิวซาเรียม"
+
+  Commit: 55cb368
+
+================================================================================
+12. Fix: Thai Disease Name Transliteration Variants
+================================================================================
+
+  ปัญหา:
+    User พิมพ์ "แอคแทคโนส" แต่ database มี "แอนแทรคโนส"
+    → exact substring match fail → Bot ตอบว่าไม่มียารักษา
+
+  แก้ไข:
+
+    app/utils/text_processing.py — generate_thai_disease_variants()
+      - เพิ่ม _SPELLING_VARIANTS dictionary สำหรับ Thai transliteration:
+        แอคแทคโนส ↔ แอนแทรคโนส
+        แอนแทรกโนส → แอนแทรคโนส
+        แอนเทรคโนส → แอนแทรคโนส
+        ไฟท็อปโทร่า ↔ ไฟทอปธอร่า
+        ดาวนี่มิลดิว → ราน้ำค้าง
+        พาวเดอรี่มิลดิว → ราแป้ง
+      - หมายเหตุ: ลบ n-gram fuzzy matching ออก เพราะ false positive
+        (ขอบใบแห้ง matched กาบใบแห้ง ซึ่งเป็นโรคคนละตัว)
+
+  ทดสอบ: 8/8 tests passed (test_disease_variants.py)
+
+  Commit: 135d1ff
+
+================================================================================
+11. Fix: Disease-Target_Pest Validation — ป้องกันแนะนำยาผิดโรค
+================================================================================
+
+  ปัญหา:
+    Bot แนะนำ "รีโนเวท" สำหรับ "โรคขอบใบแห้ง" (bacterial)
+    ทั้งที่รีโนเวทเป็น Fungicide ไม่ได้รักษา bacterial disease
+    Bot แนะนำ "อาร์เทมีส" สำหรับ "ใบเหลืองข้าว" (viral)
+    ทั้งที่ไม่มียาในระบบรักษาโรคไวรัส
+
+  สาเหตุ:
+    - system hard-codes DISEASE_TREATMENT → Fungicide category
+    - ไม่มีการตรวจสอบว่าโรคที่ถามอยู่ใน target_pest ของสินค้าจริงหรือไม่
+    - vector search หาสินค้าจาก semantic similarity เท่านั้น
+
+  แก้ไข:
+
+    app/services/agents/response_generator_agent.py (lines 251-268)
+      - เพิ่มการ validate: ตรวจสอบว่า disease_name จาก query_analysis
+        ปรากฏใน target_pest ของสินค้าที่ดึงมาหรือไม่
+      - ถ้าไม่เจอ → inject disease_mismatch_note เข้าไปใน LLM prompt:
+        "ห้ามแนะนำสินค้าใดๆ สำหรับโรคนี้"
+      - ใช้ generate_thai_disease_variants() เพื่อ match variants
+
+    app/prompts.py
+      - เพิ่มกฎข้อ 7: "ห้ามแนะนำสินค้าสำหรับโรคที่ไม่ปรากฏใน target_pest"
+
+  Commit: 85abaf1
+
+================================================================================
 9. Update: product_category → กลุ่มสาร (English) จาก CSV
 ================================================================================
 
