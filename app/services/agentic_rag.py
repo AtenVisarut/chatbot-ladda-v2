@@ -116,6 +116,7 @@ class AgenticRAG:
                 from app.utils.text_processing import generate_thai_disease_variants
                 import re
                 detected_product = extract_product_name_from_question(query)
+                product_from_query = bool(detected_product)
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
                     # Strategy 0: Check [สินค้าที่กำลังคุยอยู่] marker FIRST (highest priority)
@@ -159,6 +160,7 @@ class AgenticRAG:
                 _DISEASE_PATTERNS_STAGE0 = [
                     'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
                     'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
+                    'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป',
                     'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
                     'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
                     'ใบไหม้แผลใหญ่', 'ใบไหม้', 'ใบจุดสีม่วง', 'ใบจุด',
@@ -196,18 +198,24 @@ class AgenticRAG:
                         logger.info(f"  - Pre-extracted pest: '{pattern}'")
                         break
 
-                # --- Validate: drop false-positive product from fuzzy match ---
-                # If disease/pest was detected but product doesn't literally appear in query,
-                # the product was likely a fuzzy-match false positive
-                # e.g. "โรครากเน่าโคนเน่า" → fuzzy matches "โค-ราซ" from "โคน"
-                if (hints.get('product_name')
-                        and (hints.get('disease_name') or hints.get('pest_name'))):
+                # --- Validate: drop product when query is about a new topic ---
+                # Case 1: Disease/pest entity detected + product not literally in query
+                #   e.g. "โรครากเน่าโคนเน่า" → fuzzy "โค-ราซ" (false positive)
+                # Case 2: Product from context + disease/pest topic + product not in query
+                #   e.g. focus=ไซม๊อกซิเมท but query "ไฟท็อป ใช้สารอะไร" (new topic)
+                if hints.get('product_name'):
                     product_aliases = ICP_PRODUCT_NAMES.get(hints['product_name'], [])
                     product_literally_in_query = any(
                         alias.lower() in query.lower() for alias in product_aliases
                     )
-                    if not product_literally_in_query:
-                        logger.info(f"  - Drop false-positive product: '{hints['product_name']}' (fuzzy match, not in query)")
+                    drop_reason = None
+                    if (hints.get('disease_name') or hints.get('pest_name')) and not product_literally_in_query:
+                        drop_reason = "disease/pest detected, product not in query"
+                    elif (not product_from_query and not product_literally_in_query
+                            and hints.get('problem_type') in ('disease', 'pest')):
+                        drop_reason = f"new {hints['problem_type']} topic, product from context"
+                    if drop_reason:
+                        logger.info(f"  - Drop product: '{hints['product_name']}' ({drop_reason})")
                         del hints['product_name']
 
                 logger.info(f"  - Hints: {hints}")
