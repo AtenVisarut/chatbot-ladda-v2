@@ -305,3 +305,48 @@ def extract_keywords_from_question(question: str) -> dict:
             break
     
     return found
+
+
+def generate_thai_disease_variants(disease_name: str) -> List[str]:
+    """
+    Generate Thai disease name variants for fuzzy matching.
+
+    Thai farmers commonly drop "สี" (color) from disease names:
+      ราสีชมพู → ราชมพู, จุดสีน้ำตาล → จุดน้ำตาล
+
+    Also handles โรค prefix add/remove.
+
+    Returns list of variants including the original name.
+    """
+    variants = {disease_name}
+
+    # Strip โรค prefix for matching, but also keep variant with it
+    bare = disease_name
+    if bare.startswith("โรค"):
+        bare = bare[len("โรค"):]
+        variants.add(bare)
+    else:
+        variants.add("โรค" + bare)
+
+    _COLORS = ["ชมพู", "น้ำตาล", "เทา", "ขาว", "ดำ", "ม่วง", "เหลือง", "ส้ม"]
+
+    for color in _COLORS:
+        # รา+สี+color ↔ รา+color
+        with_si = f"ราสี{color}"
+        without_si = f"รา{color}"
+        if with_si in bare or without_si in bare:
+            variants.add(bare.replace(with_si, without_si))
+            variants.add(bare.replace(without_si, with_si))
+            variants.add("โรค" + bare.replace(with_si, without_si))
+            variants.add("โรค" + bare.replace(without_si, with_si))
+
+        # จุด+สี+color ↔ จุด+color
+        jud_with_si = f"จุดสี{color}"
+        jud_without_si = f"จุด{color}"
+        if jud_with_si in bare or jud_without_si in bare:
+            variants.add(bare.replace(jud_with_si, jud_without_si))
+            variants.add(bare.replace(jud_without_si, jud_with_si))
+            variants.add("โรค" + bare.replace(jud_with_si, jud_without_si))
+            variants.add("โรค" + bare.replace(jud_without_si, jud_with_si))
+
+    return list(variants)

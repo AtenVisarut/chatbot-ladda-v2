@@ -19,7 +19,7 @@ from app.services.agents import (
     AgenticRAGResponse,
     IntentType
 )
-from app.utils.text_processing import post_process_answer
+from app.utils.text_processing import post_process_answer, generate_thai_disease_variants
 from app.config import LLM_MODEL_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
@@ -254,9 +254,10 @@ class ResponseGeneratorAgent:
         if disease_name and query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
             # Check if any product's target_pest mentions the disease
             disease_found_in_products = False
+            disease_variants = generate_thai_disease_variants(disease_name)
             for doc in docs_to_use:
                 target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                if disease_name.lower() in target_pest:
+                if any(v.lower() in target_pest for v in disease_variants):
                     disease_found_in_products = True
                     break
             if not disease_found_in_products:
