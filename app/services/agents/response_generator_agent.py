@@ -85,10 +85,23 @@ class ResponseGeneratorAgent:
                 has_product_in_query = bool(query_analysis.entities.get('product_name'))
                 has_documents = bool(retrieval_result.documents)
 
+                # Check if disease query matched via target_pest (fallback products)
+                has_disease_match = False
+                disease_name = query_analysis.entities.get('disease_name', '')
+                if disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                    disease_variants = generate_thai_disease_variants(disease_name)
+                    for doc in retrieval_result.documents[:5]:
+                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                        if any(v.lower() in target_pest for v in disease_variants):
+                            has_disease_match = True
+                            logger.info(f"  - Disease override: '{disease_name}' found in {doc.title} target_pest")
+                            break
+
                 if not has_documents or (
                     grounding_result.confidence < 0.2
                     and not has_crop_specific_top
                     and not (has_product_in_query and has_documents)
+                    and not has_disease_match
                 ):
                     return self._generate_no_data_response(query_analysis)
 

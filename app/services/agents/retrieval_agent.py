@@ -710,10 +710,127 @@ class RetrievalAgent:
                 docs.append(doc)
 
             logger.info(f"    Product search: {len(docs)} docs for '{query[:30]}...'")
+
+            # Fallback: ถ้า query เกี่ยวกับโรค แต่ไม่เจอสินค้าที่มีโรคนั้นใน target_pest
+            # → ค้นหา target_pest โดยตรง (ไม่พึ่ง vector similarity)
+            if query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                from app.utils.text_processing import generate_thai_disease_variants
+
+                # ดึงชื่อโรคจาก entities ถ้ามี หรือจาก query text โดยตรง
+                disease_name = query_analysis.entities.get('disease_name', '')
+                if not disease_name:
+                    disease_name = self._extract_disease_from_query(query)
+
+                if disease_name:
+                    disease_variants = generate_thai_disease_variants(disease_name)
+
+                    # เช็คว่า docs ที่ได้มีสินค้าที่ตรงกับโรคนี้ไหม
+                    has_match = any(
+                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in disease_variants)
+                        for doc in docs
+                    )
+
+                    if not has_match:
+                        logger.info(f"    Fallback: disease '{disease_name}' not in vector results, searching target_pest directly")
+                        fallback_docs = await self._search_by_target_pest(disease_variants, query_analysis)
+                        if fallback_docs:
+                            logger.info(f"    Fallback found {len(fallback_docs)} products via target_pest")
+                            docs.extend(fallback_docs)
+
             return docs
 
         except Exception as e:
             logger.error(f"Product search error: {e}")
+            return []
+
+    def _extract_disease_from_query(self, query: str) -> str:
+        """Extract disease name from query text when entities are not available"""
+        # Known disease keywords to remove from extraction
+        _STOP_WORDS = {
+            'ใช้', 'ยา', 'อะไร', 'รักษา', 'ครับ', 'ค่ะ', 'คะ', 'ได้', 'บ้าง',
+            'มี', 'ไหม', 'กำจัด', 'ป้องกัน', 'แนะนำ', 'ดี', 'หน่อย', 'สำหรับ',
+            'วิธี', 'อย่างไร', 'ยังไง', 'ทำ', 'จะ', 'ต้อง', 'ควร', 'โรค',
+            'แก้', 'แก้ไข', 'ช่วย', 'อัตรา', 'ผสม', 'ฉีด', 'พ่น',
+        }
+        # Known disease name patterns
+        _DISEASE_PATTERNS = [
+            'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
+            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม',
+            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู',
+            'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
+            'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
+            'หอมเลื้อย', 'ใบจุดสีม่วง', 'ใบติด',
+        ]
+
+        # Try known patterns first
+        for pattern in _DISEASE_PATTERNS:
+            if pattern in query:
+                return pattern
+
+        # Try extracting from "โรค..." prefix
+        import re
+        match = re.search(r'โรค(\S+)', query)
+        if match:
+            return match.group(0)  # include โรค prefix
+
+        # Extract first Thai word that's not a stop word
+        words = re.findall(r'[\u0e00-\u0e7f]+', query)
+        for word in words:
+            if word not in _STOP_WORDS and len(word) > 3:
+                return word
+
+        return ''
+
+    async def _search_by_target_pest(
+        self,
+        disease_variants: list,
+        query_analysis: QueryAnalysis
+    ) -> List[RetrievedDocument]:
+        """Fallback: ค้นหาสินค้าจาก target_pest โดยตรง (ไม่ใช้ vector search)"""
+        try:
+            for variant in disease_variants:
+                if len(variant) < 3:
+                    continue
+                result = self.supabase.table('products').select('*').ilike(
+                    'target_pest', f'%{variant}%'
+                ).limit(5).execute()
+
+                if result.data:
+                    docs = []
+                    for item in result.data:
+                        common_th = item.get('common_name_th') or ''
+                        doc = RetrievedDocument(
+                            id=str(item.get('id', '')),
+                            title=item.get('product_name', ''),
+                            content=f"สินค้า: {item.get('product_name', '')}\n"
+                                   f"ชื่อสารไทย: {common_th}\n"
+                                   f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
+                                   f"ใช้กำจัด: {item.get('target_pest', '')[:200] if item.get('target_pest') else ''}\n"
+                                   f"พืชที่ใช้ได้: {item.get('applicable_crops', '')[:200] if item.get('applicable_crops') else ''}",
+                            source="products",
+                            similarity_score=0.50,  # Give reasonable score for direct match
+                            metadata={
+                                'product_name': item.get('product_name'),
+                                'common_name_th': common_th,
+                                'active_ingredient': item.get('active_ingredient'),
+                                'target_pest': item.get('target_pest'),
+                                'applicable_crops': item.get('applicable_crops'),
+                                'category': item.get('product_category') or item.get('category'),
+                                'how_to_use': item.get('how_to_use'),
+                                'usage_rate': item.get('usage_rate'),
+                                'usage_period': item.get('usage_period'),
+                                'selling_point': item.get('selling_point'),
+                                'action_characteristics': item.get('action_characteristics'),
+                                'absorption_method': item.get('absorption_method'),
+                                'strategy_group': item.get('strategy_group'),
+                                'package_size': item.get('package_size'),
+                            }
+                        )
+                        docs.append(doc)
+                    return docs
+            return []
+        except Exception as e:
+            logger.error(f"Target pest fallback search error: {e}")
             return []
 
     async def _search_diseases(self, query: str, top_k: int) -> List[RetrievedDocument]:
