@@ -398,6 +398,31 @@ class RetrievalAgent:
             multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
             all_docs.extend(multi_docs)
 
+            # Stage 1.3: Original query disease fallback
+            # LLM may have misidentified the disease (e.g. "ราชมพู" → "ฟอซาเรียม")
+            # Extract disease from original query directly and search target_pest
+            if query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                from app.utils.text_processing import generate_thai_disease_variants
+
+                entity_disease = query_analysis.entities.get('disease_name', '')
+                original_disease = self._extract_disease_from_query(query_analysis.original_query)
+
+                if original_disease and original_disease != entity_disease:
+                    original_variants = generate_thai_disease_variants(original_disease)
+
+                    # Check if any existing doc already matches this disease
+                    has_match = any(
+                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in original_variants)
+                        for doc in all_docs
+                    ) if all_docs else False
+
+                    if not has_match:
+                        logger.info(f"  - Original query disease fallback: '{original_disease}' (entity was '{entity_disease}')")
+                        oq_fallback_docs = await self._search_by_target_pest(original_variants, query_analysis)
+                        if oq_fallback_docs:
+                            all_docs.extend(oq_fallback_docs)
+                            logger.info(f"  - Original query disease fallback found: {len(oq_fallback_docs)} docs")
+
             # Stage 1.5: Fallback keyword search if no results
             if not all_docs:
                 fallback_docs = await self._fallback_keyword_search(query_analysis.original_query, top_k)
@@ -755,11 +780,13 @@ class RetrievalAgent:
         # Known disease name patterns
         _DISEASE_PATTERNS = [
             'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
-            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม',
-            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู',
+            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
+            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
+            'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
             'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
             'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
             'หอมเลื้อย', 'ใบจุดสีม่วง', 'ใบติด',
+            'เน่าคอรวง', 'ใบไหม้แผลใหญ่',
         ]
 
         # Try known patterns first

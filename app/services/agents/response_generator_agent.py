@@ -97,6 +97,31 @@ class ResponseGeneratorAgent:
                             logger.info(f"  - Disease override: '{disease_name}' found in {doc.title} target_pest")
                             break
 
+                # Also try extracting disease from original query (LLM may have changed disease name)
+                if not has_disease_match and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                    import re as _re
+                    _DISEASE_PATTERNS_RSP = [
+                        'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
+                        'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
+                        'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
+                        'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
+                        'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
+                        'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
+                    ]
+                    original_disease = ''
+                    for pattern in _DISEASE_PATTERNS_RSP:
+                        if pattern in query_analysis.original_query:
+                            original_disease = pattern
+                            break
+                    if original_disease and original_disease != disease_name:
+                        original_variants = generate_thai_disease_variants(original_disease)
+                        for doc in retrieval_result.documents[:5]:
+                            target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                            if any(v.lower() in target_pest for v in original_variants):
+                                has_disease_match = True
+                                logger.info(f"  - Disease override (original query): '{original_disease}' found in {doc.title} target_pest")
+                                break
+
                 if not has_documents or (
                     grounding_result.confidence < 0.2
                     and not has_crop_specific_top
@@ -263,23 +288,66 @@ class ResponseGeneratorAgent:
 
         # Validate disease-product match: check if queried disease is in any product's target_pest
         disease_mismatch_note = ""
+        disease_match_note = ""
         disease_name = query_analysis.entities.get('disease_name', '')
-        if disease_name and query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
-            # Check if any product's target_pest mentions the disease
+
+        # Also extract disease from original query (LLM may misidentify)
+        _DISEASE_PATTERNS_GEN = [
+            'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
+            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
+            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
+            'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
+            'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
+            'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
+        ]
+        original_disease_gen = ''
+        for _pat in _DISEASE_PATTERNS_GEN:
+            if _pat in query_analysis.original_query:
+                original_disease_gen = _pat
+                break
+
+        if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
+            # Check with entity disease_name first, then original query disease
             disease_found_in_products = False
-            disease_variants = generate_thai_disease_variants(disease_name)
-            for doc in docs_to_use:
-                target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                if any(v.lower() in target_pest for v in disease_variants):
-                    disease_found_in_products = True
+            matched_disease_label = ''
+            matched_product_name = ''
+
+            for check_disease in [disease_name, original_disease_gen]:
+                if not check_disease:
+                    continue
+                check_variants = generate_thai_disease_variants(check_disease)
+                for doc in docs_to_use:
+                    target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                    if any(v.lower() in target_pest for v in check_variants):
+                        disease_found_in_products = True
+                        matched_disease_label = check_disease
+                        matched_product_name = doc.metadata.get('product_name', doc.title)
+                        break
+                if disease_found_in_products:
                     break
-            if not disease_found_in_products:
+
+            if not disease_found_in_products and disease_name:
                 disease_mismatch_note = f"""
 [คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" (target_pest) ของสินค้าใดเลย
 → ห้ามแนะนำสินค้าใดๆ สำหรับโรคนี้ เพราะไม่มีข้อมูลว่าสินค้าเหล่านี้รักษาโรคนี้ได้
 → ให้ตอบว่า: "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าในระบบที่ระบุว่ารักษาโรค{disease_name}ได้โดยตรง แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
 """
                 logger.warning(f"Disease '{disease_name}' NOT found in any product's target_pest — will block recommendation")
+
+            # When disease was matched via variant (e.g. ราชมพู→ราสีชมพู), tell LLM
+            if disease_found_in_products and original_disease_gen and original_disease_gen != disease_name:
+                # Generate the canonical form for LLM context
+                canonical_variants = generate_thai_disease_variants(original_disease_gen)
+                canonical_form = original_disease_gen
+                for v in canonical_variants:
+                    if 'สี' in v and v != original_disease_gen:
+                        canonical_form = v
+                        break
+                disease_match_note = f"""
+[หมายเหตุโรค] "{original_disease_gen}" ในคำถาม ตรงกับ "{canonical_form}" ใน target_pest ของ "{matched_product_name}"
+→ ให้แนะนำสินค้า "{matched_product_name}" สำหรับโรคนี้
+"""
+                logger.info(f"  - Disease match note: '{original_disease_gen}' → '{canonical_form}' in {matched_product_name}")
 
         # Build crop-specific note if applicable
         crop_note = ""
@@ -300,7 +368,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
 ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย"""
 

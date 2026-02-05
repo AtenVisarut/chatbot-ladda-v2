@@ -108,7 +108,12 @@ class AgenticRAG:
             # =================================================================
             hints = {}
             try:
-                from app.services.chat import extract_product_name_from_question, detect_problem_type, ICP_PRODUCT_NAMES
+                from app.services.chat import (
+                    extract_product_name_from_question, detect_problem_type,
+                    ICP_PRODUCT_NAMES, extract_plant_type_from_question,
+                    DISEASE_KEYWORDS, INSECT_KEYWORDS
+                )
+                from app.utils.text_processing import generate_thai_disease_variants
                 import re
                 detected_product = extract_product_name_from_question(query)
                 # If no product in current query, try extracting from context (follow-up questions)
@@ -148,6 +153,48 @@ class AgenticRAG:
                 detected_problem = detect_problem_type(query)
                 if detected_problem != 'unknown':
                     hints['problem_type'] = detected_problem
+
+                # --- Pre-LLM Entity Extraction: Disease ---
+                _DISEASE_PATTERNS_STAGE0 = [
+                    'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
+                    'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
+                    'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
+                    'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
+                    'ใบไหม้แผลใหญ่', 'ใบไหม้', 'ใบจุดสีม่วง', 'ใบจุด',
+                    'ผลเน่า', 'รากเน่า', 'โคนเน่า', 'ลำต้นเน่า', 'เน่าคอรวง',
+                    'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
+                    'หอมเลื้อย', 'ใบติด', 'ใบด่าง', 'ใบหงิก',
+                ]
+                # Sort by length descending so longer patterns match first
+                for pattern in sorted(_DISEASE_PATTERNS_STAGE0, key=len, reverse=True):
+                    if pattern in query:
+                        hints['disease_name'] = pattern
+                        hints['disease_variants'] = generate_thai_disease_variants(pattern)
+                        logger.info(f"  - Pre-extracted disease: '{pattern}' variants={hints['disease_variants']}")
+                        break
+
+                # --- Pre-LLM Entity Extraction: Plant type ---
+                detected_plant = extract_plant_type_from_question(query)
+                if detected_plant:
+                    hints['plant_type'] = detected_plant
+                    logger.info(f"  - Pre-extracted plant: '{detected_plant}'")
+
+                # --- Pre-LLM Entity Extraction: Pest name ---
+                _PEST_PATTERNS_STAGE0 = [
+                    'เพลี้ยไฟ', 'เพลี้ยอ่อน', 'เพลี้ยแป้ง', 'เพลี้ยกระโดด',
+                    'เพลี้ยจักจั่น', 'เพลี้ย',
+                    'หนอนกอ', 'หนอนเจาะ', 'หนอนใย', 'หนอนกระทู้', 'หนอน',
+                    'ด้วงงวง', 'ด้วง',
+                    'แมลงวันผล', 'แมลงหวี่ขาว', 'แมลงวัน', 'แมลง',
+                    'ไรแดง', 'ไรขาว', 'ไรแมง', 'ตัวไร',
+                    'ทริปส์', 'จักจั่น', 'มด', 'ปลวก',
+                ]
+                for pattern in _PEST_PATTERNS_STAGE0:
+                    if pattern in query:
+                        hints['pest_name'] = pattern
+                        logger.info(f"  - Pre-extracted pest: '{pattern}'")
+                        break
+
                 logger.info(f"  - Hints: {hints}")
             except ImportError:
                 logger.warning("Could not import hint functions from chat.py")

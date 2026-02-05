@@ -88,10 +88,18 @@ class QueryUnderstandingAgent:
 
 """
 
-        # Build hint sections
+        # Build hint/constraint sections
+        # [CONSTRAINT] = dictionary-matched, LLM must NOT override
+        # [HINT] = softer suggestion, LLM may adjust
         hint_section = ""
         if hints.get('product_name'):
-            hint_section += f"\n[HINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ใช้ชื่อนี้ใน entities.product_name"
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.product_name เท่านั้น"
+        if hints.get('disease_name'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อโรค: \"{hints['disease_name']}\" — ห้ามเปลี่ยนชื่อโรค ต้องใช้ชื่อนี้ใน entities.disease_name เท่านั้น (ห้ามแปลหรือเปลี่ยนเป็นชื่ออื่น)"
+        if hints.get('plant_type'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['plant_type']}\" — ใช้ชื่อนี้ใน entities.plant_type"
+        if hints.get('pest_name'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
         if hints.get('problem_type') and hints['problem_type'] != 'unknown':
             problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
             hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
@@ -142,6 +150,8 @@ required_sources:
 - ใช้ ["products"] เสมอ (ข้อมูลสินค้าเป็นแหล่งหลักเพียงแหล่งเดียว)
 
 กฎสำคัญ:
+- [CONSTRAINT] คือข้อมูลที่ระบบตรวจจับได้จากพจนานุกรม — ห้ามเปลี่ยนแปลง ห้ามแปล ห้ามเปลี่ยนชื่อ ต้องใส่ค่าตามที่ระบุเท่านั้น
+- [HINT] คือคำแนะนำ — สามารถปรับได้ตามบริบท
 - ถ้าคำถามมีคำว่า "ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "แก้ยังไง", "ฉีดอะไร", "พ่นอะไร" → ต้องเป็น product-related intent (ห้ามเป็น unknown)
 - ถ้าคำถามพูดถึงอาการพืช/สภาพพืช (เช่น ใบเพสลาด, ใบไหม้, ใบเหลือง, ดอกร่วง, ผลร่วง, รากเน่า) → จัดเป็น disease_treatment หรือ nutrient_supplement
 - ห้ามสร้าง query ภาษาอังกฤษ (ฐานข้อมูลเป็นภาษาไทย)
@@ -203,10 +213,30 @@ required_sources:
             # Clean entities (remove null values)
             entities = {k: v for k, v in data.get("entities", {}).items() if v is not None}
 
+            # Post-LLM override: pre-extracted entities take priority
+            # This prevents LLM from "translating" ราชมพู→ฟอซาเรียม etc.
+            if hints.get('disease_name') and entities.get('disease_name') != hints['disease_name']:
+                logger.info(f"  - Override disease: LLM='{entities.get('disease_name')}' → pre-extracted='{hints['disease_name']}'")
+                entities['disease_name'] = hints['disease_name']
+            if hints.get('plant_type') and not entities.get('plant_type'):
+                entities['plant_type'] = hints['plant_type']
+            if hints.get('pest_name') and entities.get('pest_name') != hints['pest_name']:
+                logger.info(f"  - Override pest: LLM='{entities.get('pest_name')}' → pre-extracted='{hints['pest_name']}'")
+                entities['pest_name'] = hints['pest_name']
+            if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
+                logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
+                entities['product_name'] = hints['product_name']
+
             # Get expanded queries
             expanded_queries = data.get("expanded_queries", [query])
             if not expanded_queries:
                 expanded_queries = [query]
+
+            # Inject disease variants into expanded queries for better retrieval
+            if hints.get('disease_variants'):
+                for variant in hints['disease_variants']:
+                    if variant not in expanded_queries and variant != query:
+                        expanded_queries.append(variant)
 
             # Force products-only source (products table is the sole data source)
             required_sources = ["products"]

@@ -3,6 +3,127 @@ CHANGELOG — 2026-02-05
 ================================================================================
 
 ================================================================================
+16. Feature: Pre-LLM Entity Extraction Layer (Approach 1)
+================================================================================
+
+  ปัญหาเดิม:
+    LLM (gpt-4o-mini) ในขั้น Query Understanding มักแปลงชื่อโรค/แมลงผิด
+    เช่น "ราชมพู" → "ฟอซาเรียม", ทำให้ downstream stages ค้นหาด้วยคำผิด
+
+  แนวคิด:
+    ใช้ Dictionary-based extraction สกัด entities ก่อนส่งให้ LLM
+    แล้วบังคับ LLM ด้วย [CONSTRAINT] (ห้ามเปลี่ยน) แทน [HINT] (แนะนำ)
+    + Post-LLM override ที่ override entities กลับเป็นค่าที่ dictionary ตรวจจับ
+
+  แก้ไข (2 ไฟล์):
+
+    app/services/agentic_rag.py (Stage 0 expansion)
+      - เพิ่ม disease extraction: _DISEASE_PATTERNS_STAGE0 (32 patterns)
+        sorted by length desc เพื่อ match ชื่อยาวก่อน (ใบไหม้แผลใหญ่ > ใบไหม้)
+      - เพิ่ม plant extraction: ใช้ extract_plant_type_from_question() จาก chat.py
+      - เพิ่ม pest extraction: _PEST_PATTERNS_STAGE0 (24 patterns)
+      - สร้าง disease_variants ด้วย generate_thai_disease_variants()
+      - ส่งทั้งหมดเป็น hints dict ไป query_understanding_agent
+
+    app/services/agents/query_understanding_agent.py
+      - เปลี่ยน [HINT] → [CONSTRAINT] สำหรับ pre-extracted entities:
+        product_name, disease_name, plant_type, pest_name
+      - เพิ่มกฎ [CONSTRAINT] ใน LLM prompt: "ห้ามเปลี่ยนแปลง ห้ามแปล"
+      - เพิ่ม Post-LLM override: หลัง LLM ตอบ JSON กลับมา
+        ถ้า disease/pest/product ที่ LLM ตอบไม่ตรงกับ pre-extracted → override กลับ
+      - เพิ่ม disease_variants injection เข้า expanded_queries
+
+  ผลลัพธ์:
+    - "ราชมพู" → disease_name ถูก lock เป็น "ราชมพู" (ไม่ถูก LLM เปลี่ยนเป็น "ฟอซาเรียม")
+    - "เพลี้ยไฟในทุเรียน" → pest=เพลี้ยไฟ, plant=ทุเรียน ถูก lock
+    - "ข้าวเป็นราน้ำค้าง" → disease=ราน้ำค้าง, plant=ข้าว ถูก lock
+    - ทดสอบ 31 tests ผ่านทั้งหมด (21 unit + 5 integration + 5 pre-extraction)
+
+================================================================================
+15. Fix: ราสีชมพู (Pink Disease) — LLM แปลงชื่อโรคผิด + Fallback Original Query
+================================================================================
+
+  ปัญหา:
+    User ถาม "รักษาราชมพูยังไงได้บ้างครับ" → Bot ตอบ "ไม่มีสินค้าในระบบ"
+    ทั้งที่อาร์เทมีสมี "ราสีชมพู" อยู่ใน target_pest
+
+  Root Cause (Cascade failure 5 ชั้น):
+    1. Query Understanding Agent (LLM) แปลง "ราชมพู" → "ฟอซาเรียม" (คนละโรค!)
+       ราชมพู = ราสีชมพู (Corticium salmonicolor) ≠ Fusarium
+    2. Expanded queries ทั้ง 3 ตัวค้นหา "ฟอซาเรียม" → vector similarity ต่ำ
+    3. Fallback target_pest ILIKE '%ฟอซาเรียม%' → 0 results
+       (DB มี "ฟิวซาเรียม" ไม่ใช่ "ฟอซาเรียม" + ไม่ใช่โรคที่ถาม)
+    4. Grounding Agent reject: confidence=0.0, is_grounded=False
+    5. Response Generator disease override ใช้ entity disease_name ที่ผิด
+       → ไม่ match target_pest → ตอบ "ไม่มีสินค้า"
+
+  สาเหตุหลัก:
+    ไม่ใช่ vector search พัง — ปัญหาคือ LLM ตีความชื่อโรคผิดตั้งแต่ Stage 1
+    "ราชมพู" (ย่อจาก ราสีชมพู) ถูก LLM เดาเป็น "ฟอซาเรียม"
+    ทำให้ทุก stage หลังจากนั้นค้นหาด้วยคำผิดทั้งหมด
+
+  แก้ไข (3 ไฟล์):
+
+    app/utils/text_processing.py
+      - เพิ่ม spelling variant: "ฟอซาเรียม" → "ฟิวซาเรียม"
+        (LLM สะกด Fusarium ผิดเป็น ฟอซาเรียม แทน ฟิวซาเรียม)
+
+    app/services/agents/retrieval_agent.py
+      - เพิ่ม _DISEASE_PATTERNS: "ราชมพู", "ราดำ", "ราเขียว", "ราขาว", "ราเทา",
+        "เน่าคอรวง", "ใบไหม้แผลใหญ่", "ฟอซาเรียม"
+      - เพิ่ม Stage 1.3: Original Query Disease Fallback ใน retrieve():
+        → ดึงชื่อโรคจาก original_query โดยตรง (ไม่พึ่ง LLM expansion)
+        → ถ้าชื่อโรคต่างจาก entity disease_name → generate variants → search target_pest
+        → bypass LLM ที่อาจแปลงชื่อโรคผิด
+      - Flow: "รักษาราชมพู..." → extract "ราชมพู" → variants ["ราชมพู", "ราสีชมพู", ...]
+        → ILIKE '%ราสีชมพู%' → เจออาร์เทมีส!
+
+    app/services/agents/response_generator_agent.py
+      - เพิ่ม disease override จาก original query (lines 100-123):
+        เมื่อ entity disease_name ไม่ match target_pest
+        → ลอง extract disease จาก original query → generate variants → check target_pest
+        → ถ้า match → has_disease_match=True → bypass grounding rejection
+      - เพิ่ม disease validation ใน _generate_llm_response() (lines 289-340):
+        → check ทั้ง entity disease_name + original query disease
+        → ถ้า match ผ่าน original query variant → inject disease_match_note เข้า prompt:
+          "[หมายเหตุโรค] ราชมพู ตรงกับ ราสีชมพู ใน target_pest ของ อาร์เทมีส"
+        → LLM เห็น note แล้วแนะนำอาร์เทมีสได้ถูกต้อง
+
+  ทดสอบ:
+
+    Unit Tests: 21/21 passed
+      - Disease variant generation: 6/6
+        ราชมพู → [ราชมพู, ราสีชมพู, โรคราชมพู, โรคราสีชมพู]
+        ฟอซาเรียม → [ฟอซาเรียม, ฟิวซาเรียม, โรคฟอซาเรียม, โรคฟิวซาเรียม]
+      - Disease extraction from query: 6/6
+        "รักษาราชมพูยังไง" → "ราชมพู"
+        "ราสีชมพูในทุเรียน" → "ราสีชมพู"
+      - Variant matching against target_pest: 9/9
+        ราชมพู → match ราสีชมพู in Artemis target_pest ✓
+        ฟอซาเรียม → match ฟิวซาเรียม in Artemis target_pest ✓
+
+    Integration Tests: 5/5 passed (AgenticRAG full pipeline)
+      Q1: "รักษาราชมพูยังไงได้บ้างครับ"
+          → อาร์เทมีส #1 (score=1.0) → แนะนำอาร์เทมีส ✓
+      Q2: "ราสีชมพูในทุเรียน ใช้ยาอะไร"
+          → อาร์เทมีส #2 (score=1.0) → แนะนำอาร์เทมีส ✓
+      Q3: "โรคราสีชมพู มียารักษาไหมครับ"
+          → อาร์เทมีส #3 (score=0.88) → แนะนำอาร์เทมีส ✓
+      Q4: "ทุเรียนเป็นราสีชมพู พ่นอะไรดี"
+          → อาร์เทมีส #2 (score=1.0) → แนะนำอาร์เทมีส ✓
+      Q5: "แอนแทรคโนสมียารักษาไหม" (regression test)
+          → อาร์เทมีส #4 (score=0.65) → แนะนำอาร์เทมีส ✓
+
+  ผลกระทบ:
+    - "ราชมพู" / "ราสีชมพู" ทุกรูปแบบหาอาร์เทมีสเจอ
+    - Regression test แอนแทรคโนส ยังทำงานถูกต้อง
+    - Fix นี้เป็น generic pattern — ใช้ได้กับโรคอื่นที่ LLM อาจแปลงชื่อผิดด้วย
+      เพราะ Stage 1.3 จะ extract disease จาก original query เสมอ
+
+  Scripts ทดสอบ:
+    test_pink_disease_fix.py — Unit + Integration tests (21+5 = 26 tests)
+
+================================================================================
 14. Fix: Disease Fallback Search + Grounding Override สำหรับโรคหายาก
 ================================================================================
 
