@@ -410,26 +410,34 @@ async def get_conversation_summary(user_id: str) -> dict:
 async def get_enhanced_context(user_id: str) -> str:
     """
     สร้าง context แบบ enhanced สำหรับ AI
-    รวม: บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
+    รวม: สินค้าที่กำลังคุย + บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
     ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
     """
     try:
+        # Get current product focus first (most important for follow-up questions)
+        current_focus = await get_current_product_focus(user_id)
+
         # Get conversation context (use config value)
         context = await get_conversation_context(user_id, limit=MEMORY_CONTEXT_WINDOW)
 
         # Get conversation summary
         summary = await get_conversation_summary(user_id)
 
-        if not summary:
-            return context
-
         # Build structured enhanced context
         parts = []
+
+        # Section 0: Current product focus (most important!)
+        if current_focus:
+            parts.append(f"[สินค้าที่กำลังคุยอยู่] {current_focus['product_name']}")
+            parts.append("")
 
         # Section 1: Recent conversation
         if context:
             parts.append("[บทสนทนาล่าสุด]")
             parts.append(context)
+
+        if not summary:
+            return "\n".join(parts) if parts else context
 
         # Section 2: Products recommended
         if summary.get("products_mentioned"):
@@ -451,3 +459,56 @@ async def get_enhanced_context(user_id: str) -> str:
     except Exception as e:
         logger.error(f"Failed to get enhanced context: {e}")
         return await get_conversation_context(user_id)
+
+
+# =================================================================
+# Current Product Focus Tracking
+# =================================================================
+
+# In-memory cache for current product focus (per user)
+# Format: {user_id: {"product_name": str, "timestamp": datetime, "metadata": dict}}
+_product_focus_cache: dict = {}
+PRODUCT_FOCUS_TTL_SECONDS = 1800  # 30 minutes
+
+
+async def save_current_product_focus(user_id: str, product_name: str, metadata: dict = None):
+    """
+    บันทึกสินค้าที่กำลังคุยอยู่ (ใช้สำหรับ follow-up questions)
+    TTL: 30 นาที — หลังจากนี้จะถือว่าเริ่มบทสนทนาใหม่
+    """
+    from datetime import datetime
+    _product_focus_cache[user_id] = {
+        "product_name": product_name,
+        "timestamp": datetime.now(),
+        "metadata": metadata or {}
+    }
+    logger.info(f"✓ Saved product focus: {product_name} for user {user_id[:8]}...")
+
+
+async def get_current_product_focus(user_id: str) -> dict | None:
+    """
+    ดึงสินค้าที่กำลังคุยอยู่ (ถ้ายังไม่หมดอายุ)
+    Returns: {"product_name": str, "timestamp": datetime, "metadata": dict} หรือ None
+    """
+    from datetime import datetime
+
+    if user_id not in _product_focus_cache:
+        return None
+
+    focus = _product_focus_cache[user_id]
+    age = datetime.now() - focus["timestamp"]
+
+    if age.total_seconds() > PRODUCT_FOCUS_TTL_SECONDS:
+        # หมดอายุ — ลบออก
+        del _product_focus_cache[user_id]
+        logger.info(f"Product focus expired for user {user_id[:8]}...")
+        return None
+
+    return focus
+
+
+async def clear_product_focus(user_id: str):
+    """ล้าง product focus (เมื่อเปลี่ยนหัวข้อ)"""
+    if user_id in _product_focus_cache:
+        del _product_focus_cache[user_id]
+        logger.info(f"✓ Cleared product focus for user {user_id[:8]}...")

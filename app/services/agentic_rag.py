@@ -109,19 +109,29 @@ class AgenticRAG:
             hints = {}
             try:
                 from app.services.chat import extract_product_name_from_question, detect_problem_type, ICP_PRODUCT_NAMES
+                import re
                 detected_product = extract_product_name_from_question(query)
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
-                    # Strategy 1: Search recent conversation lines bottom-up (most recent first)
-                    context_lines = context.strip().split('\n')
-                    for line in reversed(context_lines):
-                        # Skip summary section lines
-                        if line.startswith('[') and ']' in line:
-                            continue
-                        detected_product = extract_product_name_from_question(line)
-                        if detected_product:
-                            logger.info(f"  - Product from context (most recent): {detected_product}")
-                            break
+                    # Strategy 0: Check [สินค้าที่กำลังคุยอยู่] marker FIRST (highest priority)
+                    focus_match = re.search(r'\[สินค้าที่กำลังคุยอยู่\]\s*(\S+)', context)
+                    if focus_match:
+                        product_candidate = focus_match.group(1).strip()
+                        if product_candidate in ICP_PRODUCT_NAMES:
+                            detected_product = product_candidate
+                            logger.info(f"  - Product from current focus marker: {detected_product}")
+
+                    # Strategy 1: Fallback to bottom-up search (most recent first)
+                    if not detected_product:
+                        context_lines = context.strip().split('\n')
+                        for line in reversed(context_lines):
+                            # Skip summary section lines
+                            if line.startswith('[') and ']' in line:
+                                continue
+                            detected_product = extract_product_name_from_question(line)
+                            if detected_product:
+                                logger.info(f"  - Product from context (most recent): {detected_product}")
+                                break
 
                     # Strategy 2: Fallback to [สินค้าที่แนะนำไปแล้ว] section
                     if not detected_product:

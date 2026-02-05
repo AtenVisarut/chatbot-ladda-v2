@@ -175,3 +175,50 @@ Product Data Update: อัปเดตข้อมูลสินค้า "อ
     - ลำดับยังคง Skyrocket > Expand > Natural > Standard
 
 ================================================================================
+8. Fix: Follow-up questions ดึง memory ผิด context
+================================================================================
+
+  ปัญหา:
+    เมื่อ user ถามคำถามต่อเนื่อง (เช่น "ใช้กับทุเรียนได้ไหม")
+    Agent ดึง memory จากบทสนทนาเก่ากว่า แทนที่จะใช้คำถามล่าสุด
+
+  สาเหตุ:
+    1. Context window เล็กเกินไป (30 messages)
+    2. Bottom-up search ไม่มี recency boost
+    3. ไม่มี marker ชัดเจนว่า "กำลังคุยสินค้าอะไร"
+
+  Solution: เพิ่ม "Current Product Focus" Tracking
+
+  แก้ไข (5 ไฟล์):
+
+    app/services/memory.py
+      - เพิ่ม functions: save_current_product_focus(), get_current_product_focus(), clear_product_focus()
+      - เพิ่ม in-memory cache พร้อม TTL 30 นาที
+      - แก้ get_enhanced_context(): เพิ่ม [สินค้าที่กำลังคุยอยู่] marker ด้านบนสุด
+
+    app/services/agentic_rag.py (Stage 0)
+      - เพิ่ม Strategy 0: ดึง product จาก [สินค้าที่กำลังคุยอยู่] marker ก่อน
+      - Fallback to Strategy 1 (bottom-up search) ถ้าไม่เจอ marker
+
+    app/services/chat.py (~line 1190)
+      - เพิ่ม: บันทึก product focus หลังแนะนำสินค้า
+      - เรียก save_current_product_focus(user_id, mentioned_products[0])
+
+    app/services/agents/response_generator_agent.py (~line 241)
+      - เพิ่ม instruction ให้ Agent 4 เน้น [สินค้าที่กำลังคุยอยู่]
+      - ชี้แจงชัดเจน: ห้ามเปลี่ยนสินค้าเมื่อ user ถามต่อเนื่อง
+
+  Flow ใหม่:
+    1. User ถาม "โมเดินใช้กับพริกได้ไหม"
+    2. Bot ตอบ + save_current_product_focus("โมเดิน")
+    3. User ถาม "แล้วใช้กับมะเขือเทศล่ะ" (ไม่ระบุชื่อสินค้า)
+    4. get_enhanced_context() ใส่ "[สินค้าที่กำลังคุยอยู่] โมเดิน" ไว้บนสุด
+    5. agentic_rag.py Strategy 0 ดึง "โมเดิน" จาก marker
+    6. Bot ตอบเกี่ยวกับโมเดิน (ไม่ใช่สินค้าอื่น)
+
+  ผลที่คาด:
+    - Follow-up questions จะอ้างอิงสินค้าล่าสุดที่แนะนำไปเสมอ
+    - TTL 30 นาที — หลังจากนี้จะเริ่มบทสนทนาใหม่อัตโนมัติ
+    - Backward compatible — ไม่กระทบ flow เดิม
+
+================================================================================
