@@ -311,10 +311,11 @@ def generate_thai_disease_variants(disease_name: str) -> List[str]:
     """
     Generate Thai disease name variants for fuzzy matching.
 
-    Thai farmers commonly drop "สี" (color) from disease names:
-      ราสีชมพู → ราชมพู, จุดสีน้ำตาล → จุดน้ำตาล
-
-    Also handles โรค prefix add/remove.
+    Handles:
+    1. โรค prefix add/remove
+    2. สี prefix in color names (ราสีชมพู ↔ ราชมพู)
+    3. Common transliteration variants (แอคแทคโนส ↔ แอนแทรคโนส)
+    4. N-gram substrings for fuzzy matching
 
     Returns list of variants including the original name.
     """
@@ -327,6 +328,26 @@ def generate_thai_disease_variants(disease_name: str) -> List[str]:
         variants.add(bare)
     else:
         variants.add("โรค" + bare)
+
+    # Known transliteration variants (common misspellings by Thai farmers)
+    _SPELLING_VARIANTS = {
+        "แอคแทคโนส": "แอนแทรคโนส",
+        "แอนแทรคโนส": "แอคแทคโนส",
+        "แอนแทรกโนส": "แอนแทรคโนส",
+        "แอนเทรคโนส": "แอนแทรคโนส",
+        "ไฟท็อปโทร่า": "ไฟทอปธอร่า",
+        "ไฟทอปธอร่า": "ไฟท็อปโทร่า",
+        "ไฟธอปทอร่า": "ไฟทอปธอร่า",
+        "ดาวนี่มิลดิว": "ราน้ำค้าง",
+        "พาวเดอรี่มิลดิว": "ราแป้ง",
+    }
+
+    # Add spelling variants
+    for variant_from, variant_to in _SPELLING_VARIANTS.items():
+        if variant_from in bare:
+            new_bare = bare.replace(variant_from, variant_to)
+            variants.add(new_bare)
+            variants.add("โรค" + new_bare)
 
     _COLORS = ["ชมพู", "น้ำตาล", "เทา", "ขาว", "ดำ", "ม่วง", "เหลือง", "ส้ม"]
 
