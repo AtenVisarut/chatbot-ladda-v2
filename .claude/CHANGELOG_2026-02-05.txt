@@ -69,6 +69,47 @@ CHANGELOG — 2026-02-05
   ผลกระทบ: ไม่กระทบความแม่นยำ ทดสอบแล้วทุกคำถามตอบถูกต้อง
 
 ================================================================================
+10. Fix: ป้องกัน Hallucinated Product — แนะนำสินค้าที่ไม่มีใน database
+================================================================================
+
+  ปัญหา:
+    Bot แนะนำ "คอมแพ็ค (METALAXYL + MANCOZEB)" ซึ่งไม่มีใน products table
+    LLM ใช้ความรู้ทั่วไปสร้างสินค้าขึ้นมาเอง เมื่อ user ถาม "มีตัวอื่นอีกไหม"
+
+  สาเหตุ:
+    - LLM (gpt-4o-mini) รู้จักสินค้าเคมีเกษตรจากข้อมูลทั่วไป
+    - เมื่อ retrieved docs มีสินค้าน้อย + user ขอเพิ่ม → LLM แต่งสินค้าขึ้นมา
+    - Prompt เดิมบอกแค่ "ห้ามแต่งข้อมูล" แต่ไม่ได้ห้ามชัดเจนพอ
+
+  แก้ไข (2 ชั้น):
+
+    ชั้น 1: Prompt Strengthening (app/prompts.py)
+      - เพิ่มกฎข้อ 2: "ห้ามแนะนำสินค้าที่ไม่ได้อยู่ในข้อมูลที่ผ่านการตรวจสอบ
+        แล้วเด็ดขาด — แม้จะรู้จักสินค้าตัวอื่นก็ห้ามพูดถึง
+        ถ้าไม่มีสินค้าเพิ่มเติมให้ตอบว่า 'จากข้อมูลที่มี มีเท่านี้ค่ะ'"
+
+    ชั้น 2: Post-processing Validation (response_generator_agent.py)
+      - เพิ่ม _validate_product_names() method
+      - ดึงชื่อสินค้าจากเครื่องหมายคำพูด (ทั้ง straight "" และ curly "")
+      - ตัด parenthetical ออก เช่น "(METALAXYL + MANCOZEB)"
+      - ตรวจสอบกับ retrieved docs + ICP_PRODUCT_NAMES
+      - ถ้าไม่เจอใน database → แทนที่ด้วย "(สินค้านี้ไม่อยู่ในฐานข้อมูล)"
+      - Regex: r'["\u201c\u201d]([^"\u201c\u201d]+?)["\u201c\u201d]'
+
+  ทดสอบ (6 test cases):
+    Test 1: Straight quotes with parenthetical → PASS
+    Test 2: Straight quotes without parenthetical → PASS
+    Test 3: Multiple products → PASS
+    Test 4: Curly quotes → PASS
+    Test 5: Known products pass validation → PASS
+    Test 6: Unknown product detected → PASS
+
+  ผลที่คาด:
+    - LLM จะไม่แนะนำสินค้านอก database (prompt ห้ามชัด)
+    - ถ้า LLM ยังหลุด → post-processing จับได้และแทนที่
+    - สินค้าจริงไม่ถูกกระทบ (ตรวจกับ ICP_PRODUCT_NAMES ครบ)
+
+================================================================================
 (Previous entries below)
 ================================================================================
 
