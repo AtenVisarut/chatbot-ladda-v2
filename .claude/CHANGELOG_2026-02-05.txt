@@ -3,6 +3,50 @@ CHANGELOG — 2026-02-05
 ================================================================================
 
 ================================================================================
+18. Fix: Consolidated Disease Fallback + Confidence Override + Disease Rescue
+================================================================================
+
+  ปัญหา (จาก Log วิเคราะห์):
+    1. _search_by_target_pest ยิงซ้ำ 7 ครั้ง (ทุก expanded query) หาสินค้าเดิม
+    2. Grounding confidence = 0.00 แม้ response_generator มี disease override
+    3. อาร์เทมีส (จาก fallback) ถูก reranked ต่ำ → ไม่อยู่ใน docs_to_use top 5
+
+  แก้ไข (2 ไฟล์):
+
+    app/services/agents/retrieval_agent.py
+      - ลบ per-query fallback จาก _search_products() (7 calls → 0)
+      - เพิ่ม Stage 1.2: Consolidated disease fallback ใน retrieve()
+        รันแค่ 1 ครั้ง หลัง vector search ทั้งหมดเสร็จ
+      - เพิ่ม Stage 3.52: Boost disease fallback docs ขึ้นด้านบน
+      - เพิ่ม Stage 3.8: Disease-matched product rescue
+        ถ้า top 3 ไม่มีสินค้าที่ตรงกับ disease → หาจาก full list → ดันขึ้น #1
+      - Stage 4 filter: รวม disease_fallback_ids ไม่ให้ถูก filter ออก
+
+    app/services/agents/response_generator_agent.py
+      - เพิ่ม final_confidence / final_grounded tracking
+      - Override confidence เมื่อ disease_match=0.65, crop_specific=0.60, product=0.70
+      - ขยาย disease_match check จาก top 5 → top 10
+      - เพิ่ม disease-matching product rescue ใน _generate_llm_response:
+        ถ้า disease ไม่อยู่ใน docs_to_use top 5 → หาจาก full retrieval → insert ที่ #1
+
+  ผลทดสอบ: 18/20 real-world queries (Q7=LLM variance, Q12=expected)
+  Commit: c32eb8f
+
+================================================================================
+17. Fix: False-positive Product + Hallucinated Product Name
+================================================================================
+
+  ปัญหา:
+    Q3 "โรครากเน่าโคนเน่า แก้ยังไง" → bot ตอบ "ไม่มีสินค้า"
+    extract_product_name_from_question() fuzzy-match "โคนเน่า" → "โค-ราซ"
+
+  แก้ไข:
+    agentic_rag.py Stage 0: ตรวจ product aliases ตรงตัวใน query ถ้าไม่ตรง → ลบ
+    query_understanding_agent.py: ลบ hallucinated product เมื่อ intent เป็น treatment
+
+  Commit: ae1e719
+
+================================================================================
 16. Feature: Pre-LLM Entity Extraction Layer (Approach 1)
 ================================================================================
 
