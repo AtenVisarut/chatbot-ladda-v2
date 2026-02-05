@@ -283,10 +283,59 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 temperature=0.1,
                 max_tokens=700
             )
-            return response.choices[0].message.content.strip()
+            answer = response.choices[0].message.content.strip()
+
+            # Post-processing: validate product names in response
+            answer = self._validate_product_names(answer, docs_to_use)
+
+            return answer
         except Exception as e:
             logger.error(f"LLM response generation failed: {e}")
             return self._build_fallback_answer(retrieval_result, grounding_result)
+
+    def _validate_product_names(self, answer: str, docs: list) -> str:
+        """
+        Post-processing: ตรวจสอบว่าสินค้าที่แนะนำอยู่ใน retrieved documents จริง
+        ถ้าเจอสินค้าที่ไม่มีใน database → ลบออกจากคำตอบ
+        """
+        try:
+            from app.services.chat import ICP_PRODUCT_NAMES
+            import re
+
+            # Build set of allowed product names from retrieved docs + ICP list
+            allowed_names = set()
+            for doc in docs:
+                pname = doc.metadata.get('product_name', '')
+                if pname:
+                    allowed_names.add(pname)
+
+            # Match text between straight quotes " or curly quotes ""
+            for match in re.finditer(r'["\u201c\u201d]([^"\u201c\u201d]+?)["\u201c\u201d]', answer):
+                full_match = match.group(0)
+                inner_text = match.group(1).strip()
+
+                # Extract product name (strip trailing parenthetical like "(สารสำคัญ)")
+                product_mention = re.sub(r'\s*\([^)]+\)\s*$', '', inner_text).strip()
+
+                if not product_mention or len(product_mention) > 30:
+                    continue
+
+                is_known = any(
+                    product_mention in name or name in product_mention
+                    for name in allowed_names
+                ) or any(
+                    product_mention in name or name in product_mention
+                    for name in ICP_PRODUCT_NAMES.keys()
+                )
+
+                if not is_known:
+                    logger.warning(f"HALLUCINATED product detected: '{product_mention}' - not in database!")
+                    answer = answer.replace(full_match, '"(สินค้านี้ไม่อยู่ในฐานข้อมูล)"')
+
+        except Exception as e:
+            logger.error(f"Product name validation error: {e}")
+
+        return answer
 
     def _build_fallback_answer(
         self,
