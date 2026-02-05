@@ -83,11 +83,17 @@ def post_process_answer(answer: str) -> str:
     # 8. Strip all emojis except 😊 and 🌱
     answer = _strip_banned_emojis(answer)
 
-    # 9. Normalize dividers to standard format
-    answer = re.sub(r'^[-=─]{3,}$', '━━━━━━━━━━━━━━━', answer, flags=re.MULTILINE)
+    # 9. Remove divider/separator lines entirely (─, ━, ═, -, =, etc.)
+    answer = re.sub(r'^[\s]*[-=─━═—–_]{3,}[\s]*$', '', answer, flags=re.MULTILINE)
 
     # 10. Remove old [หัวข้อ] bracket format (fallback cleanup)
     answer = re.sub(r'^\[([^\]]+)\]\s*$', r'\1', answer, flags=re.MULTILINE)
+
+    # 11. Strip leading whitespace from each line (left after emoji removal)
+    answer = '\n'.join(line.lstrip() for line in answer.split('\n'))
+
+    # 12. Collapse excessive blank lines
+    answer = re.sub(r'\n{3,}', '\n\n', answer)
 
     return answer
 
