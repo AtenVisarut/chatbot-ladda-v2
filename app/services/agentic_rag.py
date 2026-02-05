@@ -155,6 +155,7 @@ class AgenticRAG:
                     hints['problem_type'] = detected_problem
 
                 # --- Pre-LLM Entity Extraction: Disease ---
+                # (defined here so we can validate product vs disease below)
                 _DISEASE_PATTERNS_STAGE0 = [
                     'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
                     'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
@@ -194,6 +195,20 @@ class AgenticRAG:
                         hints['pest_name'] = pattern
                         logger.info(f"  - Pre-extracted pest: '{pattern}'")
                         break
+
+                # --- Validate: drop false-positive product from fuzzy match ---
+                # If disease/pest was detected but product doesn't literally appear in query,
+                # the product was likely a fuzzy-match false positive
+                # e.g. "โรครากเน่าโคนเน่า" → fuzzy matches "โค-ราซ" from "โคน"
+                if (hints.get('product_name')
+                        and (hints.get('disease_name') or hints.get('pest_name'))):
+                    product_aliases = ICP_PRODUCT_NAMES.get(hints['product_name'], [])
+                    product_literally_in_query = any(
+                        alias.lower() in query.lower() for alias in product_aliases
+                    )
+                    if not product_literally_in_query:
+                        logger.info(f"  - Drop false-positive product: '{hints['product_name']}' (fuzzy match, not in query)")
+                        del hints['product_name']
 
                 logger.info(f"  - Hints: {hints}")
             except ImportError:

@@ -180,7 +180,7 @@ required_sources:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,
-            max_tokens=500
+            max_completion_tokens=500
         )
 
         response_text = response.choices[0].message.content.strip()
@@ -226,6 +226,19 @@ required_sources:
             if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
                 logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
                 entities['product_name'] = hints['product_name']
+
+            # Remove LLM-hallucinated product_name for recommendation/treatment queries
+            # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)
+            _recommendation_intents = {
+                IntentType.DISEASE_TREATMENT, IntentType.PEST_CONTROL,
+                IntentType.PRODUCT_RECOMMENDATION, IntentType.WEED_CONTROL,
+                IntentType.NUTRIENT_SUPPLEMENT,
+            }
+            if (intent in _recommendation_intents
+                    and entities.get('product_name')
+                    and not hints.get('product_name')):
+                logger.info(f"  - Remove hallucinated product: LLM added '{entities['product_name']}' but user didn't mention any product")
+                del entities['product_name']
 
             # Get expanded queries
             expanded_queries = data.get("expanded_queries", [query])
