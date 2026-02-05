@@ -398,30 +398,42 @@ class RetrievalAgent:
             multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
             all_docs.extend(multi_docs)
 
-            # Stage 1.3: Original query disease fallback
-            # LLM may have misidentified the disease (e.g. "ราชมพู" → "ฟอซาเรียม")
-            # Extract disease from original query directly and search target_pest
+            # Stage 1.2: Consolidated disease fallback (runs ONCE after all vector searches)
+            # Checks if disease is in any retrieved doc's target_pest
+            # If not, does a single direct DB lookup instead of per-query fallbacks
+            disease_fallback_ids = set()
             if query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                 from app.utils.text_processing import generate_thai_disease_variants
 
+                # Collect all disease names to check (entity + original query)
+                disease_names_to_check = set()
                 entity_disease = query_analysis.entities.get('disease_name', '')
+                if entity_disease:
+                    disease_names_to_check.add(entity_disease)
                 original_disease = self._extract_disease_from_query(query_analysis.original_query)
+                if original_disease:
+                    disease_names_to_check.add(original_disease)
 
-                if original_disease and original_disease != entity_disease:
-                    original_variants = generate_thai_disease_variants(original_disease)
+                if disease_names_to_check:
+                    # Build combined variants from all disease names
+                    all_variants = []
+                    for d in disease_names_to_check:
+                        all_variants.extend(generate_thai_disease_variants(d))
+                    all_variants = list(set(all_variants))
 
-                    # Check if any existing doc already matches this disease
-                    has_match = any(
-                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in original_variants)
+                    # Check if any existing doc already matches
+                    has_disease_in_docs = any(
+                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in all_variants)
                         for doc in all_docs
                     ) if all_docs else False
 
-                    if not has_match:
-                        logger.info(f"  - Original query disease fallback: '{original_disease}' (entity was '{entity_disease}')")
-                        oq_fallback_docs = await self._search_by_target_pest(original_variants, query_analysis)
-                        if oq_fallback_docs:
-                            all_docs.extend(oq_fallback_docs)
-                            logger.info(f"  - Original query disease fallback found: {len(oq_fallback_docs)} docs")
+                    if not has_disease_in_docs:
+                        logger.info(f"  - Disease fallback: {disease_names_to_check} not in retrieved docs, searching target_pest")
+                        fallback_docs = await self._search_by_target_pest(all_variants, query_analysis)
+                        if fallback_docs:
+                            disease_fallback_ids = {doc.id for doc in fallback_docs}
+                            all_docs.extend(fallback_docs)
+                            logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via target_pest")
 
             # Stage 1.5: Fallback keyword search if no results
             if not all_docs:
@@ -476,6 +488,14 @@ class RetrievalAgent:
                 others = [doc for doc in reranked_docs if doc.id not in direct_lookup_ids]
                 reranked_docs = boosted + others
                 logger.info(f"  - Boosted {len(boosted)} direct lookup docs to top")
+
+            # Stage 3.52: Boost disease fallback docs to top (matched via target_pest directly)
+            if disease_fallback_ids:
+                boosted = [doc for doc in reranked_docs if doc.id in disease_fallback_ids]
+                others = [doc for doc in reranked_docs if doc.id not in disease_fallback_ids]
+                reranked_docs = boosted + others
+                if boosted:
+                    logger.info(f"  - Boosted {len(boosted)} disease fallback docs to top")
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             intent_category_map = {
@@ -566,11 +586,38 @@ class RetrievalAgent:
                         reranked_docs.insert(0, best_priority)
                         logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy_group')}) from pos {current_pos + 1} to 1")
 
+            # Stage 3.8: Ensure disease-matching product is in top 3
+            # If query is about disease but no top-3 doc has the disease in target_pest,
+            # find and promote the matching doc (e.g. อาร์เทมีส for ราชมพู)
+            if not direct_lookup_ids and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                from app.utils.text_processing import generate_thai_disease_variants
+                _entity_disease = query_analysis.entities.get('disease_name', '')
+                _original_disease = self._extract_disease_from_query(query_analysis.original_query)
+                _diseases_to_check = [d for d in [_entity_disease, _original_disease] if d]
+                if _diseases_to_check:
+                    _all_variants = []
+                    for d in _diseases_to_check:
+                        _all_variants.extend(generate_thai_disease_variants(d))
+                    _all_variants = list(set(_all_variants))
+                    top_has_match = any(
+                        any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _all_variants)
+                        for d in reranked_docs[:3]
+                    )
+                    if not top_has_match:
+                        for d in reranked_docs[3:]:
+                            target_pest = str(d.metadata.get('target_pest', '')).lower()
+                            if any(v.lower() in target_pest for v in _all_variants):
+                                reranked_docs.remove(d)
+                                reranked_docs.insert(0, d)
+                                logger.info(f"  - Rescued disease-matched product: {d.title} to position 1")
+                                break
+
             # Stage 4: Filter by rerank threshold
             filtered_docs = [
                 doc for doc in reranked_docs
                 if doc.rerank_score >= self.rerank_threshold or doc.similarity_score >= self.vector_threshold
                 or doc.id in direct_lookup_ids
+                or doc.id in disease_fallback_ids
             ]
 
             # Ensure we have at least some results
@@ -735,32 +782,6 @@ class RetrievalAgent:
                 docs.append(doc)
 
             logger.info(f"    Product search: {len(docs)} docs for '{query[:30]}...'")
-
-            # Fallback: ถ้า query เกี่ยวกับโรค แต่ไม่เจอสินค้าที่มีโรคนั้นใน target_pest
-            # → ค้นหา target_pest โดยตรง (ไม่พึ่ง vector similarity)
-            if query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
-                from app.utils.text_processing import generate_thai_disease_variants
-
-                # ดึงชื่อโรคจาก entities ถ้ามี หรือจาก query text โดยตรง
-                disease_name = query_analysis.entities.get('disease_name', '')
-                if not disease_name:
-                    disease_name = self._extract_disease_from_query(query)
-
-                if disease_name:
-                    disease_variants = generate_thai_disease_variants(disease_name)
-
-                    # เช็คว่า docs ที่ได้มีสินค้าที่ตรงกับโรคนี้ไหม
-                    has_match = any(
-                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in disease_variants)
-                        for doc in docs
-                    )
-
-                    if not has_match:
-                        logger.info(f"    Fallback: disease '{disease_name}' not in vector results, searching target_pest directly")
-                        fallback_docs = await self._search_by_target_pest(disease_variants, query_analysis)
-                        if fallback_docs:
-                            logger.info(f"    Fallback found {len(fallback_docs)} products via target_pest")
-                            docs.extend(fallback_docs)
 
             return docs
 

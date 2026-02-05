@@ -68,6 +68,10 @@ class ResponseGeneratorAgent:
             if query_analysis.intent == IntentType.GREETING:
                 return self._generate_greeting_response(query_analysis)
 
+            # Track final confidence/grounded (may be overridden if disease/crop match triggers)
+            final_confidence = grounding_result.confidence
+            final_grounded = grounding_result.is_grounded
+
             # Handle no data case — grounding says not relevant
             if not grounding_result.is_grounded:
                 # Check if retrieval promoted a crop-specific product (override grounding)
@@ -90,7 +94,7 @@ class ResponseGeneratorAgent:
                 disease_name = query_analysis.entities.get('disease_name', '')
                 if disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     disease_variants = generate_thai_disease_variants(disease_name)
-                    for doc in retrieval_result.documents[:5]:
+                    for doc in retrieval_result.documents[:10]:
                         target_pest = str(doc.metadata.get('target_pest', '')).lower()
                         if any(v.lower() in target_pest for v in disease_variants):
                             has_disease_match = True
@@ -135,6 +139,20 @@ class ResponseGeneratorAgent:
                     logger.info(f"  - Product-specific override: bypassing grounding for '{query_analysis.entities.get('product_name')}'")
                     # LLM will use the product data to explain (e.g. "ราเซอร์ใช้กำจัดวัชพืช ใช้ได้กับ...")
 
+                # Override confidence when bypass triggered (don't keep 0.00)
+                if has_disease_match:
+                    final_confidence = max(final_confidence, 0.65)
+                    final_grounded = True
+                    logger.info(f"  - Confidence override: disease match → {final_confidence:.2f}")
+                elif has_crop_specific_top:
+                    final_confidence = max(final_confidence, 0.60)
+                    final_grounded = True
+                    logger.info(f"  - Confidence override: crop-specific top → {final_confidence:.2f}")
+                elif has_product_in_query and has_documents:
+                    final_confidence = max(final_confidence, 0.70)
+                    final_grounded = True
+                    logger.info(f"  - Confidence override: product in query → {final_confidence:.2f}")
+
             # Generate answer from verified product data using LLM
             answer = await self._generate_llm_response(
                 query_analysis, retrieval_result, grounding_result, context
@@ -144,15 +162,15 @@ class ResponseGeneratorAgent:
             answer = post_process_answer(answer)
 
             # Add low confidence indicator if needed
-            if grounding_result.confidence < LOW_CONFIDENCE_THRESHOLD:
+            if final_confidence < LOW_CONFIDENCE_THRESHOLD:
                 answer = self._add_low_confidence_note(answer)
 
             return AgenticRAGResponse(
                 answer=answer,
-                confidence=grounding_result.confidence,
+                confidence=final_confidence,
                 citations=grounding_result.citations,
                 intent=query_analysis.intent,
-                is_grounded=grounding_result.is_grounded,
+                is_grounded=final_grounded,
                 sources_used=retrieval_result.sources_used,
                 query_analysis=query_analysis,
                 retrieval_result=retrieval_result,
@@ -189,6 +207,27 @@ class ResponseGeneratorAgent:
         # ensures Skyrocket/Expand appear first in product context sent to LLM
         _STRATEGY_ORDER = {'Skyrocket': 0, 'Expand': 1, 'Natural': 2, 'Standard': 3}
         docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy_group', ''), 3))
+
+        # Rescue: ensure disease-matching product is in docs_to_use
+        # If query is about disease but no doc in docs_to_use has the disease in target_pest,
+        # search full retrieval results and add the matching doc
+        if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
+            _rescue_disease = query_analysis.entities.get('disease_name', '')
+            if _rescue_disease:
+                _rescue_variants = generate_thai_disease_variants(_rescue_disease)
+                _has_in_docs_to_use = any(
+                    any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _rescue_variants)
+                    for d in docs_to_use
+                )
+                if not _has_in_docs_to_use:
+                    for doc in retrieval_result.documents:
+                        if doc in docs_to_use:
+                            continue
+                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                        if any(v.lower() in target_pest for v in _rescue_variants):
+                            docs_to_use.insert(0, doc)
+                            logger.info(f"  - Rescued disease-matching product into docs_to_use: {doc.title}")
+                            break
 
         # Filter: when a crop-specific product exists, remove non-specific variants of same family
         # e.g., if พรีดิคท์ 25 is for ทุเรียน specifically, remove พรีดิคท์ 10% and 15
