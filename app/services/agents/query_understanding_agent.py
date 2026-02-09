@@ -103,6 +103,11 @@ class QueryUnderstandingAgent:
         if hints.get('problem_type') and hints['problem_type'] != 'unknown':
             problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
             hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
+        if hints.get('resolved_slang'):
+            hint_section += f"\n[HINT] ภาษาชาวบ้าน: {hints['resolved_slang']}"
+        if hints.get('possible_diseases'):
+            diseases_str = ", ".join(hints['possible_diseases'])
+            hint_section += f"\n[HINT] อาการในคำถามอาจเกิดจากโรค: {diseases_str} — ให้ใช้โรคเหล่านี้ใน expanded_queries เพื่อค้นหาสินค้าที่เหมาะสม"
 
         products_str = ", ".join(_ICP_PRODUCT_LIST)
 
@@ -250,6 +255,22 @@ required_sources:
                 for variant in hints['disease_variants']:
                     if variant not in expanded_queries and variant != query:
                         expanded_queries.append(variant)
+
+            # Inject extra search terms from farmer slang resolution
+            if hints.get('extra_search_terms'):
+                plant_type = entities.get('plant_type', '')
+                for term in hints['extra_search_terms']:
+                    search_q = f"{term} {plant_type}".strip() if plant_type else term
+                    if search_q not in expanded_queries:
+                        expanded_queries.append(search_q)
+
+            # Inject possible diseases from symptom mapping
+            if hints.get('possible_diseases'):
+                plant_type = entities.get('plant_type', '')
+                for disease in hints['possible_diseases']:
+                    search_q = f"{disease} {plant_type}".strip() if plant_type else disease
+                    if search_q not in expanded_queries:
+                        expanded_queries.append(search_q)
 
             # Force products-only source (products table is the sole data source)
             required_sources = ["products"]

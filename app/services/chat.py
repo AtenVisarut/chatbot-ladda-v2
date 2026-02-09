@@ -258,7 +258,7 @@ DISEASE_KEYWORDS = [
     # โรคทั่วไป
     "โรค", "ใบจุด", "ใบไหม้", "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "เชื้อรา",
     "แอนแทรคโนส", "ผลเน่า", "รากเน่า", "โคนเน่า", "ลำต้นเน่า", "กิ่งแห้ง",
-    "ราดำ", "จุดสีน้ำตาล", "ใบแห้ง", "ไฟท็อป", "ใบติด",
+    "ราดำ", "จุดสีน้ำตาล", "ใบแห้ง", "ไฟท็อป", "ใบติด", "ดอกกระถิน", "เมล็ดด่าง",
     # English
     "disease", "fungus", "fungal", "rot", "blight", "mildew", "rust", "anthracnose"
 ]
@@ -292,6 +292,63 @@ WEED_KEYWORDS = [
     "หญ้า", "วัชพืช", "กำจัดหญ้า", "ยาฆ่าหญ้า", "หญ้าขึ้น", "หญ้างอก",
     "ใบแคบ", "ใบกว้าง", "กก"
 ]
+
+
+# =============================================================================
+# Farmer Slang → Technical Terms Mapping
+# =============================================================================
+FARMER_SLANG_MAP = {
+    "ยาดูด": {"hint": "สารดูดซึม (systemic insecticide/fungicide) ไม่ใช่สารควบคุมการเจริญเติบโต", "search_terms": ["ดูดซึม", "สารกำจัดแมลง", "สารป้องกันโรค"]},
+    "ยาสัมผัส": {"hint": "สารสัมผัส (contact)", "search_terms": ["สัมผัส", "contact"]},
+    "ยาเผาไหม้": {"hint": "ยาฆ่าหญ้าสัมผัส", "category": "Herbicide", "search_terms": ["เผาไหม้"]},
+    "ยาคลุม": {"hint": "สารก่อนงอก (pre-emergent)", "search_terms": ["ก่อนงอก"]},
+    "ต้นโทรม": {"hint": "ต้นไม่สมบูรณ์/ขาดธาตุอาหาร", "problem_type": "nutrient"},
+    "ใบม้วน": {"hint": "ใบม้วนงอ อาจจากเพลี้ยหรือไวรัส", "problem_type": "insect"},
+    "ต้นเหลือง": {"hint": "ใบเหลือง/ขาดธาตุอาหาร", "problem_type": "nutrient"},
+    "ราขึ้น": {"hint": "เชื้อราเข้าทำลาย", "problem_type": "disease"},
+    "แมลงกัด": {"hint": "แมลงกัดกิน/เจาะ", "problem_type": "insect"},
+    "หนอนเจาะ": {"hint": "หนอนเจาะลำต้น/ผล", "problem_type": "insect"},
+    "ข้าวดื้อยา": {"hint": "วัชพืชดื้อสารเคมี ต้องเปลี่ยนกลุ่มสาร", "problem_type": "weed"},
+    "หญ้าดื้อ": {"hint": "วัชพืชดื้อสารเคมี", "problem_type": "weed"},
+    "ดอกกระถิน": {"hint": "โรคเมล็ดด่าง/ดอกกระถิน (false smut) ในข้าว", "problem_type": "disease", "search_terms": ["เมล็ดด่าง", "ดอกกระถิน", "false smut"]},
+}
+
+
+def resolve_farmer_slang(query: str) -> dict:
+    """
+    ตรวจจับคำภาษาชาวบ้านในคำถามและแปลเป็นคำทางเทคนิค
+
+    Returns:
+        {
+            "matched_slangs": [str],
+            "hints": str,           # ข้อความ hint สำหรับ inject เข้า LLM prompt
+            "search_terms": [str],  # คำค้นเพิ่มเติมสำหรับ retrieval
+            "problem_type": str|None
+        }
+    """
+    result = {
+        "matched_slangs": [],
+        "hints": "",
+        "search_terms": [],
+        "problem_type": None,
+    }
+
+    query_lower = query.lower()
+    hint_parts = []
+
+    for slang, info in FARMER_SLANG_MAP.items():
+        if slang in query_lower:
+            result["matched_slangs"].append(slang)
+            hint_parts.append(f'"{slang}" หมายถึง {info["hint"]}')
+            if info.get("search_terms"):
+                result["search_terms"].extend(info["search_terms"])
+            if info.get("problem_type") and not result["problem_type"]:
+                result["problem_type"] = info["problem_type"]
+
+    if hint_parts:
+        result["hints"] = "; ".join(hint_parts)
+
+    return result
 
 
 def detect_problem_type(message: str) -> str:

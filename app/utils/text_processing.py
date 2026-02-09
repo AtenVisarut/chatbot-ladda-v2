@@ -313,6 +313,59 @@ def extract_keywords_from_question(question: str) -> dict:
     return found
 
 
+def validate_numbers_against_source(answer: str, source_docs: list) -> dict:
+    """
+    ตรวจสอบว่าตัวเลข+หน่วยในคำตอบตรงกับข้อมูลใน source documents หรือไม่
+    Phase 1: logging only — เก็บ data เพื่อวิเคราะห์
+
+    Args:
+        answer: คำตอบจาก LLM
+        source_docs: list ของ documents (มี .metadata)
+
+    Returns:
+        {"valid": bool, "mismatches": [{"number": str, "unit": str, "found_in_source": bool}]}
+    """
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+
+    # 1. ดึงตัวเลข+หน่วย จาก source docs
+    _UNIT_PATTERN = r'(\d+(?:[.,]\d+)?)\s*(มล\.|มิลลิลิตร|กรัม|ลิตร|ไร่|%|กก\.|กิโลกรัม|วัน|ซีซี|ช้อน|แก้ว|ขวด|ถุง|กระสอบ)'
+    source_numbers = set()
+    fields_to_check = ['usage_rate', 'how_to_use', 'package_size', 'active_ingredient', 'selling_point']
+    for doc in source_docs:
+        meta = doc.metadata if hasattr(doc, 'metadata') else (doc if isinstance(doc, dict) else {})
+        for field in fields_to_check:
+            text = str(meta.get(field, ''))
+            if text:
+                for m in re.finditer(_UNIT_PATTERN, text):
+                    # Normalize: remove commas
+                    num = m.group(1).replace(',', '')
+                    source_numbers.add(num)
+
+    # 2. ดึงตัวเลข+หน่วย จาก answer
+    answer_matches = list(re.finditer(_UNIT_PATTERN, answer))
+    mismatches = []
+    for m in answer_matches:
+        num = m.group(1).replace(',', '')
+        unit = m.group(2)
+        found = num in source_numbers
+        mismatches.append({
+            "number": num,
+            "unit": unit,
+            "found_in_source": found
+        })
+
+    valid = all(item["found_in_source"] for item in mismatches) if mismatches else True
+
+    if not valid:
+        bad = [f'{item["number"]}{item["unit"]}' for item in mismatches if not item["found_in_source"]]
+        _logger.warning(f"[NumberCheck] Mismatched numbers in answer: {bad}")
+    else:
+        _logger.info(f"[NumberCheck] All {len(mismatches)} numbers validated OK")
+
+    return {"valid": valid, "mismatches": mismatches}
+
+
 def generate_thai_disease_variants(disease_name: str) -> List[str]:
     """
     Generate Thai disease name variants for fuzzy matching.
@@ -385,3 +438,45 @@ def generate_thai_disease_variants(disease_name: str) -> List[str]:
             variants.add("โรค" + bare.replace(jud_without_si, jud_with_si))
 
     return list(variants)
+
+
+# =============================================================================
+# Symptom → Pathogen Mapping
+# =============================================================================
+SYMPTOM_PATHOGEN_MAP = {
+    "กิ่งแห้ง": ["ฟิวซาเรียม", "แอนแทรคโนส", "ราสีชมพู"],
+    "ผลเน่า": ["แอนแทรคโนส", "ไฟทอปธอร่า"],
+    "รากเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม", "พิเทียม"],
+    "ใบจุด": ["เซอโคสปอร่า", "แอนแทรคโนส"],
+    "ยางไหล": ["ไฟทอปธอร่า"],
+    "ใบไหม้": ["ไฟทอปธอร่า", "แอนแทรคโนส"],
+    "ราแป้ง": ["ราแป้ง", "โอดิอัม"],
+    "ราดำ": ["ราดำ"],
+    "โคนเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม"],
+    "ลำต้นเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม"],
+    "ใบร่วง": ["แอนแทรคโนส", "ไฟทอปธอร่า"],
+}
+
+
+def resolve_symptom_to_pathogens(query: str) -> List[str]:
+    """
+    ตรวจจับอาการพืชในคำถามและ map กลับไปหาโรคที่เป็นไปได้
+
+    Args:
+        query: คำถามผู้ใช้
+
+    Returns:
+        list ของชื่อโรคที่เป็นไปได้ (deduplicated)
+        เช่น "กิ่งแห้ง" → ["ฟิวซาเรียม", "แอนแทรคโนส", "ราสีชมพู"]
+    """
+    result = []
+    seen = set()
+
+    for symptom, pathogens in SYMPTOM_PATHOGEN_MAP.items():
+        if symptom in query:
+            for p in pathogens:
+                if p not in seen:
+                    seen.add(p)
+                    result.append(p)
+
+    return result

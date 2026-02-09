@@ -111,10 +111,27 @@ class AgenticRAG:
                 from app.services.chat import (
                     extract_product_name_from_question, detect_problem_type,
                     ICP_PRODUCT_NAMES, extract_plant_type_from_question,
-                    DISEASE_KEYWORDS, INSECT_KEYWORDS
+                    DISEASE_KEYWORDS, INSECT_KEYWORDS,
+                    resolve_farmer_slang
                 )
-                from app.utils.text_processing import generate_thai_disease_variants
+                from app.utils.text_processing import generate_thai_disease_variants, resolve_symptom_to_pathogens
                 import re
+
+                # --- Farmer Slang Resolution ---
+                slang_result = resolve_farmer_slang(query)
+                if slang_result["matched_slangs"]:
+                    hints['resolved_slang'] = slang_result["hints"]
+                    hints['extra_search_terms'] = slang_result["search_terms"]
+                    if slang_result["problem_type"]:
+                        hints['problem_type'] = slang_result["problem_type"]
+                    logger.info(f"  - Farmer slang: {slang_result['matched_slangs']} → hints='{slang_result['hints']}'")
+
+                # --- Symptom→Pathogen Resolution ---
+                possible_diseases = resolve_symptom_to_pathogens(query)
+                if possible_diseases:
+                    hints['possible_diseases'] = possible_diseases
+                    logger.info(f"  - Symptom→Pathogen: {possible_diseases}")
+
                 detected_product = extract_product_name_from_question(query)
                 product_from_query = bool(detected_product)
                 # If no product in current query, try extracting from context (follow-up questions)
@@ -127,16 +144,20 @@ class AgenticRAG:
                             detected_product = product_candidate
                             logger.info(f"  - Product from current focus marker: {detected_product}")
 
-                    # Strategy 1: Fallback to bottom-up search (most recent first)
+                    # Strategy 1: Fallback to bottom-up search (3 most recent msgs only)
                     if not detected_product:
                         context_lines = context.strip().split('\n')
+                        msgs_checked = 0
                         for line in reversed(context_lines):
                             # Skip summary section lines
                             if line.startswith('[') and ']' in line:
                                 continue
                             detected_product = extract_product_name_from_question(line)
                             if detected_product:
-                                logger.info(f"  - Product from context (most recent): {detected_product}")
+                                logger.info(f"  - Product from context (recent 3 msgs): {detected_product}")
+                                break
+                            msgs_checked += 1
+                            if msgs_checked >= 3:
                                 break
 
                     # Strategy 2: Fallback to [สินค้าที่แนะนำไปแล้ว] section
@@ -166,7 +187,7 @@ class AgenticRAG:
                     'ใบไหม้แผลใหญ่', 'ใบไหม้', 'ใบจุดสีม่วง', 'ใบจุด',
                     'ผลเน่า', 'รากเน่า', 'โคนเน่า', 'ลำต้นเน่า', 'เน่าคอรวง',
                     'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
-                    'หอมเลื้อย', 'ใบติด', 'ใบด่าง', 'ใบหงิก',
+                    'หอมเลื้อย', 'ใบติด', 'ใบด่าง', 'ใบหงิก', 'ดอกกระถิน',
                 ]
                 # Sort by length descending so longer patterns match first
                 for pattern in sorted(_DISEASE_PATTERNS_STAGE0, key=len, reverse=True):
@@ -208,15 +229,58 @@ class AgenticRAG:
                     product_literally_in_query = any(
                         alias.lower() in query.lower() for alias in product_aliases
                     )
+                    # Check if current msg mentions a DIFFERENT product explicitly
+                    new_product_in_query = extract_product_name_from_question(query)
+                    has_new_different_product = (
+                        new_product_in_query
+                        and new_product_in_query != hints['product_name']
+                    )
                     drop_reason = None
-                    if (hints.get('disease_name') or hints.get('pest_name')) and not product_literally_in_query:
+                    if has_new_different_product:
+                        drop_reason = f"new product '{new_product_in_query}' explicitly mentioned"
+                        hints['product_name'] = new_product_in_query
+                    elif (hints.get('disease_name') or hints.get('pest_name')) and not product_literally_in_query:
                         drop_reason = "disease/pest detected, product not in query"
                     elif (not product_from_query and not product_literally_in_query
                             and hints.get('problem_type') in ('disease', 'pest')):
                         drop_reason = f"new {hints['problem_type']} topic, product from context"
-                    if drop_reason:
+                    if drop_reason and not has_new_different_product:
                         logger.info(f"  - Drop product: '{hints['product_name']}' ({drop_reason})")
                         del hints['product_name']
+                    elif has_new_different_product:
+                        logger.info(f"  - Switch product: → '{hints['product_name']}' ({drop_reason})")
+
+                # --- 2C: Ambiguous product detection ---
+                # If user asks a follow-up but no product is clear, and context has 2+ products
+                if (not hints.get('product_name') and not product_from_query and context):
+                    # Scan context for product names
+                    context_products = set()
+                    for pname in ICP_PRODUCT_NAMES.keys():
+                        if pname in context:
+                            context_products.add(pname)
+                    # Also check [สินค้าที่แนะนำไปแล้ว] section
+                    if len(context_products) >= 2:
+                        # Check if query is a follow-up question (short, no product name)
+                        followup_patterns = [
+                            "ใช้ยังไง", "ใช้เท่าไหร่", "อัตราเท่าไหร่", "ผสมเท่าไหร่",
+                            "ใช้ช่วงไหน", "ตัวไหนดี", "ตัวไหนเหมาะ", "ใช้กี่",
+                            "พ่นกี่", "ฉีดกี่", "ใช้กับ", "เหมาะกับ"
+                        ]
+                        is_followup = any(p in query for p in followup_patterns) and len(query) < 50
+                        if is_followup:
+                            products_list = sorted(context_products)[:4]
+                            clarify_msg = f"ขอถามหน่อยค่ะ หมายถึง " + " หรือ ".join(f'"{p}"' for p in products_list) + " คะ?"
+                            hints['ambiguous_products'] = products_list
+                            logger.info(f"  - Ambiguous products: {products_list}, will ask user")
+                            return AgenticRAGResponse(
+                                answer=clarify_msg,
+                                confidence=0.5,
+                                citations=[],
+                                intent=IntentType.UNKNOWN,
+                                is_grounded=True,
+                                sources_used=[],
+                                processing_time_ms=(time.time() - start_time) * 1000
+                            )
 
                 logger.info(f"  - Hints: {hints}")
             except ImportError:

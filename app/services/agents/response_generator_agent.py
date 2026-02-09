@@ -19,7 +19,7 @@ from app.services.agents import (
     AgenticRAGResponse,
     IntentType
 )
-from app.utils.text_processing import post_process_answer, generate_thai_disease_variants
+from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
 from app.config import LLM_MODEL_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
@@ -161,6 +161,12 @@ class ResponseGeneratorAgent:
             # Post-process answer (remove markdown artifacts)
             answer = post_process_answer(answer)
 
+            # Validate numbers against source docs (Phase 1: logging only)
+            if retrieval_result and retrieval_result.documents:
+                num_check = validate_numbers_against_source(answer, retrieval_result.documents[:5])
+                if not num_check["valid"]:
+                    logger.warning(f"  - Number validation: {len([m for m in num_check['mismatches'] if not m['found_in_source']])} mismatches found")
+
             # Add low confidence indicator if needed
             if final_confidence < LOW_CONFIDENCE_THRESHOLD:
                 answer = self._add_low_confidence_note(answer)
@@ -274,21 +280,21 @@ class ResponseGeneratorAgent:
             if meta.get('category'):
                 part += f"  ประเภท: {meta['category']}\n"
             if meta.get('target_pest'):
-                part += f"  ใช้กำจัด: {str(meta['target_pest'])[:200]}\n"
+                part += f"  ใช้กำจัด: {str(meta['target_pest'])}\n"
             if meta.get('applicable_crops'):
-                part += f"  พืชที่ใช้ได้: {str(meta['applicable_crops'])[:200]}\n"
+                part += f"  พืชที่ใช้ได้: {str(meta['applicable_crops'])}\n"
             if meta.get('usage_rate'):
                 part += f"  อัตราใช้: {meta['usage_rate']}\n"
             if meta.get('how_to_use'):
-                part += f"  วิธีใช้: {str(meta['how_to_use'])[:200]}\n"
+                part += f"  วิธีใช้: {str(meta['how_to_use'])}\n"
             if meta.get('usage_period'):
-                part += f"  ช่วงการใช้: {str(meta['usage_period'])[:150]}\n"
+                part += f"  ช่วงการใช้: {str(meta['usage_period'])}\n"
             if meta.get('selling_point'):
-                part += f"  จุดเด่น: {str(meta['selling_point'])[:150]}\n"
+                part += f"  จุดเด่น: {str(meta['selling_point'])}\n"
             if meta.get('action_characteristics'):
-                part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])[:150]}\n"
+                part += f"  ลักษณะการออกฤทธิ์: {str(meta['action_characteristics'])}\n"
             if meta.get('absorption_method'):
-                part += f"  การดูดซึม: {str(meta['absorption_method'])[:100]}\n"
+                part += f"  การดูดซึม: {str(meta['absorption_method'])}\n"
             if meta.get('package_size'):
                 part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
             if meta.get('strategy_group'):
