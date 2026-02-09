@@ -233,8 +233,17 @@ class ResponseGeneratorAgent:
         # search full retrieval results and add the matching doc
         if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
             _rescue_disease = query_analysis.entities.get('disease_name', '')
+            # Build list of diseases to rescue: disease_name + possible_diseases (from symptom mapping)
+            _rescue_diseases_list = []
             if _rescue_disease:
-                _rescue_variants = generate_thai_disease_variants(_rescue_disease)
+                _rescue_diseases_list.append(_rescue_disease)
+            _possible_diseases = query_analysis.entities.get('possible_diseases', [])
+            for pd in _possible_diseases:
+                if pd not in _rescue_diseases_list:
+                    _rescue_diseases_list.append(pd)
+
+            for _rd in _rescue_diseases_list:
+                _rescue_variants = generate_thai_disease_variants(_rd)
                 _has_in_docs_to_use = any(
                     any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _rescue_variants)
                     for d in docs_to_use
@@ -246,7 +255,7 @@ class ResponseGeneratorAgent:
                         target_pest = str(doc.metadata.get('target_pest', '')).lower()
                         if any(v.lower() in target_pest for v in _rescue_variants):
                             docs_to_use.insert(0, doc)
-                            logger.info(f"  - Rescued disease-matching product into docs_to_use: {doc.title}")
+                            logger.info(f"  - Rescued disease-matching product into docs_to_use: {doc.title} (for disease: {_rd})")
                             break
 
         # Filter: when a crop-specific product exists, remove non-specific variants of same family
