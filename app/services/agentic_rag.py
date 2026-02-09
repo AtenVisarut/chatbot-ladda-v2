@@ -291,6 +291,10 @@ class AgenticRAG:
             # =================================================================
             query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
 
+            # Inject possible_diseases from symptom mapping into entities for downstream use
+            if hints.get('possible_diseases'):
+                query_analysis.entities['possible_diseases'] = hints['possible_diseases']
+
             # Handle greeting intent directly
             if query_analysis.intent == IntentType.GREETING:
                 response = await self.response_agent.generate(

@@ -126,6 +126,20 @@ class ResponseGeneratorAgent:
                                 logger.info(f"  - Disease override (original query): '{original_disease}' found in {doc.title} target_pest")
                                 break
 
+                # Also check possible_diseases from symptom→pathogen mapping
+                if not has_disease_match and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                    _possible_diseases = query_analysis.entities.get('possible_diseases', [])
+                    for pd in _possible_diseases:
+                        pd_variants = generate_thai_disease_variants(pd)
+                        for doc in retrieval_result.documents[:10]:
+                            target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                            if any(v.lower() in target_pest for v in pd_variants):
+                                has_disease_match = True
+                                logger.info(f"  - Disease override (symptom→pathogen): '{pd}' found in {doc.title} target_pest")
+                                break
+                        if has_disease_match:
+                            break
+
                 if not has_documents or (
                     grounding_result.confidence < 0.2
                     and not has_crop_specific_top
@@ -357,7 +371,11 @@ class ResponseGeneratorAgent:
             matched_disease_label = ''
             matched_product_name = ''
 
-            for check_disease in [disease_name, original_disease_gen]:
+            # Also check possible_diseases from symptom→pathogen mapping
+            possible_diseases = query_analysis.entities.get('possible_diseases', [])
+            diseases_to_check = [disease_name, original_disease_gen] + possible_diseases
+
+            for check_disease in diseases_to_check:
                 if not check_disease:
                     continue
                 check_variants = generate_thai_disease_variants(check_disease)
