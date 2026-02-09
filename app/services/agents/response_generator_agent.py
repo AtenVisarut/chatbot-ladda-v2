@@ -466,6 +466,21 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             logger.error(f"LLM response generation failed: {e}")
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
+    # Non-product terms that may appear in quotes (weed species, disease, pest, crop names)
+    _NON_PRODUCT_KEYWORDS = {
+        # Weed/crop species
+        'หญ้า', 'วัชพืช', 'ข้าวนก', 'ผักปอด', 'เซ่ง', 'โสน', 'กก',
+        # Disease/pathogen
+        'โรค', 'เชื้อรา', 'รา', 'แอนแทรคโนส', 'ฟิวซาเรียม', 'ไฟท็อป',
+        'เน่า', 'ไหม้', 'จุด', 'แห้ง', 'ด่าง', 'สนิม',
+        # Insect/pest
+        'เพลี้ย', 'หนอน', 'แมลง', 'ด้วง', 'ไร', 'บั่ว', 'จักจั่น', 'ทริปส์',
+        # Crop names
+        'ข้าว', 'ทุเรียน', 'มะม่วง', 'ลำไย', 'มังคุด', 'อ้อย', 'ข้าวโพด',
+        # Generic terms
+        'ดื้อยา', 'ดื้อสาร', 'ใบ', 'ดอก', 'ผล', 'ราก', 'กิ่ง', 'ลำต้น',
+    }
+
     def _validate_product_names(self, answer: str, docs: list) -> str:
         """
         Post-processing: ตรวจสอบว่าสินค้าที่แนะนำอยู่ใน retrieved documents จริง
@@ -491,6 +506,10 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 product_mention = re.sub(r'\s*\([^)]+\)\s*$', '', inner_text).strip()
 
                 if not product_mention or len(product_mention) > 30:
+                    continue
+
+                # Skip non-product quoted text (weed species, disease, pest, crop names)
+                if any(kw in product_mention for kw in self._NON_PRODUCT_KEYWORDS):
                     continue
 
                 is_known = any(
