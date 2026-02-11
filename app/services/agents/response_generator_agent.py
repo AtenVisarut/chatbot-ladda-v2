@@ -108,15 +108,23 @@ class ResponseGeneratorAgent:
                     _DISEASE_PATTERNS_RSP = [
                         'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
                         'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
+                        'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
                         'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
                         'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
                         'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
                         'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
                     ]
+                    _DISEASE_CANONICAL_RSP = {
+                        'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
+                        'ไฟทอปธอร่า': 'ไฟท็อปธอร่า',
+                        'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
+                        'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
+                        'ราชมพู': 'ราสีชมพู',
+                    }
                     original_disease = ''
                     for pattern in _DISEASE_PATTERNS_RSP:
                         if _dm(query_analysis.original_query, pattern):
-                            original_disease = pattern
+                            original_disease = _DISEASE_CANONICAL_RSP.get(pattern, pattern)
                             break
                     if original_disease and original_disease != disease_name:
                         original_variants = generate_thai_disease_variants(original_disease)
@@ -364,16 +372,24 @@ class ResponseGeneratorAgent:
         _DISEASE_PATTERNS_GEN = [
             'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
             'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
+            'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
             'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
             'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
             'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
             'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
         ]
         from app.utils.text_processing import diacritics_match as _dm_gen
+        _DISEASE_CANONICAL_GEN = {
+            'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
+            'ไฟทอปธอร่า': 'ไฟท็อปธอร่า',
+            'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
+            'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
+            'ราชมพู': 'ราสีชมพู',
+        }
         original_disease_gen = ''
         for _pat in _DISEASE_PATTERNS_GEN:
             if _dm_gen(query_analysis.original_query, _pat):
-                original_disease_gen = _pat
+                original_disease_gen = _DISEASE_CANONICAL_GEN.get(_pat, _pat)
                 break
 
         if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
@@ -479,7 +495,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         # Weed/crop species
         'หญ้า', 'วัชพืช', 'ข้าวนก', 'ผักปอด', 'เซ่ง', 'โสน', 'กก',
         # Disease/pathogen
-        'โรค', 'เชื้อรา', 'รา', 'แอนแทรคโนส', 'ฟิวซาเรียม', 'ไฟท็อป',
+        'โรค', 'เชื้อรา', 'รา', 'แอนแทรคโนส', 'ฟิวซาเรียม', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
         'เน่า', 'ไหม้', 'จุด', 'แห้ง', 'ด่าง', 'สนิม',
         # Insect/pest
         'เพลี้ย', 'หนอน', 'แมลง', 'ด้วง', 'ไร', 'บั่ว', 'จักจั่น', 'ทริปส์',

@@ -802,7 +802,7 @@ class RetrievalAgent:
         _DISEASE_PATTERNS = [
             'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
             'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
-            'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป',
+            'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
             'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
             'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
             'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
@@ -811,11 +811,19 @@ class RetrievalAgent:
             'เน่าคอรวง', 'ใบไหม้แผลใหญ่',
         ]
 
+        # Normalize slang/variant → canonical DB name
+        _DISEASE_CANONICAL = {
+            'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
+            'ไฟทอปธอร่า': 'ไฟท็อปธอร่า', 'ไฟท็อปโทร่า': 'ไฟท็อปธอร่า', 'ไฟธอปทอร่า': 'ไฟท็อปธอร่า',
+            'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
+            'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟูซาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
+            'ราชมพู': 'ราสีชมพู',
+        }
         # Try known patterns first (diacritics-tolerant)
         from app.utils.text_processing import diacritics_match
         for pattern in _DISEASE_PATTERNS:
             if diacritics_match(query, pattern):
-                return pattern
+                return _DISEASE_CANONICAL.get(pattern, pattern)
 
         # Try extracting from "โรค..." prefix
         import re

@@ -173,7 +173,7 @@ class AgenticRAG:
                 _DISEASE_PATTERNS_STAGE0 = [
                     'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
                     'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
-                    'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป',
+                    'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
                     'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
                     'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
                     'ใบไหม้แผลใหญ่', 'ใบไหม้', 'ใบจุดสีม่วง', 'ใบจุด',
@@ -181,10 +181,18 @@ class AgenticRAG:
                     'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
                     'หอมเลื้อย', 'ใบติด', 'ใบด่าง', 'ใบหงิก', 'ดอกกระถิน',
                 ]
+                # Normalize slang/variant → canonical DB name
+                _DISEASE_CANONICAL = {
+                    'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
+                    'ไฟทอปธอร่า': 'ไฟท็อปธอร่า', 'ไฟท็อปโทร่า': 'ไฟท็อปธอร่า', 'ไฟธอปทอร่า': 'ไฟท็อปธอร่า',
+                    'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
+                    'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟูซาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
+                    'ราชมพู': 'ราสีชมพู',
+                }
                 # Sort by length descending so longer patterns match first
                 for pattern in sorted(_DISEASE_PATTERNS_STAGE0, key=len, reverse=True):
                     if diacritics_match(query, pattern):
-                        hints['disease_name'] = pattern  # canonical pattern, not user's misspelling
+                        hints['disease_name'] = _DISEASE_CANONICAL.get(pattern, pattern)
                         hints['disease_variants'] = generate_thai_disease_variants(pattern)
                         logger.info(f"  - Pre-extracted disease: '{pattern}' variants={hints['disease_variants']}")
                         break
