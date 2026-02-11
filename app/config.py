@@ -41,7 +41,7 @@ USE_REDIS_CACHE = bool(REDIS_URL or UPSTASH_REDIS_REST_URL)
 
 # Memory configuration
 MAX_MEMORY_MESSAGES = 50  # Keep last 50 messages for context (ปรับจาก 100 เพื่อ performance)
-MEMORY_CONTEXT_WINDOW = 30  # Use last 30 messages for context
+MEMORY_CONTEXT_WINDOW = 10  # Use last 10 messages for context
 MEMORY_CONTENT_PREVIEW = 800  # Characters to show in context preview (เพิ่มจาก 300 เพื่อให้ชื่อสินค้าไม่ถูกตัด)
 
 # RAG-based Disease Detection
