@@ -65,6 +65,21 @@ class RetrievalAgent:
     Performs multi-query retrieval with re-ranking
     """
 
+    # Category-Intent mapping (single source, used in _search_products + retrieve stages)
+    INTENT_CATEGORY_MAP = {
+        IntentType.DISEASE_TREATMENT: "Fungicide",
+        IntentType.PEST_CONTROL: "Insecticide",
+        IntentType.WEED_CONTROL: "Herbicide",
+        IntentType.NUTRIENT_SUPPLEMENT: "Fertilizer",
+    }
+
+    # Category variants for reranking stages (includes Thai labels)
+    INTENT_CATEGORY_VARIANTS = {
+        IntentType.DISEASE_TREATMENT: ["Fungicide", "fungicide", "ป้องกันโรค"],
+        IntentType.PEST_CONTROL: ["Insecticide", "insecticide", "กำจัดแมลง"],
+        IntentType.WEED_CONTROL: ["Herbicide", "herbicide", "กำจัดวัชพืช"],
+    }
+
     def __init__(
         self,
         supabase_client=None,
@@ -76,6 +91,43 @@ class RetrievalAgent:
         self.openai_client = openai_client
         self.vector_threshold = vector_threshold
         self.rerank_threshold = rerank_threshold
+
+    @staticmethod
+    def _build_doc_from_row(item: dict, similarity: float, content_extra: str = "") -> 'RetrievedDocument':
+        """Build a RetrievedDocument from a DB row dict (single source for metadata construction)."""
+        common_th = item.get('common_name_th') or ''
+        content = (
+            f"สินค้า: {item.get('product_name', '')}\n"
+            f"ชื่อสารไทย: {common_th}\n"
+            f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
+            f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
+            f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}"
+        )
+        if content_extra:
+            content += f"\n{content_extra}"
+        return RetrievedDocument(
+            id=str(item.get('id', '')),
+            title=item.get('product_name', ''),
+            content=content,
+            source="products",
+            similarity_score=similarity,
+            metadata={
+                'product_name': item.get('product_name'),
+                'common_name_th': common_th,
+                'active_ingredient': item.get('active_ingredient'),
+                'target_pest': item.get('target_pest'),
+                'applicable_crops': item.get('applicable_crops'),
+                'category': item.get('product_category') or item.get('category'),
+                'how_to_use': item.get('how_to_use'),
+                'usage_rate': item.get('usage_rate'),
+                'usage_period': item.get('usage_period'),
+                'selling_point': item.get('selling_point'),
+                'action_characteristics': item.get('action_characteristics'),
+                'absorption_method': item.get('absorption_method'),
+                'strategy_group': item.get('strategy_group'),
+                'package_size': item.get('package_size'),
+            }
+        )
 
     async def _direct_product_lookup(self, product_name: str) -> List[RetrievedDocument]:
         """Direct database lookup by product name (exact/ilike match)"""
@@ -95,35 +147,8 @@ class RetrievalAgent:
 
             docs = []
             for item in result.data:
-                common_th = item.get('common_name_th') or ''
-                doc = RetrievedDocument(
-                    id=str(item.get('id', '')),
-                    title=item.get('product_name', ''),
-                    content=f"สินค้า: {item.get('product_name', '')}\n"
-                           f"ชื่อสารไทย: {common_th}\n"
-                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
-                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
-                    source="products",
-                    similarity_score=1.0,
-                    rerank_score=1.0,
-                    metadata={
-                        'product_name': item.get('product_name'),
-                        'common_name_th': common_th,
-                        'active_ingredient': item.get('active_ingredient'),
-                        'target_pest': item.get('target_pest'),
-                        'applicable_crops': item.get('applicable_crops'),
-                        'category': item.get('product_category') or item.get('category'),
-                        'how_to_use': item.get('how_to_use'),
-                        'usage_rate': item.get('usage_rate'),
-                        'usage_period': item.get('usage_period'),
-                        'selling_point': item.get('selling_point'),
-                        'action_characteristics': item.get('action_characteristics'),
-                        'absorption_method': item.get('absorption_method'),
-                        'strategy_group': item.get('strategy_group'),
-                        'package_size': item.get('package_size'),
-                    }
-                )
+                doc = self._build_doc_from_row(item, similarity=1.0)
+                doc.rerank_score = 1.0
                 docs.append(doc)
 
             logger.info(f"    Direct lookup: {len(docs)} docs for '{product_name}'")
@@ -165,37 +190,7 @@ class RetrievalAgent:
             if not result.data:
                 return []
 
-            docs = []
-            for item in result.data:
-                common_th = item.get('common_name_th') or ''
-                doc = RetrievedDocument(
-                    id=str(item.get('id', '')),
-                    title=item.get('product_name', ''),
-                    content=f"สินค้า: {item.get('product_name', '')}\n"
-                           f"ชื่อสารไทย: {common_th}\n"
-                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
-                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}",
-                    source="products",
-                    similarity_score=0.5,
-                    metadata={
-                        'product_name': item.get('product_name'),
-                        'common_name_th': common_th,
-                        'active_ingredient': item.get('active_ingredient'),
-                        'target_pest': item.get('target_pest'),
-                        'applicable_crops': item.get('applicable_crops'),
-                        'category': item.get('product_category') or item.get('category'),
-                        'how_to_use': item.get('how_to_use'),
-                        'usage_rate': item.get('usage_rate'),
-                        'usage_period': item.get('usage_period'),
-                        'selling_point': item.get('selling_point'),
-                        'action_characteristics': item.get('action_characteristics'),
-                        'absorption_method': item.get('absorption_method'),
-                        'strategy_group': item.get('strategy_group'),
-                        'package_size': item.get('package_size'),
-                    }
-                )
-                docs.append(doc)
+            docs = [self._build_doc_from_row(item, similarity=0.5) for item in result.data]
 
             logger.info(f"    Fallback keyword search: {len(docs)} docs for '{query[:30]}...'")
             return docs
@@ -257,12 +252,7 @@ class RetrievalAgent:
             or_filter = ",".join(or_conditions)
 
             # Apply category filter if intent requires specific product type
-            intent_cat_map = {
-                IntentType.DISEASE_TREATMENT: "Fungicide",
-                IntentType.PEST_CONTROL: "Insecticide",
-                IntentType.WEED_CONTROL: "Herbicide",
-            }
-            cat_filter = intent_cat_map.get(query_analysis.intent)
+            cat_filter = self.INTENT_CATEGORY_MAP.get(query_analysis.intent)
 
             query_builder = self.supabase.table('products') \
                 .select('*') \
@@ -283,35 +273,8 @@ class RetrievalAgent:
                 if doc_id in existing_ids:
                     continue  # Skip duplicates
 
-                common_th = item.get('common_name_th') or ''
-                doc = RetrievedDocument(
-                    id=doc_id,
-                    title=item.get('product_name', ''),
-                    content=f"สินค้า: {item.get('product_name', '')}\n"
-                           f"ชื่อสารไทย: {common_th}\n"
-                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-                           f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
-                           f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}\n"
-                           f"จุดเด่น: {(item.get('selling_point') or '')[:200]}",
-                    source="products",
-                    similarity_score=0.55,
-                    metadata={
-                        'product_name': item.get('product_name'),
-                        'common_name_th': common_th,
-                        'active_ingredient': item.get('active_ingredient'),
-                        'target_pest': item.get('target_pest'),
-                        'applicable_crops': item.get('applicable_crops'),
-                        'category': item.get('product_category') or item.get('category'),
-                        'how_to_use': item.get('how_to_use'),
-                        'usage_rate': item.get('usage_rate'),
-                        'usage_period': item.get('usage_period'),
-                        'selling_point': item.get('selling_point'),
-                        'action_characteristics': item.get('action_characteristics'),
-                        'absorption_method': item.get('absorption_method'),
-                        'strategy_group': item.get('strategy_group'),
-                        'package_size': item.get('package_size'),
-                    }
-                )
+                selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
+                doc = self._build_doc_from_row(item, similarity=0.55, content_extra=selling_extra)
                 docs.append(doc)
 
             if docs:
@@ -498,12 +461,7 @@ class RetrievalAgent:
                     logger.info(f"  - Boosted {len(boosted)} disease fallback docs to top")
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
-            intent_category_map = {
-                IntentType.DISEASE_TREATMENT: ["Fungicide", "fungicide", "ป้องกันโรค"],
-                IntentType.PEST_CONTROL: ["Insecticide", "insecticide", "กำจัดแมลง"],
-                IntentType.WEED_CONTROL: ["Herbicide", "herbicide", "กำจัดวัชพืช"],
-            }
-            expected_categories = intent_category_map.get(query_analysis.intent)
+            expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
 
             # Stage 3.55: Category-Intent alignment penalty
             # If user asks about disease, penalize non-fungicide products (e.g. PGR)
@@ -716,15 +674,7 @@ class RetrievalAgent:
                 return []
 
             # Determine category filter based on intent (English values matching products table)
-            category_filter = None
-            intent_category_map = {
-                IntentType.DISEASE_TREATMENT: "Fungicide",
-                IntentType.PEST_CONTROL: "Insecticide",
-                IntentType.WEED_CONTROL: "Herbicide",
-                IntentType.NUTRIENT_SUPPLEMENT: "Fertilizer",
-            }
-            if query_analysis.intent in intent_category_map:
-                category_filter = intent_category_map[query_analysis.intent]
+            category_filter = self.INTENT_CATEGORY_MAP.get(query_analysis.intent)
 
             # Try hybrid search (note: hybrid_search_products doesn't support match_threshold or category_filter)
             rpc_params = {
@@ -751,34 +701,7 @@ class RetrievalAgent:
 
                 # Category filter removed - let reranker handle relevance instead
 
-                common_th = item.get('common_name_th') or ''
-                doc = RetrievedDocument(
-                    id=str(item.get('id', '')),
-                    title=item.get('product_name', ''),
-                    content=f"สินค้า: {item.get('product_name', '')}\n"
-                           f"ชื่อสารไทย: {common_th}\n"
-                           f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-                           f"ใช้กำจัด: {item.get('target_pest', '')[:200] if item.get('target_pest') else ''}\n"
-                           f"พืชที่ใช้ได้: {item.get('applicable_crops', '')[:200] if item.get('applicable_crops') else ''}",
-                    source="products",
-                    similarity_score=similarity,
-                    metadata={
-                        'product_name': item.get('product_name'),
-                        'common_name_th': common_th,
-                        'active_ingredient': item.get('active_ingredient'),
-                        'target_pest': item.get('target_pest'),
-                        'applicable_crops': item.get('applicable_crops'),
-                        'category': item.get('product_category') or item.get('category'),
-                        'how_to_use': item.get('how_to_use'),
-                        'usage_rate': item.get('usage_rate'),
-                        'usage_period': item.get('usage_period'),
-                        'selling_point': item.get('selling_point'),
-                        'action_characteristics': item.get('action_characteristics'),
-                        'absorption_method': item.get('absorption_method'),
-                        'strategy_group': item.get('strategy_group'),
-                        'package_size': item.get('package_size'),
-                    }
-                )
+                doc = self._build_doc_from_row(item, similarity=similarity)
                 docs.append(doc)
 
             logger.info(f"    Product search: {len(docs)} docs for '{query[:30]}...'")
@@ -798,32 +721,13 @@ class RetrievalAgent:
             'วิธี', 'อย่างไร', 'ยังไง', 'ทำ', 'จะ', 'ต้อง', 'ควร', 'โรค',
             'แก้', 'แก้ไข', 'ช่วย', 'อัตรา', 'ผสม', 'ฉีด', 'พ่น',
         }
-        # Known disease name patterns
-        _DISEASE_PATTERNS = [
-            'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
-            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
-            'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
-            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
-            'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
-            'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
-            'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
-            'หอมเลื้อย', 'ใบจุดสีม่วง', 'ใบติด',
-            'เน่าคอรวง', 'ใบไหม้แผลใหญ่',
-        ]
-
-        # Normalize slang/variant → canonical DB name
-        _DISEASE_CANONICAL = {
-            'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
-            'ไฟทอปธอร่า': 'ไฟท็อปธอร่า', 'ไฟท็อปโทร่า': 'ไฟท็อปธอร่า', 'ไฟธอปทอร่า': 'ไฟท็อปธอร่า',
-            'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
-            'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟูซาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
-            'ราชมพู': 'ราสีชมพู',
-        }
+        # Known disease name patterns (single source of truth)
+        from app.utils.disease_constants import DISEASE_PATTERNS_SORTED, get_canonical
         # Try known patterns first (diacritics-tolerant)
         from app.utils.text_processing import diacritics_match
-        for pattern in _DISEASE_PATTERNS:
+        for pattern in DISEASE_PATTERNS_SORTED:
             if diacritics_match(query, pattern):
-                return _DISEASE_CANONICAL.get(pattern, pattern)
+                return get_canonical(pattern)
 
         # Try extracting from "โรค..." prefix
         import re
@@ -854,37 +758,7 @@ class RetrievalAgent:
                 ).limit(5).execute()
 
                 if result.data:
-                    docs = []
-                    for item in result.data:
-                        common_th = item.get('common_name_th') or ''
-                        doc = RetrievedDocument(
-                            id=str(item.get('id', '')),
-                            title=item.get('product_name', ''),
-                            content=f"สินค้า: {item.get('product_name', '')}\n"
-                                   f"ชื่อสารไทย: {common_th}\n"
-                                   f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-                                   f"ใช้กำจัด: {item.get('target_pest', '')[:200] if item.get('target_pest') else ''}\n"
-                                   f"พืชที่ใช้ได้: {item.get('applicable_crops', '')[:200] if item.get('applicable_crops') else ''}",
-                            source="products",
-                            similarity_score=0.50,  # Give reasonable score for direct match
-                            metadata={
-                                'product_name': item.get('product_name'),
-                                'common_name_th': common_th,
-                                'active_ingredient': item.get('active_ingredient'),
-                                'target_pest': item.get('target_pest'),
-                                'applicable_crops': item.get('applicable_crops'),
-                                'category': item.get('product_category') or item.get('category'),
-                                'how_to_use': item.get('how_to_use'),
-                                'usage_rate': item.get('usage_rate'),
-                                'usage_period': item.get('usage_period'),
-                                'selling_point': item.get('selling_point'),
-                                'action_characteristics': item.get('action_characteristics'),
-                                'absorption_method': item.get('absorption_method'),
-                                'strategy_group': item.get('strategy_group'),
-                                'package_size': item.get('package_size'),
-                            }
-                        )
-                        docs.append(doc)
+                    docs = [self._build_doc_from_row(item, similarity=0.50) for item in result.data]
                     return docs
             return []
         except Exception as e:

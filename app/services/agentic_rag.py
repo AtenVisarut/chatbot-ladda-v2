@@ -31,9 +31,66 @@ from app.services.agents.query_understanding_agent import QueryUnderstandingAgen
 from app.services.agents.retrieval_agent import RetrievalAgent
 from app.services.agents.grounding_agent import GroundingAgent
 from app.services.agents.response_generator_agent import ResponseGeneratorAgent
-from app.config import AGENTIC_RAG_CONFIG
+from app.config import AGENTIC_RAG_CONFIG, LLM_MODEL_ENTITY_EXTRACTION
 
 logger = logging.getLogger(__name__)
+
+
+async def _llm_entity_extraction(query: str, product_list: list, openai_client_instance) -> dict:
+    """
+    LLM fallback: ใช้ gpt-4o-mini extract entities เมื่อ dictionary ไม่เจออะไร.
+    Returns dict with keys: disease_name, pest_name, product_name, plant_type (all optional).
+    Values tagged as [HINT_LLM] to distinguish from dictionary [CONSTRAINT].
+    """
+    try:
+        products_str = ", ".join(product_list[:50])
+        prompt = f"""จากคำถามเกษตรกรรมต่อไปนี้ ให้ดึง entity ที่เกี่ยวข้อง
+
+คำถาม: "{query}"
+
+รายชื่อสินค้าในระบบ: [{products_str}]
+
+ตอบเป็น JSON เท่านั้น (ไม่มี markdown):
+{{
+    "disease_name": "<ชื่อโรคพืช ถ้ามี หรือ null>",
+    "pest_name": "<ชื่อแมลง/ศัตรูพืช ถ้ามี หรือ null>",
+    "product_name": "<ชื่อสินค้าจากรายชื่อข้างบน ถ้ามี หรือ null>",
+    "plant_type": "<ชื่อพืช ถ้ามี หรือ null>"
+}}
+
+กฎ:
+- ถ้าคำถามบอกอาการพืช (เช่น จุดสีน้ำตาลบนใบ, ใบเหลือง, ลำต้นเน่า) ให้ระบุชื่อโรคที่น่าจะเป็นสาเหตุใน disease_name
+- ถ้าไม่แน่ใจเรื่องโรค ให้ใส่อาการเป็น disease_name (เช่น "ใบจุด", "รากเน่า")
+- product_name ต้องเป็นชื่อจากรายชื่อข้างบนเท่านั้น ถ้าไม่มีให้ใส่ null
+- ตอบ JSON เท่านั้น ห้ามมี text อื่น"""
+
+        response = await openai_client_instance.chat.completions.create(
+            model=LLM_MODEL_ENTITY_EXTRACTION,
+            messages=[
+                {"role": "system", "content": "คุณเป็นผู้เชี่ยวชาญด้านเกษตร ดึง entity จากคำถาม ตอบ JSON เท่านั้น"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_completion_tokens=200
+        )
+
+        import json
+        import re as _re
+        text = response.choices[0].message.content.strip()
+        # Remove markdown code blocks if present
+        if text.startswith("```"):
+            text = _re.sub(r'^```(?:json)?\n?', '', text)
+            text = _re.sub(r'\n?```$', '', text)
+
+        data = json.loads(text)
+        # Filter out null values
+        result = {k: v for k, v in data.items() if v is not None}
+        logger.info(f"  - LLM entity extraction: {result}")
+        return result
+
+    except Exception as e:
+        logger.warning(f"LLM entity extraction failed: {e}")
+        return {}
 
 
 class AgenticRAG:
@@ -136,32 +193,49 @@ class AgenticRAG:
                 product_from_query = bool(detected_product)
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
-                    # Strategy 1: bottom-up search (3 most recent msgs only)
-                    if not detected_product:
-                        context_lines = context.strip().split('\n')
+                    # Split context into active topic vs past sections
+                    _active_section = ""
+                    _past_section = ""
+                    if "[บทสนทนาปัจจุบัน]" in context:
+                        # Extract active topic section
+                        parts = context.split("[สรุปหัวข้อก่อนหน้า]")
+                        _active_part = parts[0]
+                        _past_section = parts[1] if len(parts) > 1 else ""
+                        # Remove the section header
+                        _active_section = _active_part.replace("[บทสนทนาปัจจุบัน]", "").strip()
+                    else:
+                        # Legacy format — treat all as active
+                        _active_section = context
+
+                    # Strategy 1: Scan active topic only (bottom-up, 3 msgs)
+                    if _active_section:
+                        active_lines = _active_section.strip().split('\n')
                         msgs_checked = 0
-                        for line in reversed(context_lines):
-                            # Skip summary section lines
+                        for line in reversed(active_lines):
                             if line.startswith('[') and ']' in line:
                                 continue
                             detected_product = extract_product_name_from_question(line)
                             if detected_product:
-                                logger.info(f"  - Product from context (recent 3 msgs): {detected_product}")
+                                logger.info(f"  - Product from active topic: {detected_product}")
                                 break
                             msgs_checked += 1
                             if msgs_checked >= 3:
                                 break
 
-                    # Strategy 2: Fallback to [สินค้าที่แนะนำไปแล้ว] section
+                    # Strategy 2: Fallback to past topics / [สินค้าที่แนะนำไปแล้ว]
+                    # ONLY if query is a short follow-up without disease/pest entities
                     if not detected_product:
-                        for line in context.split('\n'):
-                            if 'สินค้าที่แนะนำ' in line:
-                                for product_name in ICP_PRODUCT_NAMES.keys():
-                                    if product_name in line:
-                                        detected_product = product_name
-                                        logger.info(f"  - Product from summary section: {detected_product}")
-                                        break
-                                break
+                        has_disease_or_pest = hints.get('disease_name') or hints.get('pest_name')
+                        is_short_followup = len(query.strip()) < 40
+                        if is_short_followup and not has_disease_or_pest:
+                            for line in context.split('\n'):
+                                if 'สินค้าที่แนะนำ' in line:
+                                    for product_name in ICP_PRODUCT_NAMES.keys():
+                                        if product_name in line:
+                                            detected_product = product_name
+                                            logger.info(f"  - Product from summary section (follow-up): {detected_product}")
+                                            break
+                                    break
                 if detected_product:
                     hints['product_name'] = detected_product
                 detected_problem = detect_problem_type(query)
@@ -169,30 +243,10 @@ class AgenticRAG:
                     hints['problem_type'] = detected_problem
 
                 # --- Pre-LLM Entity Extraction: Disease ---
-                # (defined here so we can validate product vs disease below)
-                _DISEASE_PATTERNS_STAGE0 = [
-                    'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
-                    'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟูซาเรียม', 'ฟอซาเรียม',
-                    'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อปโทร่า', 'ไฟธอปทอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
-                    'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
-                    'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
-                    'ใบไหม้แผลใหญ่', 'ใบไหม้', 'ใบจุดสีม่วง', 'ใบจุด',
-                    'ผลเน่า', 'รากเน่า', 'โคนเน่า', 'ลำต้นเน่า', 'เน่าคอรวง',
-                    'กาบใบแห้ง', 'ขอบใบแห้ง', 'เมล็ดด่าง', 'ใบขีดสีน้ำตาล',
-                    'หอมเลื้อย', 'ใบติด', 'ใบด่าง', 'ใบหงิก', 'ดอกกระถิน',
-                ]
-                # Normalize slang/variant → canonical DB name
-                _DISEASE_CANONICAL = {
-                    'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
-                    'ไฟทอปธอร่า': 'ไฟท็อปธอร่า', 'ไฟท็อปโทร่า': 'ไฟท็อปธอร่า', 'ไฟธอปทอร่า': 'ไฟท็อปธอร่า',
-                    'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
-                    'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟูซาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
-                    'ราชมพู': 'ราสีชมพู',
-                }
-                # Sort by length descending so longer patterns match first
-                for pattern in sorted(_DISEASE_PATTERNS_STAGE0, key=len, reverse=True):
+                from app.utils.disease_constants import DISEASE_PATTERNS_SORTED, get_canonical
+                for pattern in DISEASE_PATTERNS_SORTED:
                     if diacritics_match(query, pattern):
-                        hints['disease_name'] = _DISEASE_CANONICAL.get(pattern, pattern)
+                        hints['disease_name'] = get_canonical(pattern)
                         hints['disease_variants'] = generate_thai_disease_variants(pattern)
                         logger.info(f"  - Pre-extracted disease: '{pattern}' variants={hints['disease_variants']}")
                         break
@@ -281,6 +335,27 @@ class AgenticRAG:
                                 sources_used=[],
                                 processing_time_ms=(time.time() - start_time) * 1000
                             )
+
+                # --- LLM Fallback Entity Extraction ---
+                # When dictionary scan finds nothing and query is long enough
+                _has_any_entity = (
+                    hints.get('disease_name') or hints.get('pest_name')
+                    or hints.get('product_name')
+                )
+                _is_greeting = hints.get('problem_type') == 'greeting'
+                if not _has_any_entity and not _is_greeting and len(query.strip()) >= 10:
+                    llm_entities = await _llm_entity_extraction(
+                        query,
+                        list(ICP_PRODUCT_NAMES.keys()),
+                        self.openai_client
+                    )
+                    if llm_entities:
+                        # Tag as HINT_LLM — Agent 1 can adjust these
+                        for key in ('disease_name', 'pest_name', 'product_name', 'plant_type'):
+                            if llm_entities.get(key) and not hints.get(key):
+                                hints[key] = llm_entities[key]
+                                hints.setdefault('_llm_fallback_keys', []).append(key)
+                        logger.info(f"  - LLM fallback entities applied: {llm_entities}")
 
                 logger.info(f"  - Hints: {hints}")
             except ImportError:

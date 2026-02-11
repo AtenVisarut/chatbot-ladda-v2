@@ -103,28 +103,12 @@ class ResponseGeneratorAgent:
 
                 # Also try extracting disease from original query (LLM may have changed disease name)
                 if not has_disease_match and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
-                    import re as _re
                     from app.utils.text_processing import diacritics_match as _dm
-                    _DISEASE_PATTERNS_RSP = [
-                        'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
-                        'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
-                        'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
-                        'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
-                        'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
-                        'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
-                        'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
-                    ]
-                    _DISEASE_CANONICAL_RSP = {
-                        'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
-                        'ไฟทอปธอร่า': 'ไฟท็อปธอร่า',
-                        'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
-                        'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
-                        'ราชมพู': 'ราสีชมพู',
-                    }
+                    from app.utils.disease_constants import DISEASE_PATTERNS_SORTED as _DP, get_canonical as _gc
                     original_disease = ''
-                    for pattern in _DISEASE_PATTERNS_RSP:
+                    for pattern in _DP:
                         if _dm(query_analysis.original_query, pattern):
-                            original_disease = _DISEASE_CANONICAL_RSP.get(pattern, pattern)
+                            original_disease = _gc(pattern)
                             break
                     if original_disease and original_disease != disease_name:
                         original_variants = generate_thai_disease_variants(original_disease)
@@ -369,27 +353,12 @@ class ResponseGeneratorAgent:
         disease_name = query_analysis.entities.get('disease_name', '')
 
         # Also extract disease from original query (LLM may misidentify)
-        _DISEASE_PATTERNS_GEN = [
-            'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
-            'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
-            'ไฟท็อปธอร่า', 'ไฟทอปธอร่า', 'ไฟท็อป', 'ไฟทิป', 'ไฟทอป',
-            'ราน้ำค้าง', 'ราแป้ง', 'ราสนิม', 'ราสีชมพู', 'ราชมพู',
-            'ราดำ', 'ราเขียว', 'ราขาว', 'ราเทา',
-            'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
-            'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
-        ]
         from app.utils.text_processing import diacritics_match as _dm_gen
-        _DISEASE_CANONICAL_GEN = {
-            'ไฟทิป': 'ไฟท็อป', 'ไฟทอป': 'ไฟท็อป',
-            'ไฟทอปธอร่า': 'ไฟท็อปธอร่า',
-            'แอนแทคโนส': 'แอนแทรคโนส', 'แอคแทคโนส': 'แอนแทรคโนส',
-            'ฟิวสาเรียม': 'ฟิวซาเรียม', 'ฟอซาเรียม': 'ฟิวซาเรียม',
-            'ราชมพู': 'ราสีชมพู',
-        }
+        from app.utils.disease_constants import DISEASE_PATTERNS_SORTED as _DP_GEN, get_canonical as _gc_gen
         original_disease_gen = ''
-        for _pat in _DISEASE_PATTERNS_GEN:
+        for _pat in _DP_GEN:
             if _dm_gen(query_analysis.original_query, _pat):
-                original_disease_gen = _DISEASE_CANONICAL_GEN.get(_pat, _pat)
+                original_disease_gen = _gc_gen(_pat)
                 break
 
         if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
@@ -417,12 +386,22 @@ class ResponseGeneratorAgent:
                     break
 
             if not disease_found_in_products and disease_name:
-                disease_mismatch_note = f"""
+                # Safety check: re-verify with ALL disease variants against docs_to_use
+                # (rescue logic above may have injected a matching doc after the initial check)
+                _all_check_variants = generate_thai_disease_variants(disease_name)
+                _really_missing = not any(
+                    any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _all_check_variants)
+                    for d in docs_to_use
+                )
+                if _really_missing:
+                    disease_mismatch_note = f"""
 [คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" (target_pest) ของสินค้าใดเลย
 → ห้ามแนะนำสินค้าใดๆ สำหรับโรคนี้ เพราะไม่มีข้อมูลว่าสินค้าเหล่านี้รักษาโรคนี้ได้
 → ให้ตอบว่า: "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าในระบบที่ระบุว่ารักษาโรค{disease_name}ได้โดยตรง แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
 """
-                logger.warning(f"Disease '{disease_name}' NOT found in any product's target_pest — will block recommendation")
+                    logger.warning(f"Disease '{disease_name}' NOT found in any product's target_pest — will block recommendation")
+                else:
+                    logger.info(f"  - Disease '{disease_name}' found in docs_to_use after rescue — skipping mismatch block")
 
             # When disease was matched via variant (e.g. ราชมพู→ราสีชมพู), tell LLM
             if disease_found_in_products and original_disease_gen and original_disease_gen != disease_name:

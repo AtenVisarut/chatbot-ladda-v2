@@ -66,6 +66,7 @@ LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o")
 LLM_MODEL_GROUNDING = os.getenv("LLM_MODEL_GROUNDING", "gpt-4o")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
+LLM_MODEL_ENTITY_EXTRACTION = os.getenv("LLM_MODEL_ENTITY_EXTRACTION", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 AGENTIC_RAG_CONFIG = {
@@ -79,7 +80,7 @@ AGENTIC_RAG_CONFIG = {
     "MIN_RELEVANT_DOCS": int(os.getenv("AGENTIC_MIN_DOCS", "3")),
 
     # Enable grounding check (hallucination prevention)
-    "ENABLE_GROUNDING": os.getenv("AGENTIC_ENABLE_GROUNDING", "1") == "1",
+    "ENABLE_GROUNDING": os.getenv("AGENTIC_ENABLE_GROUNDING", "0") == "1",
 
     # Maximum citations to include in response
     "MAX_CITATIONS": int(os.getenv("AGENTIC_MAX_CITATIONS", "3")),

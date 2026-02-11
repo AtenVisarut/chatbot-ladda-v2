@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from app.services.services import supabase_client
 from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW
 
@@ -411,49 +412,228 @@ async def get_conversation_summary(user_id: str) -> dict:
         return {}
 
 
-async def get_enhanced_context(user_id: str) -> str:
+def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
     """
-    สร้าง context แบบ enhanced สำหรับ AI
-    รวม: บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
-    ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
+    แบ่ง messages ออกเป็น active topic (เกี่ยวกับคำถามปัจจุบัน) กับ past topics.
+
+    Scan จากหลังมาหน้า (ล่าสุดก่อน). ข้อความเป็น active topic จนกว่าจะเจอ
+    topic boundary — คือข้อความที่พูดถึงสินค้า/โรค/แมลงตัวอื่น หรือมีคำบ่งชี้เปลี่ยนหัวข้อ.
+
+    Args:
+        formatted_messages: list of dicts with keys: role, content, metadata
+                            (chronological order, oldest first)
+        current_query: คำถามปัจจุบันของ user
+
+    Returns:
+        (active_messages: list[str], past_summary: str)
+        active_messages = formatted strings "ผู้ใช้: ..." or "น้องลัดดา: ..."
+        past_summary = short summary of past topics (or "")
     """
     try:
-        # Get conversation context (use config value)
-        context = await get_conversation_context(user_id, limit=MEMORY_CONTEXT_WINDOW)
+        from app.services.chat import extract_product_name_from_question, ICP_PRODUCT_NAMES
+    except ImportError:
+        # Fallback: return all messages as active, no past summary
+        all_formatted = []
+        for msg in formatted_messages:
+            role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+            content = msg["content"][:MEMORY_CONTENT_PREVIEW]
+            metadata = msg.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                products = metadata.get("products", [])
+                if products:
+                    pnames = [p.get("product_name", "") for p in products[:3]]
+                    content += f" (สินค้าที่แนะนำ: {', '.join(pnames)})"
+            all_formatted.append(f"{role}: {content}")
+        return all_formatted, ""
 
-        # Get conversation summary
-        summary = await get_conversation_summary(user_id)
+    # --- Extract entities from current query ---
+    current_product = extract_product_name_from_question(current_query)
+
+    # Topic-change keywords (user is done with previous topic)
+    _TOPIC_BOUNDARY_WORDS = [
+        "ขอบคุณ", "โอเค", "oke", "ok", "อีกเรื่อง", "เปลี่ยนเรื่อง",
+        "ถามเรื่องอื่น", "เรื่องอื่น", "หัวข้ออื่น",
+    ]
+
+    # Format all messages first
+    formatted = []
+    for msg in formatted_messages:
+        role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+        content = msg["content"][:MEMORY_CONTENT_PREVIEW]
+        metadata = msg.get("metadata", {})
+        if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+            products = metadata.get("products", [])
+            if products:
+                pnames = [p.get("product_name", "") for p in products[:3]]
+                content += f" (สินค้าที่แนะนำ: {', '.join(pnames)})"
+        formatted.append({
+            "text": f"{role}: {content}",
+            "role": msg["role"],
+            "content": msg["content"],
+            "metadata": metadata,
+        })
+
+    if not formatted:
+        return [], ""
+
+    # --- Scan from newest to oldest to find topic boundary ---
+    boundary_idx = -1  # index in formatted (chronological) where boundary is found
+    for i in range(len(formatted) - 1, -1, -1):
+        entry = formatted[i]
+        raw_content = entry["content"]
+
+        # Only user messages can be topic boundaries
+        if entry["role"] != "user":
+            continue
+
+        # Check for topic-change keywords
+        content_lower = raw_content.lower()
+        if any(word in content_lower for word in _TOPIC_BOUNDARY_WORDS):
+            boundary_idx = i
+            break
+
+        # Check if user mentioned a DIFFERENT product than current query
+        msg_product = extract_product_name_from_question(raw_content)
+        if msg_product and current_product and msg_product != current_product:
+            boundary_idx = i
+            break
+
+        # Check if current query has a product but this old user message asks about
+        # a different topic (disease/pest) without the current product
+        if current_product and not msg_product:
+            # This older message is about something else — could be same topic or not
+            # We only break if we already found active messages below this
+            pass
+
+    # --- Split into active / past ---
+    if boundary_idx < 0:
+        # No boundary found — all messages are active topic
+        active_texts = [f["text"] for f in formatted]
+        return active_texts, ""
+
+    active_texts = [f["text"] for f in formatted[boundary_idx + 1:]]
+    past_entries = formatted[:boundary_idx + 1]
+
+    # If active is empty (boundary is the very last msg), include boundary msg itself
+    if not active_texts:
+        active_texts = [formatted[boundary_idx]["text"]]
+        past_entries = formatted[:boundary_idx]
+
+    # --- Build past summary ---
+    past_products = set()
+    past_topics = []
+    for entry in past_entries:
+        # Extract products from metadata
+        metadata = entry.get("metadata", {})
+        if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+            for p in metadata.get("products", []):
+                name = p.get("product_name", "")
+                if name:
+                    past_products.add(name)
+        # Extract products from text
+        p = extract_product_name_from_question(entry["content"])
+        if p:
+            past_products.add(p)
+        # Collect user questions as topic hints
+        if entry["role"] == "user":
+            q = entry["content"][:80].strip()
+            if q and q not in past_topics:
+                past_topics.append(q)
+
+    summary_parts = []
+    if past_topics:
+        # Show at most 3 past user questions
+        for q in past_topics[-3:]:
+            summary_parts.append(f"- เคยถามเรื่อง: {q}")
+    if past_products:
+        summary_parts.append(f"- สินค้าที่แนะนำ: {', '.join(sorted(past_products))}")
+
+    past_summary = "\n".join(summary_parts) if summary_parts else ""
+    return active_texts, past_summary
+
+
+async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
+    """
+    สร้าง context แบบ enhanced สำหรับ AI
+    รวม: บทสนทนาปัจจุบัน (topic-aware) + สรุปหัวข้อก่อนหน้า + สินค้าที่แนะนำ
+    ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
+
+    Args:
+        user_id: User identifier
+        current_query: คำถามปัจจุบันของ user (ใช้สำหรับแยก active topic)
+    """
+    try:
+        if not supabase_client:
+            return ""
+
+        # Fetch raw messages from DB
+        result = supabase_client.table('conversation_memory')\
+            .select('role, content, metadata, created_at')\
+            .eq('user_id', user_id)\
+            .order('created_at', desc=True)\
+            .limit(MEMORY_CONTEXT_WINDOW)\
+            .execute()
+
+        if not result.data:
+            return ""
+
+        # Chronological order (oldest first)
+        messages = list(reversed(result.data))
+
+        # --- Topic-aware splitting ---
+        if current_query:
+            active_texts, past_summary = compute_active_topic(messages, current_query)
+        else:
+            # No current query — format all messages as before (backward compat)
+            active_texts = []
+            for msg in messages:
+                role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+                content = msg["content"][:MEMORY_CONTENT_PREVIEW]
+                metadata = msg.get("metadata", {})
+                if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                    products = metadata.get("products", [])
+                    if products:
+                        pnames = [p.get("product_name", "") for p in products[:3]]
+                        content += f" (สินค้าที่แนะนำ: {', '.join(pnames)})"
+                active_texts.append(f"{role}: {content}")
+            past_summary = ""
 
         # Build structured enhanced context
         parts = []
 
-        # Section 1: Recent conversation
-        if context:
-            parts.append("[บทสนทนาล่าสุด]")
-            parts.append(context)
+        # Section 1: Active topic conversation
+        if active_texts:
+            parts.append("[บทสนทนาปัจจุบัน]")
+            parts.append("\n".join(active_texts))
 
-        if not summary:
-            return "\n".join(parts) if parts else context
-
-        # Section 2: Products recommended
-        if summary.get("products_mentioned"):
+        # Section 2: Past topic summary (from compute_active_topic)
+        if past_summary:
             parts.append("")
-            parts.append(f"[สินค้าที่แนะนำไปแล้ว] {', '.join(summary['products_mentioned'][:5])}")
+            parts.append("[สรุปหัวข้อก่อนหน้า]")
+            parts.append(past_summary)
 
-        # Section 3: Current topics
-        topic_parts = []
-        if summary.get("topics"):
-            topic_parts.append(f"หัวข้อ: {', '.join(summary['topics'])}")
-        if summary.get("plants_mentioned"):
-            topic_parts.append(f"พืช: {', '.join(summary['plants_mentioned'])}")
-        if topic_parts:
-            parts.append("")
-            parts.append(f"[หัวข้อที่กำลังคุย] {' | '.join(topic_parts)}")
+        # Section 3: Get conversation summary for products/topics metadata
+        summary = await get_conversation_summary(user_id)
 
+        if summary:
+            if summary.get("products_mentioned"):
+                parts.append("")
+                parts.append(f"[สินค้าที่แนะนำไปแล้ว] {', '.join(summary['products_mentioned'][:5])}")
+
+            topic_parts = []
+            if summary.get("topics"):
+                topic_parts.append(f"หัวข้อ: {', '.join(summary['topics'])}")
+            if summary.get("plants_mentioned"):
+                topic_parts.append(f"พืช: {', '.join(summary['plants_mentioned'])}")
+            if topic_parts:
+                parts.append("")
+                parts.append(f"[หัวข้อที่กำลังคุย] {' | '.join(topic_parts)}")
+
+        logger.info(f"✓ Enhanced context: {len(active_texts)} active msgs, past_summary={'yes' if past_summary else 'no'}")
         return "\n".join(parts)
 
     except Exception as e:
         logger.error(f"Failed to get enhanced context: {e}")
-        return await get_conversation_context(user_id)
+        return ""
 
 
