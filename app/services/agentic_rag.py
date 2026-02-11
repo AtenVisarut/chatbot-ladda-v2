@@ -223,11 +223,17 @@ class AgenticRAG:
                                 break
 
                     # Strategy 2: Fallback to past topics / [สินค้าที่แนะนำไปแล้ว]
-                    # ONLY if query is a short follow-up without disease/pest entities
+                    # ONLY if query is a true follow-up (usage question) without disease/pest
+                    # NOT for queries asking for new recommendations
                     if not detected_product:
                         has_disease_or_pest = hints.get('disease_name') or hints.get('pest_name')
                         is_short_followup = len(query.strip()) < 40
-                        if is_short_followup and not has_disease_or_pest:
+                        _RECOMMENDATION_KEYWORDS = [
+                            "แนะนำ", "มีอะไร", "มีไหม", "ตัวไหนดี", "อะไรดี",
+                            "ควรใช้อะไร", "ใช้อะไรดี", "มียาอะไร",
+                        ]
+                        is_asking_for_recommendations = any(kw in query for kw in _RECOMMENDATION_KEYWORDS)
+                        if is_short_followup and not has_disease_or_pest and not is_asking_for_recommendations:
                             for line in context.split('\n'):
                                 if 'สินค้าที่แนะนำ' in line:
                                     for product_name in ICP_PRODUCT_NAMES.keys():

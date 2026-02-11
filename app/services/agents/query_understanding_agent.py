@@ -253,8 +253,18 @@ required_sources:
                     logger.info(f"  - LLM fallback pest: keeping Agent 1 value='{entities.get('pest_name')}' (hint was '{hints['pest_name']}')")
             if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
                 if 'product_name' not in llm_fallback_keys:
-                    logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
-                    entities['product_name'] = hints['product_name']
+                    # If LLM says None + intent is recommendation → respect LLM's None
+                    # (user is asking for NEW recommendations, not follow-up about existing product)
+                    _rec_intents_for_override = {
+                        IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
+                        IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
+                    }
+                    llm_said_none = entities.get('product_name') is None
+                    if llm_said_none and intent in _rec_intents_for_override:
+                        logger.info(f"  - Skip product override: LLM correctly found no product (intent={intent}, hint='{hints['product_name']}')")
+                    else:
+                        logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
+                        entities['product_name'] = hints['product_name']
                 else:
                     logger.info(f"  - LLM fallback product: keeping Agent 1 value='{entities.get('product_name')}' (hint was '{hints['product_name']}')")
 
