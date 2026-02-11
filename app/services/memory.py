@@ -131,10 +131,7 @@ async def clear_memory(user_id: str):
             .eq('user_id', user_id)\
             .execute()
 
-        # 2. Clear product focus (in-memory + Supabase)
-        await clear_product_focus(user_id)
-
-        logger.info(f"✓ Cleared memory + product focus for user {user_id[:8]}...")
+        logger.info(f"✓ Cleared memory for user {user_id[:8]}...")
 
     except Exception as e:
         logger.error(f"Failed to clear memory: {e}")
@@ -417,13 +414,10 @@ async def get_conversation_summary(user_id: str) -> dict:
 async def get_enhanced_context(user_id: str) -> str:
     """
     สร้าง context แบบ enhanced สำหรับ AI
-    รวม: สินค้าที่กำลังคุย + บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
+    รวม: บทสนทนาล่าสุด + สรุปหัวข้อ + สินค้าที่แนะนำ
     ใช้ structured format เพื่อให้ AI เข้าใจง่ายขึ้น
     """
     try:
-        # Get current product focus first (most important for follow-up questions)
-        current_focus = await get_current_product_focus(user_id)
-
         # Get conversation context (use config value)
         context = await get_conversation_context(user_id, limit=MEMORY_CONTEXT_WINDOW)
 
@@ -432,11 +426,6 @@ async def get_enhanced_context(user_id: str) -> str:
 
         # Build structured enhanced context
         parts = []
-
-        # Section 0: Current product focus (most important!)
-        if current_focus:
-            parts.append(f"[สินค้าที่กำลังคุยอยู่] {current_focus['product_name']}")
-            parts.append("")
 
         # Section 1: Recent conversation
         if context:
@@ -468,72 +457,3 @@ async def get_enhanced_context(user_id: str) -> str:
         return await get_conversation_context(user_id)
 
 
-# =================================================================
-# Current Product Focus Tracking
-# =================================================================
-# เก็บใน Supabase `cache` table เท่านั้น (ไม่มี in-memory)
-# TTL 5 นาที — หลังจากนี้จะถือว่าเริ่มบทสนทนาใหม่
-
-PRODUCT_FOCUS_TTL_SECONDS = 300  # 5 minutes
-
-
-def _focus_key(user_id: str) -> str:
-    return f"product_focus:{user_id}"
-
-
-async def save_current_product_focus(user_id: str, product_name: str, metadata: dict = None):
-    """
-    บันทึกสินค้าที่กำลังคุยอยู่ลง Supabase cache table
-    TTL: 5 นาที
-    """
-    from datetime import datetime, timedelta, timezone
-
-    try:
-        if not supabase_client:
-            return
-        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=PRODUCT_FOCUS_TTL_SECONDS)).isoformat()
-        supabase_client.table('cache').upsert({
-            "key": _focus_key(user_id),
-            "value": {"product_name": product_name, "metadata": metadata or {}},
-            "expires_at": expires_at
-        }).execute()
-        logger.info(f"✓ Saved product focus: {product_name} for user {user_id[:8]}... (TTL={PRODUCT_FOCUS_TTL_SECONDS}s)")
-    except Exception as e:
-        logger.warning(f"Failed to save product focus: {e}")
-
-
-async def get_current_product_focus(user_id: str) -> dict | None:
-    """
-    ดึงสินค้าที่กำลังคุยอยู่จาก Supabase cache table (ถ้ายังไม่หมดอายุ)
-    Returns: {"product_name": str} หรือ None
-    """
-    from datetime import datetime, timezone
-
-    try:
-        if not supabase_client:
-            return None
-        result = supabase_client.table('cache')\
-            .select('value, expires_at')\
-            .eq('key', _focus_key(user_id))\
-            .gt('expires_at', datetime.now(timezone.utc).isoformat())\
-            .execute()
-        if result.data:
-            return result.data[0]['value']
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to get product focus: {e}")
-        return None
-
-
-async def clear_product_focus(user_id: str):
-    """ล้าง product focus"""
-    try:
-        if supabase_client:
-            supabase_client.table('cache')\
-                .delete()\
-                .eq('key', _focus_key(user_id))\
-                .execute()
-    except Exception as e:
-        logger.warning(f"Failed to clear product focus: {e}")
-
-    logger.info(f"✓ Cleared product focus for user {user_id[:8]}...")

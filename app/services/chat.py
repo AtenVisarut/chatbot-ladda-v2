@@ -1297,9 +1297,6 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             rag_metadata["products"] = [
                                 {"product_name": p} for p in mentioned_products[:5]
                             ]
-                            # Save first product as current focus for follow-up questions
-                            from app.services.memory import save_current_product_focus
-                            await save_current_product_focus(user_id, mentioned_products[0])
                         await add_to_memory(user_id, "assistant", answer, metadata=rag_metadata)
                         return answer
 

@@ -136,15 +136,7 @@ class AgenticRAG:
                 product_from_query = bool(detected_product)
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
-                    # Strategy 0: Check [สินค้าที่กำลังคุยอยู่] marker FIRST (highest priority)
-                    focus_match = re.search(r'\[สินค้าที่กำลังคุยอยู่\]\s*(\S+)', context)
-                    if focus_match:
-                        product_candidate = focus_match.group(1).strip()
-                        if product_candidate in ICP_PRODUCT_NAMES:
-                            detected_product = product_candidate
-                            logger.info(f"  - Product from current focus marker: {detected_product}")
-
-                    # Strategy 1: Fallback to bottom-up search (3 most recent msgs only)
+                    # Strategy 1: bottom-up search (3 most recent msgs only)
                     if not detected_product:
                         context_lines = context.strip().split('\n')
                         msgs_checked = 0
