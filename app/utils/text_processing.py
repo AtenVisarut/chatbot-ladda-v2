@@ -1,6 +1,26 @@
 import re
 from typing import List, Dict
 
+# Thai diacritics (tone marks + special marks) used for fuzzy matching
+_THAI_DIACRITICS = re.compile(r'[\u0E48\u0E49\u0E4A\u0E4B\u0E47\u0E4C]')
+# ่ (0E48) ้ (0E49) ๊ (0E4A) ๋ (0E4B) ็ (0E47) ์ (0E4C)
+
+
+def strip_thai_diacritics(text: str) -> str:
+    """
+    Remove Thai tone marks and diacritics for fuzzy matching.
+    ่ ้ ๊ ๋ ็ ์  — only for matching, never change the original query.
+    """
+    return _THAI_DIACRITICS.sub('', text)
+
+
+def diacritics_match(text: str, pattern: str) -> bool:
+    """
+    Check if *pattern* appears in *text* after stripping Thai diacritics from both.
+    Use this instead of ``pattern in text`` when user may type extra tone marks.
+    """
+    return strip_thai_diacritics(pattern) in strip_thai_diacritics(text)
+
 # Allowed emojis: 😊 (U+1F60A) and 🌱 (U+1F331)
 _ALLOWED_EMOJIS = {'\U0001F60A', '\U0001F331'}
 

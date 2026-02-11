@@ -588,7 +588,7 @@ class RetrievalAgent:
 
             # Stage 3.8: Ensure disease-matching product is in top 3
             # If query is about disease but no top-3 doc has the disease in target_pest,
-            # find and promote the matching doc (e.g. อาร์เทมีส for ราชมพู)
+            # find and promote the matching doc (e.g. อาร์เทมิส for ราชมพู)
             if not direct_lookup_ids and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                 from app.utils.text_processing import generate_thai_disease_variants
                 _entity_disease = query_analysis.entities.get('disease_name', '')
@@ -811,9 +811,10 @@ class RetrievalAgent:
             'เน่าคอรวง', 'ใบไหม้แผลใหญ่',
         ]
 
-        # Try known patterns first
+        # Try known patterns first (diacritics-tolerant)
+        from app.utils.text_processing import diacritics_match
         for pattern in _DISEASE_PATTERNS:
-            if pattern in query:
+            if diacritics_match(query, pattern):
                 return pattern
 
         # Try extracting from "โรค..." prefix

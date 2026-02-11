@@ -91,7 +91,7 @@ ICP_PRODUCT_NAMES = {
     "อะนิลการ์ด": ["อะนิลการ์ด", "อนิลการ์ด"],
     "อัพดาว": ["อัพดาว", "อัปดาว"],
     "อาร์ดอน": ["อาร์ดอน", "อาดอน"],
-    "อาร์เทมีส": ["อาร์เทมีส", "อาเทมิส", "อาร์เทมิส", "artemis"],
+    "อาร์เทมิส": ["อาร์เทมิส", "อาร์เทมีส", "อาเทมิส", "artemis"],
     "อิมิดาโกลด์": ["อิมิดาโกลด์", "อิมิดา", "อิมิดาโกล", "imidagold", "อิมิดาโกลด์70", "อิมิดาโกลด์ 70"],
     "เกรค": ["เกรค", "เกรค 5 เอสซี", "เกรด", "เกรด5", "เกรค5", "เกรด 5"],
     "เคเซีย": ["เคเซีย", "เคเซีย์"],
@@ -133,12 +133,15 @@ def extract_product_name_from_question(question: str) -> Optional[str]:
     ดึงชื่อสินค้าจากคำถาม
     Returns: ชื่อสินค้าที่พบ หรือ None ถ้าไม่พบ
     """
+    from app.utils.text_processing import strip_thai_diacritics
     question_lower = question.lower()
+    question_stripped = strip_thai_diacritics(question_lower)
 
-    # Step 1: Exact substring match (เร็ว)
+    # Step 1: Exact substring match (เร็ว) — also try diacritics-stripped version
     for product_name, aliases in ICP_PRODUCT_NAMES.items():
         for alias in aliases:
-            if alias.lower() in question_lower:
+            alias_lower = alias.lower()
+            if alias_lower in question_lower or strip_thai_diacritics(alias_lower) in question_stripped:
                 return product_name
 
     # Step 2: Fuzzy match (fallback สำหรับพิมพ์ผิด)
@@ -359,13 +362,14 @@ def detect_problem_type(message: str) -> str:
     Priority: nutrient > disease > insect > weed > unknown
     (เพราะคำถามเรื่องบำรุงมักมีคำว่า "ใบเหลือง" ซึ่งอาจซ้ำกับ disease)
     """
+    from app.utils.text_processing import diacritics_match
     message_lower = message.lower()
 
-    # นับ keywords แต่ละประเภท
-    nutrient_count = sum(1 for kw in NUTRIENT_KEYWORDS if kw in message_lower)
-    disease_count = sum(1 for kw in DISEASE_KEYWORDS if kw in message_lower)
-    insect_count = sum(1 for kw in INSECT_KEYWORDS if kw in message_lower)
-    weed_count = sum(1 for kw in WEED_KEYWORDS if kw in message_lower)
+    # นับ keywords แต่ละประเภท (diacritics-tolerant)
+    nutrient_count = sum(1 for kw in NUTRIENT_KEYWORDS if diacritics_match(message_lower, kw))
+    disease_count = sum(1 for kw in DISEASE_KEYWORDS if diacritics_match(message_lower, kw))
+    insect_count = sum(1 for kw in INSECT_KEYWORDS if diacritics_match(message_lower, kw))
+    weed_count = sum(1 for kw in WEED_KEYWORDS if diacritics_match(message_lower, kw))
 
     # หา max count
     counts = {
@@ -617,9 +621,10 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         if problem_type in ['insect', 'disease'] and is_treatment_question and not plant_in_question and not product_in_question:
             logger.info(f"⚠️ ถามเรื่อง {problem_type} แต่ไม่ระบุพืช → ถามพืชก่อน")
             # Extract ชื่อปัญหา/แมลง/โรค จากคำถาม
+            from app.utils.text_processing import diacritics_match as _dm_kw
             problem_name = ""
             for kw in INSECT_KEYWORDS + DISEASE_KEYWORDS:
-                if kw in question.lower() and len(kw) > 2:
+                if _dm_kw(question.lower(), kw) and len(kw) > 2:
                     problem_name = kw
                     break
 
@@ -1032,6 +1037,23 @@ def is_usage_question(message: str) -> bool:
     return False
 
 
+async def _fetch_product_from_db(product_name: str) -> list:
+    """ดึงข้อมูลสินค้าจาก DB ตรงๆ สำหรับ enrich memory data"""
+    try:
+        from app.services.services import supabase_client as _sb
+        if not _sb:
+            return []
+        result = _sb.table('products').select(
+            'product_name, active_ingredient, target_pest, applicable_crops, '
+            'how_to_use, usage_rate, usage_period, package_size, '
+            'absorption_method, mechanism_of_action'
+        ).ilike('product_name', f'%{product_name}%').limit(1).execute()
+        return result.data if result.data else []
+    except Exception as e:
+        logger.error(f"_fetch_product_from_db error: {e}")
+        return []
+
+
 async def answer_usage_question(user_id: str, message: str, context: str = "") -> str:
     """
     ตอบคำถามเกี่ยวกับวิธีใช้สินค้าจากข้อมูลที่เก็บใน memory
@@ -1058,7 +1080,26 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         products = await get_recommended_products(user_id, limit=5)
 
         if not products:
-            return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
+            # ถ้าไม่มี memory แต่ระบุชื่อสินค้า → ดึงจาก DB ตรงๆ
+            if product_in_question:
+                products = await _fetch_product_from_db(product_in_question)
+            if not products:
+                return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
+
+        # ถ้ามีชื่อสินค้าในคำถาม → enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields ใหม่)
+        if product_in_question:
+            db_product = await _fetch_product_from_db(product_in_question)
+            if db_product:
+                # Merge DB data into memory products
+                for p in products:
+                    if product_in_question.lower() in p.get('product_name', '').lower():
+                        db_p = db_product[0]
+                        for key in ['package_size', 'absorption_method', 'mechanism_of_action',
+                                     'how_to_use', 'usage_rate', 'usage_period', 'target_pest',
+                                     'active_ingredient', 'applicable_crops']:
+                            if db_p.get(key) and not p.get(key):
+                                p[key] = db_p[key]
+                        break
 
         # สร้าง prompt สำหรับ AI
         products_text = ""
@@ -1074,6 +1115,12 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 products_text += f"\n   • ศัตรูพืชที่กำจัด: {p.get('target_pest')[:100]}"
             if p.get('applicable_crops'):
                 products_text += f"\n   • ใช้กับพืช: {p.get('applicable_crops')[:100]}"
+            if p.get('package_size'):
+                products_text += f"\n   • ขนาดบรรจุ: {p.get('package_size')}"
+            if p.get('absorption_method'):
+                products_text += f"\n   • การดูดซึม: {p.get('absorption_method')}"
+            if p.get('mechanism_of_action'):
+                products_text += f"\n   • กลไกการออกฤทธิ์: {p.get('mechanism_of_action')}"
             products_text += "\n"
 
         prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืชจาก ICP Ladda
@@ -1094,9 +1141,14 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
 - ห้ามใช้ ** หรือ ## หรือ markdown อื่นๆ
 - ใช้ bullet point แบบ "•" หรือเลข "1. 2. 3." เท่านั้น
 - ห้ามจัดรูปแบบเป็น section/หมวดหมู่ที่มี header แยก
-- ห้ามแต่งข้อมูลเอง ใช้เฉพาะข้อมูลที่ให้มา
 - หน่วย: ใช้ "มล." แทน "cc/ซีซี" เสมอ; กรัม = "กรัม"
 - ตอบกระชับ ตรงประเด็น ไม่เกิน 8-10 บรรทัด
+
+[ห้ามมั่วข้อมูล — กฎเด็ดขาด]
+- ตอบเฉพาะข้อมูลที่ปรากฏในรายการสินค้าด้านบนเท่านั้น
+- ห้ามแต่งข้อมูลขนาดบรรจุ น้ำหนัก ราคา กลไกการออกฤทธิ์ หรือการดูดซึมเอง
+- ถ้าข้อมูลที่ถามไม่มีในรายการด้านบน ให้ตอบว่า "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ"
+- ห้ามเดา ห้ามใช้ความรู้ทั่วไป ใช้เฉพาะข้อมูลที่ให้มาเท่านั้น
 
 [คำนวณอัตราผสม] (ถ้าผู้ใช้บอกขนาดถังหรือพื้นที่)
 - ดูอัตราใช้จากข้อมูลสินค้าด้านบน
@@ -1133,7 +1185,9 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
 - ห้ามใช้ ** หรือ ## หรือ markdown
 - ใช้ bullet point แบบ • หรือเลข 1. 2. 3.
 - หน่วย: ใช้ "มล." แทน "cc/ซีซี"
-- ตอบกระชับ ไม่เกิน 8-10 บรรทัด"""},
+- ตอบกระชับ ไม่เกิน 8-10 บรรทัด
+- ห้ามมั่วข้อมูลเด็ดขาด ตอบเฉพาะข้อมูลที่ให้มา ถ้าไม่มีข้อมูลให้ตอบ "ไม่มีข้อมูลในระบบ"
+- ห้ามแต่งตัวเลขขนาดบรรจุ น้ำหนัก ราคา กลไกการออกฤทธิ์เอง"""},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=600,

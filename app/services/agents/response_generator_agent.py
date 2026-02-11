@@ -104,6 +104,7 @@ class ResponseGeneratorAgent:
                 # Also try extracting disease from original query (LLM may have changed disease name)
                 if not has_disease_match and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     import re as _re
+                    from app.utils.text_processing import diacritics_match as _dm
                     _DISEASE_PATTERNS_RSP = [
                         'แอนแทรคโนส', 'แอนแทคโนส', 'แอคแทคโนส',
                         'ฟิวซาเรียม', 'ฟิวสาเรียม', 'ฟอซาเรียม',
@@ -114,7 +115,7 @@ class ResponseGeneratorAgent:
                     ]
                     original_disease = ''
                     for pattern in _DISEASE_PATTERNS_RSP:
-                        if pattern in query_analysis.original_query:
+                        if _dm(query_analysis.original_query, pattern):
                             original_disease = pattern
                             break
                     if original_disease and original_disease != disease_name:
@@ -368,9 +369,10 @@ class ResponseGeneratorAgent:
             'ใบไหม้', 'ใบจุด', 'ผลเน่า', 'รากเน่า', 'โคนเน่า',
             'กาบใบแห้ง', 'ขอบใบแห้ง', 'ใบติด', 'เน่าคอรวง',
         ]
+        from app.utils.text_processing import diacritics_match as _dm_gen
         original_disease_gen = ''
         for _pat in _DISEASE_PATTERNS_GEN:
-            if _pat in query_analysis.original_query:
+            if _dm_gen(query_analysis.original_query, _pat):
                 original_disease_gen = _pat
                 break
 
@@ -442,7 +444,13 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
 {crop_note}{disease_mismatch_note}{disease_match_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
-ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย"""
+ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย
+
+[ห้ามมั่วข้อมูลเด็ดขาด]
+- ตอบเฉพาะข้อมูลที่ปรากฏในข้อมูลสินค้าด้านบน ห้ามแต่งเอง
+- ห้ามเดาตัวเลขขนาดบรรจุ น้ำหนัก ราคา กลไกการออกฤทธิ์ การดูดซึม
+- ถ้าข้อมูลที่ถามไม่มีในข้อมูลด้านบน ให้ตอบว่า "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ"
+- ห้ามใช้ความรู้ทั่วไปมาตอบแทนข้อมูลจริง"""
 
         system_prompt = PRODUCT_QA_PROMPT
 

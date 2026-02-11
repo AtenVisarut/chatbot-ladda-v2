@@ -114,7 +114,7 @@ class AgenticRAG:
                     DISEASE_KEYWORDS, INSECT_KEYWORDS,
                     resolve_farmer_slang
                 )
-                from app.utils.text_processing import generate_thai_disease_variants, resolve_symptom_to_pathogens
+                from app.utils.text_processing import generate_thai_disease_variants, resolve_symptom_to_pathogens, diacritics_match
                 import re
 
                 # --- Farmer Slang Resolution ---
@@ -191,8 +191,8 @@ class AgenticRAG:
                 ]
                 # Sort by length descending so longer patterns match first
                 for pattern in sorted(_DISEASE_PATTERNS_STAGE0, key=len, reverse=True):
-                    if pattern in query:
-                        hints['disease_name'] = pattern
+                    if diacritics_match(query, pattern):
+                        hints['disease_name'] = pattern  # canonical pattern, not user's misspelling
                         hints['disease_variants'] = generate_thai_disease_variants(pattern)
                         logger.info(f"  - Pre-extracted disease: '{pattern}' variants={hints['disease_variants']}")
                         break
@@ -214,8 +214,8 @@ class AgenticRAG:
                     'ทริปส์', 'จักจั่น', 'มด', 'ปลวก',
                 ]
                 for pattern in _PEST_PATTERNS_STAGE0:
-                    if pattern in query:
-                        hints['pest_name'] = pattern
+                    if diacritics_match(query, pattern):
+                        hints['pest_name'] = pattern  # canonical pattern
                         logger.info(f"  - Pre-extracted pest: '{pattern}'")
                         break
 

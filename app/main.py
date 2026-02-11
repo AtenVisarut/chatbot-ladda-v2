@@ -259,7 +259,7 @@ async def clear_cache_endpoint(request: Request):
 async def regenerate_embeddings_endpoint(request: Request):
     """
     Regenerate embeddings for products after data changes.
-    Body (optional): {"product_name": "อาร์เทมีส"}  — regenerate one product
+    Body (optional): {"product_name": "อาร์เทมิส"}  — regenerate one product
     Body empty or {}                                  — regenerate ALL products
     """
     if not request.session.get("user"):
