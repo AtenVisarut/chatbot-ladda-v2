@@ -242,7 +242,7 @@ class AgenticRAG:
                     elif (hints.get('disease_name') or hints.get('pest_name')) and not product_literally_in_query:
                         drop_reason = "disease/pest detected, product not in query"
                     elif (not product_from_query and not product_literally_in_query
-                            and hints.get('problem_type') in ('disease', 'pest')):
+                            and hints.get('problem_type') in ('disease', 'pest', 'weed', 'nutrient')):
                         drop_reason = f"new {hints['problem_type']} topic, product from context"
                     if drop_reason and not has_new_different_product:
                         logger.info(f"  - Drop product: '{hints['product_name']}' ({drop_reason})")
