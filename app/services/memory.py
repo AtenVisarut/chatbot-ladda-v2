@@ -119,19 +119,23 @@ async def cleanup_old_memory(user_id: str):
             logger.error(f"Failed to cleanup old memory: {e}")
 
 async def clear_memory(user_id: str):
-    """Clear all conversation memory for user"""
+    """Clear all conversation memory + all cache layers for user"""
     try:
         if not supabase_client:
             logger.warning("Supabase not available")
             return
-        
-        result = supabase_client.table('conversation_memory')\
+
+        # 1. Delete from conversation_memory table
+        supabase_client.table('conversation_memory')\
             .delete()\
             .eq('user_id', user_id)\
             .execute()
-        
-        logger.info(f"✓ Cleared memory for user {user_id[:8]}...")
-        
+
+        # 2. Clear product focus (in-memory + Supabase)
+        await clear_product_focus(user_id)
+
+        logger.info(f"✓ Cleared memory + product focus for user {user_id[:8]}...")
+
     except Exception as e:
         logger.error(f"Failed to clear memory: {e}")
 
@@ -467,102 +471,69 @@ async def get_enhanced_context(user_id: str) -> str:
 # =================================================================
 # Current Product Focus Tracking
 # =================================================================
+# เก็บใน Supabase `cache` table เท่านั้น (ไม่มี in-memory)
+# TTL 5 นาที — หลังจากนี้จะถือว่าเริ่มบทสนทนาใหม่
 
-# In-memory cache for current product focus (per user)
-# Format: {user_id: {"product_name": str, "timestamp": datetime, "metadata": dict}}
-_product_focus_cache: dict = {}
-PRODUCT_FOCUS_TTL_SECONDS = 1800  # 30 minutes
+PRODUCT_FOCUS_TTL_SECONDS = 300  # 5 minutes
+
+
+def _focus_key(user_id: str) -> str:
+    return f"product_focus:{user_id}"
 
 
 async def save_current_product_focus(user_id: str, product_name: str, metadata: dict = None):
     """
-    บันทึกสินค้าที่กำลังคุยอยู่ (ใช้สำหรับ follow-up questions)
-    - upsert ลง Supabase table conversation_product_focus
-    - เก็บ in-memory cache ด้วยเพื่อความเร็ว
-    TTL: 30 นาที — หลังจากนี้จะถือว่าเริ่มบทสนทนาใหม่
+    บันทึกสินค้าที่กำลังคุยอยู่ลง Supabase cache table
+    TTL: 5 นาที
     """
-    from datetime import datetime
+    from datetime import datetime, timedelta, timezone
 
-    # In-memory cache (fast path)
-    _product_focus_cache[user_id] = {
-        "product_name": product_name,
-        "timestamp": datetime.now(),
-        "metadata": metadata or {}
-    }
-
-    # Persist to Supabase
     try:
-        if supabase_client:
-            supabase_client.table('conversation_product_focus').upsert({
-                "user_id": user_id,
-                "product_name": product_name,
-                "updated_at": datetime.now().isoformat()
-            }, on_conflict="user_id").execute()
+        if not supabase_client:
+            return
+        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=PRODUCT_FOCUS_TTL_SECONDS)).isoformat()
+        supabase_client.table('cache').upsert({
+            "key": _focus_key(user_id),
+            "value": {"product_name": product_name, "metadata": metadata or {}},
+            "expires_at": expires_at
+        }).execute()
+        logger.info(f"✓ Saved product focus: {product_name} for user {user_id[:8]}... (TTL={PRODUCT_FOCUS_TTL_SECONDS}s)")
     except Exception as e:
-        logger.warning(f"Failed to persist product focus to Supabase: {e}")
-
-    logger.info(f"✓ Saved product focus: {product_name} for user {user_id[:8]}...")
+        logger.warning(f"Failed to save product focus: {e}")
 
 
 async def get_current_product_focus(user_id: str) -> dict | None:
     """
-    ดึงสินค้าที่กำลังคุยอยู่ (ถ้ายังไม่หมดอายุ)
-    - ลองจาก in-memory cache ก่อน
-    - Fallback ไป Supabase ถ้า cache ว่าง
-    Returns: {"product_name": str, "timestamp": datetime, "metadata": dict} หรือ None
+    ดึงสินค้าที่กำลังคุยอยู่จาก Supabase cache table (ถ้ายังไม่หมดอายุ)
+    Returns: {"product_name": str} หรือ None
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    # Try in-memory cache first
-    if user_id in _product_focus_cache:
-        focus = _product_focus_cache[user_id]
-        age = datetime.now() - focus["timestamp"]
-        if age.total_seconds() > PRODUCT_FOCUS_TTL_SECONDS:
-            del _product_focus_cache[user_id]
-            logger.info(f"Product focus expired (cache) for user {user_id[:8]}...")
-        else:
-            return focus
-
-    # Fallback: query Supabase
     try:
-        if supabase_client:
-            result = supabase_client.table('conversation_product_focus')\
-                .select('product_name, updated_at')\
-                .eq('user_id', user_id)\
-                .single()\
-                .execute()
-            if result.data:
-                updated_at = datetime.fromisoformat(result.data['updated_at'].replace('Z', '+00:00'))
-                age = datetime.now(updated_at.tzinfo) - updated_at if updated_at.tzinfo else datetime.now() - updated_at
-                if age.total_seconds() <= PRODUCT_FOCUS_TTL_SECONDS:
-                    focus = {
-                        "product_name": result.data['product_name'],
-                        "timestamp": datetime.now(),
-                        "metadata": {}
-                    }
-                    _product_focus_cache[user_id] = focus
-                    logger.info(f"✓ Restored product focus from Supabase: {focus['product_name']}")
-                    return focus
-                else:
-                    logger.info(f"Product focus expired (Supabase) for user {user_id[:8]}...")
+        if not supabase_client:
+            return None
+        result = supabase_client.table('cache')\
+            .select('value, expires_at')\
+            .eq('key', _focus_key(user_id))\
+            .gt('expires_at', datetime.now(timezone.utc).isoformat())\
+            .execute()
+        if result.data:
+            return result.data[0]['value']
+        return None
     except Exception as e:
-        logger.warning(f"Failed to get product focus from Supabase: {e}")
-
-    return None
+        logger.warning(f"Failed to get product focus: {e}")
+        return None
 
 
 async def clear_product_focus(user_id: str):
-    """ล้าง product focus (เมื่อเปลี่ยนหัวข้อ)"""
-    if user_id in _product_focus_cache:
-        del _product_focus_cache[user_id]
-
+    """ล้าง product focus"""
     try:
         if supabase_client:
-            supabase_client.table('conversation_product_focus')\
+            supabase_client.table('cache')\
                 .delete()\
-                .eq('user_id', user_id)\
+                .eq('key', _focus_key(user_id))\
                 .execute()
     except Exception as e:
-        logger.warning(f"Failed to clear product focus from Supabase: {e}")
+        logger.warning(f"Failed to clear product focus: {e}")
 
     logger.info(f"✓ Cleared product focus for user {user_id[:8]}...")
