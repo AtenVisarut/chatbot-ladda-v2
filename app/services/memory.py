@@ -425,9 +425,10 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
         current_query: คำถามปัจจุบันของ user
 
     Returns:
-        (active_messages: list[str], past_summary: str)
+        (active_messages: list[str], past_summary: str, recent_products: list[str])
         active_messages = formatted strings "ผู้ใช้: ..." or "น้องลัดดา: ..."
         past_summary = short summary of past topics (or "")
+        recent_products = product names from the last assistant recommendation in active topic
     """
     try:
         from app.services.chat import extract_product_name_from_question, ICP_PRODUCT_NAMES
@@ -444,7 +445,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
                     pnames = [p.get("product_name", "") for p in products[:3]]
                     content += f" (สินค้าที่แนะนำ: {', '.join(pnames)})"
             all_formatted.append(f"{role}: {content}")
-        return all_formatted, ""
+        return all_formatted, "", []
 
     # --- Extract entities from current query ---
     current_product = extract_product_name_from_question(current_query)
@@ -505,11 +506,26 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
             # We only break if we already found active messages below this
             pass
 
+    # --- Helper: extract recent products from active entries (newest assistant msg) ---
+    def _extract_recent_products(entries):
+        """Find product names from the last assistant message with product metadata."""
+        for entry in reversed(entries):
+            if entry["role"] != "assistant":
+                continue
+            metadata = entry.get("metadata", {})
+            if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
+                products = metadata.get("products", [])
+                pnames = [p.get("product_name", "") for p in products if p.get("product_name")]
+                if pnames:
+                    return pnames
+        return []
+
     # --- Split into active / past ---
     if boundary_idx < 0:
         # No boundary found — all messages are active topic
         active_texts = [f["text"] for f in formatted]
-        return active_texts, ""
+        recent_products = _extract_recent_products(formatted)
+        return active_texts, "", recent_products
 
     active_texts = [f["text"] for f in formatted[boundary_idx + 1:]]
     past_entries = formatted[:boundary_idx + 1]
@@ -518,6 +534,10 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
     if not active_texts:
         active_texts = [formatted[boundary_idx]["text"]]
         past_entries = formatted[:boundary_idx]
+
+    # Extract recent products from active topic entries only
+    active_entries = formatted[boundary_idx + 1:] if boundary_idx >= 0 else formatted
+    recent_products = _extract_recent_products(active_entries)
 
     # --- Build past summary ---
     past_products = set()
@@ -549,7 +569,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
         summary_parts.append(f"- สินค้าที่แนะนำ: {', '.join(sorted(past_products))}")
 
     past_summary = "\n".join(summary_parts) if summary_parts else ""
-    return active_texts, past_summary
+    return active_texts, past_summary, recent_products
 
 
 async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
@@ -581,8 +601,9 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
         messages = list(reversed(result.data))
 
         # --- Topic-aware splitting ---
+        recent_products = []
         if current_query:
-            active_texts, past_summary = compute_active_topic(messages, current_query)
+            active_texts, past_summary, recent_products = compute_active_topic(messages, current_query)
         else:
             # No current query — format all messages as before (backward compat)
             active_texts = []
@@ -605,6 +626,11 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
         if active_texts:
             parts.append("[บทสนทนาปัจจุบัน]")
             parts.append("\n".join(active_texts))
+
+        # Section 1.5: Recent products from metadata (most reliable source)
+        if recent_products:
+            parts.append("")
+            parts.append(f"[สินค้าล่าสุดในบทสนทนา] {', '.join(recent_products)}")
 
         # Section 2: Past topic summary (from compute_active_topic)
         if past_summary:

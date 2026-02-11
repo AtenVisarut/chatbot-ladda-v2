@@ -1,0 +1,219 @@
+================================================================================
+CHANGELOG 2026-02-11
+================================================================================
+
+## สรุปงานที่ทำวันนี้
+
+วันนี้มี 5 กลุ่มงานหลัก:
+1. Thai Diacritics Stripping (แก้ปัญหาวรรณยุกต์เกิน)
+2. อาร์เทมีส → อาร์เทมิส Rename
+3. Pipeline Quality Overhaul (WI-1 ~ WI-4)
+4. Memory Context & Stage 0 LLM Fallback (WI-A ~ WI-C)
+5. Metadata-based Product Detection (แก้ bug ดึงสินค้าผิด)
+
+================================================================================
+## 1. Thai Diacritics Stripping
+================================================================================
+
+### ปัญหา
+เกษตรกรพิมพ์วรรณยุกต์เกิน เช่น "ฟิวซาเรี่ยม" (มี ่ เกิน) → dictionary ไม่ match
+"แอนแทรค์โนส" (มี ์ เกิน) → ไม่เจอในรายชื่อโรค
+
+### แก้ไข
+- เพิ่ม `strip_thai_diacritics(text)` + `diacritics_match(text, pattern)` ใน `text_processing.py`
+- ตัววรรณยุกต์ที่ strip: ่ ้ ๊ ๋ ็ ์
+- Strip เฉพาะตอน matching เท่านั้น (ไม่เปลี่ยน original query)
+
+### ไฟล์ที่แก้
+- `app/utils/text_processing.py` — เพิ่ม functions
+- `app/services/agentic_rag.py` — Stage 0 disease/pest detection ใช้ `diacritics_match()`
+- `app/services/agents/retrieval_agent.py` — disease variant search ใช้ `diacritics_match()`
+- `app/services/agents/response_generator_agent.py` — disease mismatch check ใช้ `diacritics_match()`
+- `app/services/chat.py` — `detect_problem_type()` ใช้ `diacritics_match()`
+
+================================================================================
+## 2. อาร์เทมีส → อาร์เทมิส Rename
+================================================================================
+
+### ปัญหา
+ชื่อสินค้าในระบบเขียนเป็น "อาร์เทมีส" (สระอี) แต่ชื่อทางการคือ "อาร์เทมิส" (สระอิ)
+
+### แก้ไข
+- `chat.py` — ICP_PRODUCT_NAMES key เปลี่ยนเป็น "อาร์เทมิส", ชื่อเก่า "อาร์เทมีส" เป็น alias
+- `query_understanding_agent.py` — `_ICP_PRODUCT_LIST` updated
+- `retrieval_agent.py` — comment updated
+- `main.py` — docstring updated
+- `scripts/rename_artemis_embedding.py` — script สำหรับ update DB embeddings (run manually)
+
+================================================================================
+## 3. Pipeline Quality Overhaul (WI-1 ~ WI-4)
+================================================================================
+
+### WI-1: Disease Constants Centralization
+**ปัญหา**: DISEASE_PATTERNS ซ้ำกัน 4 ที่ (agentic_rag.py, retrieval_agent.py, response_generator_agent.py, chat.py)
+
+**แก้ไข**:
+- สร้าง `app/utils/disease_constants.py` — Single source of truth
+  - `DISEASE_PATTERNS`: dict {canonical_name: [patterns + variants]}
+  - `DISEASE_CANONICAL`: dict {pattern → canonical_name}
+  - `DISEASE_PATTERNS_SORTED`: sorted list (ยาวสุดก่อน)
+  - `get_canonical(pattern)`: helper function
+- ลบ duplicated lists จาก 3 files, เปลี่ยนเป็น import จาก disease_constants
+
+**ไฟล์ที่แก้**:
+- `app/utils/disease_constants.py` — NEW
+- `app/services/agentic_rag.py` — import DISEASE_PATTERNS_SORTED, get_canonical
+- `app/services/agents/retrieval_agent.py` — import DISEASE_PATTERNS_SORTED, get_canonical
+- `app/services/agents/response_generator_agent.py` — import DISEASE_PATTERNS_SORTED, get_canonical
+
+### WI-2: Disable Grounding Agent by Default
+**ปัญหา**: Grounding Agent (Agent 3) ใช้ LLM call เพิ่ม ~$0.008/question + 3-5s latency
+
+**แก้ไข**:
+- `config.py` — `ENABLE_GROUNDING` default เปลี่ยนจาก "1" เป็น "0"
+- `agentic_rag.py` — เมื่อ disabled, สร้าง synthetic grounding result:
+  - `is_grounded = bool(docs)` (มีเอกสาร = grounded)
+  - `confidence = avg_similarity` (จาก retrieval agent)
+
+### WI-3: Disease Mismatch Note Safety Re-check
+**ปัญหา**: `disease_mismatch_note` ถูก inject "ห้ามแนะนำ" หลัง rescue logic → LLM บอก "ไม่มีสินค้า"
+
+**แก้ไข**:
+- `response_generator_agent.py` — เพิ่ม safety re-check หลัง rescue logic
+- ก่อนจะ inject "ห้ามแนะนำ" → verify อีกครั้งว่า all disease variants ไม่ match docs_to_use
+- ใช้ `diacritics_match()` + `get_canonical()` ในการ verify
+
+### WI-4: Consolidated retrieval_agent.py
+**แก้ไข**:
+- เพิ่ม `_build_doc_from_row()` helper — ลดโค้ดซ้ำจาก 4 จุด
+- เพิ่ม `INTENT_CATEGORY_MAP` / `INTENT_CATEGORY_VARIANTS` เป็น class constants
+
+================================================================================
+## 4. Memory Context & Stage 0 LLM Fallback (WI-A ~ WI-C)
+================================================================================
+
+### WI-A: Topic-Aware Context (CRITICAL)
+**ปัญหา**: `get_enhanced_context()` ส่ง 10 ข้อความล่าสุดแบบ flat → Stage 0 ดึง product จาก topic เก่า
+
+**แก้ไข**:
+- เพิ่ม `compute_active_topic(formatted_messages, current_query)` ใน `memory.py`
+  - Scan จากหลังมาหน้า (ล่าสุดก่อน)
+  - หา topic boundary: สินค้าตัวอื่น หรือ คำเปลี่ยนเรื่อง (ขอบคุณ, โอเค, etc.)
+  - Return: (active_messages, past_summary, recent_products)
+- แก้ `get_enhanced_context()` รับ `current_query` parameter
+- Output format ใหม่:
+  ```
+  [บทสนทนาปัจจุบัน]
+  ผู้ใช้: ไฟท็อป ใช้สารอะไร
+
+  [สินค้าล่าสุดในบทสนทนา] อาร์เทมิส, ไฮซีส
+
+  [สรุปหัวข้อก่อนหน้า]
+  - เคยถามเรื่อง: โมเดิน วิธีใช้
+  - สินค้าที่แนะนำ: โมเดิน
+
+  [สินค้าที่แนะนำไปแล้ว] โมเดิน, อาร์เทมิส, ไฮซีส
+  ```
+- `chat.py` — เปลี่ยน `get_enhanced_context(user_id)` → `get_enhanced_context(user_id, current_query=message)`
+
+**ไฟล์ที่แก้**:
+- `app/services/memory.py` — compute_active_topic(), get_enhanced_context()
+- `app/services/chat.py` — line 1220
+
+### WI-B: Product Focus from Active Topic
+**ปัญหา**: Stage 0 ดึง product จาก context ไม่แยก topic
+
+**แก้ไข**:
+- `agentic_rag.py` — ปรับ product-from-context logic:
+  - Strategy 1: scan เฉพาะ [บทสนทนาปัจจุบัน] section
+  - Strategy 2: fallback ไป [สินค้าที่แนะนำไปแล้ว] เฉพาะ follow-up สั้นๆ
+  - เพิ่ม `_RECOMMENDATION_KEYWORDS` check — ถ้า user ถามแนะนำสินค้าใหม่ ไม่ดึงจาก context
+
+**ไฟล์ที่แก้**:
+- `app/services/agentic_rag.py` — lines 195-244
+
+### WI-C: Stage 0 LLM Fallback
+**ปัญหา**: Dictionary ครอบคลุมเฉพาะ ~42 โรค, ~24 แมลง → โรค/แมลง/อาการใหม่ไม่ถูก extract
+
+**แก้ไข**:
+- เพิ่ม `_llm_entity_extraction()` ใน `agentic_rag.py`
+  - ใช้ gpt-4o (configurable via LLM_MODEL_ENTITY_EXTRACTION)
+  - เรียกเมื่อ: dictionary ไม่เจอ disease/pest/product AND query >= 10 chars AND ไม่ใช่ greeting
+  - Return entities tagged `[HINT_LLM]` (Agent 1 ปรับได้)
+  - Tracked via `_llm_fallback_keys` list in hints
+- เพิ่ม `[HINT_LLM]` tag handling ใน `query_understanding_agent.py`
+  - Prompt rule: "[HINT_LLM] คือ entity ที่ AI อีกตัวตรวจพบ — ใช้เป็นแนวทางเริ่มต้น"
+  - Post-LLM override: skip override สำหรับ LLM-fallback entities
+- เพิ่ม `LLM_MODEL_ENTITY_EXTRACTION` ใน `config.py` (default: gpt-4o)
+
+**ไฟล์ที่แก้**:
+- `app/services/agentic_rag.py` — _llm_entity_extraction(), Stage 0 LLM fallback
+- `app/services/agents/query_understanding_agent.py` — [HINT_LLM] handling
+- `app/config.py` — LLM_MODEL_ENTITY_EXTRACTION
+
+================================================================================
+## 5. Bug Fixes
+================================================================================
+
+### Fix: Wrong Product Injection for Recommendation Queries
+**ปัญหา**: "ใช้ในช่วงดอก มีแนะนำไหมคับ" → ดึง ทูโฟฟอส (herbicide) จาก context
+
+**Root cause**:
+1. Strategy 2 fired ไม่มี condition check สำหรับ recommendation queries
+2. Post-LLM override บังคับใส่ product กลับ แม้ LLM ตัดสินว่า None
+
+**แก้ไข**:
+1. เพิ่ม `_RECOMMENDATION_KEYWORDS` check ใน Strategy 2
+2. Post-LLM override respect LLM's None สำหรับ recommendation intents
+
+**ไฟล์ที่แก้**:
+- `app/services/agentic_rag.py` — Strategy 2 conditions
+- `app/services/agents/query_understanding_agent.py` — post-LLM override
+
+### Fix: Metadata-based Product Detection (Option C)
+**ปัญหา**: ประวัติบันทึก อาร์เทมิส แต่ตอบกลับเป็น ไฮซีส
+
+**Root cause**:
+1. Strategy 1 (3-line scan) ไม่เจอ product ใน multi-line bot response
+2. Strategy 2 (top-down scan) เจอ `(สินค้าที่แนะนำ: ไฮซีส)` annotation ก่อน summary section
+3. Dict iteration order ≠ recency
+
+**แก้ไข**:
+1. `memory.py` — `compute_active_topic()` return 3-tuple เพิ่ม `recent_products`
+   - Extract จาก metadata ของ last assistant msg ที่มี product_recommendation type
+   - เพิ่ม section `[สินค้าล่าสุดในบทสนทนา]` ใน context
+2. `agentic_rag.py` — เพิ่ม Strategy 0 (metadata-based)
+   - อ่าน `[สินค้าล่าสุดในบทสนทนา]` section → ใช้ตัวแรก (= สินค้าหลัก)
+   - Strategy 1: scan หา last assistant message ทั้งก้อน (ไม่จำกัด 3 lines)
+   - Strategy 2: เปลี่ยนเป็น bottom-up scan → เจอ `[สินค้าที่แนะนำไปแล้ว]` ก่อน annotation
+
+**ไฟล์ที่แก้**:
+- `app/services/memory.py` — compute_active_topic() return recent_products, get_enhanced_context()
+- `app/services/agentic_rag.py` — Strategy 0/1/2 rewrite
+
+================================================================================
+## 6. Prompt Changes
+================================================================================
+
+### Remove "จากข้อมูลสินค้า" Forced Prefix
+- ลบ prompt rule ที่บังคับให้ LLM ขึ้นต้นด้วย "จากข้อมูลสินค้า" ทุกคำตอบ
+- ยังคงกฎห้ามพูดว่า "ดึงจากตาราง/ฐานข้อมูล"
+- แก้ 5 จุดใน: `prompts.py` (2 จุด), `chat.py` (3 จุด)
+
+================================================================================
+## Commits
+================================================================================
+
+1. `4f75526` — feat: topic-aware memory context, LLM entity fallback, pipeline quality overhaul
+2. `0574c0d` — fix: prevent wrong product injection for recommendation queries
+3. `aa4d434` — config: change LLM entity extraction model from gpt-4o-mini to gpt-4o
+4. `73ea7ae` — remove forced prefix from response prompts
+5. (pending) — fix: metadata-based product detection for follow-up questions
+
+================================================================================
+## Test Results (after all changes)
+================================================================================
+
+- test_hard_10.py: 9/10 (Q3 ราน้ำค้าง = known DB limitation)
+- test_phytophthora.py: 4/4
+- test_package_info.py: 7/10 (Q4,Q5,Q9 = known DB data issues)

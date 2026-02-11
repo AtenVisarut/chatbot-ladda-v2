@@ -207,10 +207,24 @@ class AgenticRAG:
                         # Legacy format — treat all as active
                         _active_section = context
 
-                    # Strategy 1: Scan active topic only (bottom-up, 3 msgs)
-                    if _active_section:
+                    # Strategy 0 (NEW): Use metadata-based [สินค้าล่าสุดในบทสนทนา] section
+                    # This is the most reliable source — extracted from structured metadata
+                    for line in context.split('\n'):
+                        if line.startswith("[สินค้าล่าสุดในบทสนทนา]"):
+                            # Extract first product (= most relevant from last recommendation)
+                            section_text = line.replace("[สินค้าล่าสุดในบทสนทนา]", "").strip()
+                            if section_text:
+                                for product_name in section_text.split(','):
+                                    pname = product_name.strip()
+                                    if pname in ICP_PRODUCT_NAMES:
+                                        detected_product = pname
+                                        logger.info(f"  - Product from metadata (recent recommendation): {detected_product}")
+                                        break
+                            break
+
+                    # Strategy 1: Scan active topic text (bottom-up, last assistant msg)
+                    if not detected_product and _active_section:
                         active_lines = _active_section.strip().split('\n')
-                        msgs_checked = 0
                         for line in reversed(active_lines):
                             if line.startswith('[') and ']' in line:
                                 continue
@@ -218,11 +232,11 @@ class AgenticRAG:
                             if detected_product:
                                 logger.info(f"  - Product from active topic: {detected_product}")
                                 break
-                            msgs_checked += 1
-                            if msgs_checked >= 3:
+                            # Stop after reaching a role prefix (= next message boundary)
+                            if line.startswith("ผู้ใช้:") or line.startswith("น้องลัดดา:"):
                                 break
 
-                    # Strategy 2: Fallback to past topics / [สินค้าที่แนะนำไปแล้ว]
+                    # Strategy 2: Fallback to [สินค้าที่แนะนำไปแล้ว] section
                     # ONLY if query is a true follow-up (usage question) without disease/pest
                     # NOT for queries asking for new recommendations
                     if not detected_product:
@@ -234,8 +248,9 @@ class AgenticRAG:
                         ]
                         is_asking_for_recommendations = any(kw in query for kw in _RECOMMENDATION_KEYWORDS)
                         if is_short_followup and not has_disease_or_pest and not is_asking_for_recommendations:
-                            for line in context.split('\n'):
-                                if 'สินค้าที่แนะนำ' in line:
+                            # Scan bottom-up to find [สินค้าที่แนะนำไปแล้ว] section first
+                            for line in reversed(context.split('\n')):
+                                if line.startswith("[สินค้าที่แนะนำไปแล้ว]"):
                                     for product_name in ICP_PRODUCT_NAMES.keys():
                                         if product_name in line:
                                             detected_product = product_name
