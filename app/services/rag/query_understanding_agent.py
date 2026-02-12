@@ -247,6 +247,7 @@ required_sources:
                     _rec_intents_for_override = {
                         IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
                         IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
+                        IntentType.GENERAL_AGRICULTURE,
                     }
                     llm_said_none = entities.get('product_name') is None
                     if llm_said_none and intent in _rec_intents_for_override:

@@ -207,20 +207,28 @@ class AgenticRAG:
                         # Legacy format — treat all as active
                         _active_section = context
 
-                    # Strategy 0 (NEW): Use metadata-based [สินค้าล่าสุดในบทสนทนา] section
-                    # This is the most reliable source — extracted from structured metadata
-                    for line in context.split('\n'):
-                        if line.startswith("[สินค้าล่าสุดในบทสนทนา]"):
-                            # Extract first product (= most relevant from last recommendation)
-                            section_text = line.replace("[สินค้าล่าสุดในบทสนทนา]", "").strip()
-                            if section_text:
-                                for product_name in section_text.split(','):
-                                    pname = product_name.strip()
-                                    if pname in ICP_PRODUCT_NAMES:
-                                        detected_product = pname
-                                        logger.info(f"  - Product from metadata (recent recommendation): {detected_product}")
-                                        break
-                            break
+                    # Strategy 0: Use metadata-based [สินค้าล่าสุดในบทสนทนา] section
+                    # ONLY for short follow-ups — skip if query introduces a new topic
+                    _plant_in_query = extract_plant_type_from_question(query)
+                    # NOTE: 'รา' and 'ไร' omitted — too short, false-positive in ราคา/อะไร/ไร่
+                    # Layer 2 (query_understanding_agent skip set) handles those edge cases
+                    _disease_pest_keywords = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
+                    _has_new_topic = _plant_in_query or any(kw in query for kw in _disease_pest_keywords)
+                    if _has_new_topic:
+                        logger.info(f"  - Strategy 0 skipped: query has new topic (plant={_plant_in_query})")
+                    else:
+                        for line in context.split('\n'):
+                            if line.startswith("[สินค้าล่าสุดในบทสนทนา]"):
+                                # Extract first product (= most relevant from last recommendation)
+                                section_text = line.replace("[สินค้าล่าสุดในบทสนทนา]", "").strip()
+                                if section_text:
+                                    for product_name in section_text.split(','):
+                                        pname = product_name.strip()
+                                        if pname in ICP_PRODUCT_NAMES:
+                                            detected_product = pname
+                                            logger.info(f"  - Product from metadata (recent recommendation): {detected_product}")
+                                            break
+                                break
 
                     # Strategy 1: Scan active topic text (bottom-up, last assistant msg)
                     if not detected_product and _active_section:
