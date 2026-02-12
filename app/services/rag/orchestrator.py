@@ -8,7 +8,7 @@ Main entry point for the 4-agent RAG pipeline:
 4. ResponseGeneratorAgent - Answer synthesis with confidence scoring
 
 Usage:
-    from app.services.agentic_rag import AgenticRAG
+    from app.services.rag.orchestrator import AgenticRAG
 
     rag = AgenticRAG()
     response = await rag.process("โมเดิน ใช้กับทุเรียนได้ไหม")
@@ -21,16 +21,16 @@ import logging
 import time
 from typing import Optional
 
-from app.services.services import openai_client, supabase_client
-from app.services.agents import (
+from app.dependencies import openai_client, supabase_client
+from app.services.rag import (
     IntentType,
     QueryAnalysis,
     AgenticRAGResponse
 )
-from app.services.agents.query_understanding_agent import QueryUnderstandingAgent
-from app.services.agents.retrieval_agent import RetrievalAgent
-from app.services.agents.grounding_agent import GroundingAgent
-from app.services.agents.response_generator_agent import ResponseGeneratorAgent
+from app.services.rag.query_understanding_agent import QueryUnderstandingAgent
+from app.services.rag.retrieval_agent import RetrievalAgent
+from app.services.rag.grounding_agent import GroundingAgent
+from app.services.rag.response_generator_agent import ResponseGeneratorAgent
 from app.config import AGENTIC_RAG_CONFIG, LLM_MODEL_ENTITY_EXTRACTION
 
 logger = logging.getLogger(__name__)
@@ -165,7 +165,7 @@ class AgenticRAG:
             # =================================================================
             hints = {}
             try:
-                from app.services.chat import (
+                from app.services.chat.handler import (
                     extract_product_name_from_question, detect_problem_type,
                     ICP_PRODUCT_NAMES, extract_plant_type_from_question,
                     DISEASE_KEYWORDS, INSECT_KEYWORDS,
@@ -264,7 +264,7 @@ class AgenticRAG:
                     hints['problem_type'] = detected_problem
 
                 # --- Pre-LLM Entity Extraction: Disease ---
-                from app.utils.disease_constants import DISEASE_PATTERNS_SORTED, get_canonical
+                from app.services.disease.constants import DISEASE_PATTERNS_SORTED, get_canonical
                 for pattern in DISEASE_PATTERNS_SORTED:
                     if diacritics_match(query, pattern):
                         hints['disease_name'] = get_canonical(pattern)
@@ -439,7 +439,7 @@ class AgenticRAG:
                 )
             else:
                 # Skip grounding, use retrieval directly
-                from app.services.agents import GroundingResult
+                from app.services.rag import GroundingResult
                 grounding_result = GroundingResult(
                     is_grounded=bool(retrieval_result.documents),
                     confidence=retrieval_result.avg_similarity,

@@ -1,14 +1,14 @@
 import logging
 from typing import List, Optional, Union, Dict
 from app.models import DiseaseDetectionResult, ProductRecommendation
-from app.services.services import openai_client
-from app.utils.response_template import build_simple_response
-from app.utils.text_messages import (
+from app.dependencies import openai_client
+from app.utils.line.response_template import build_simple_response
+from app.utils.line.text_messages import (
     format_disease_result_text,
     format_product_list_text,
     get_growth_stage_question_text
 )
-from app.services.product_recommendation import get_search_query_for_disease
+from app.services.product.recommendation import get_search_query_for_disease
 from app.prompts import DISEASE_DETECTION_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ async def generate_final_response(
 
         if not openai_client:
             logger.warning("OpenAI client not available, falling back to template")
-            from app.utils.response_template import build_detailed_response
+            from app.utils.line.response_template import build_detailed_response
             return build_detailed_response(disease_info, knowledge_text or "", products, extra_user_info)
 
         # Call GPT

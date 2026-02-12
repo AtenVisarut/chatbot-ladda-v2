@@ -1,0 +1,384 @@
+================================================================================
+CHANGELOG 2026-02-12
+================================================================================
+
+## สรุปงานที่ทำวันนี้
+
+วันนี้มี 1 กลุ่มงานหลัก:
+1. Directory Restructure — จัดโครงสร้าง app/ ใหม่ทั้งหมด
+
+Branch: refactor/restructure-app
+
+================================================================================
+## 1. Directory Restructure
+================================================================================
+
+### ปัญหา
+- `app/` มี 30+ Python files วางแบบ flat ไม่มีการจัดกลุ่ม
+- Disease files กระจาย 4 ที่ (disease_detection, disease_search, disease_database, disease_constants)
+- `services/` มี 18 files ปนกัน ทั้ง chat, disease, product, agents
+- `utils/` ปน LINE-specific code (line_helpers, text_messages, flex_messages) กับ generic utilities
+- `main.py` 786 บรรทัดรวม routes + business logic ทุกอย่าง
+- Import paths ยาวไม่มี pattern ชัดเจน
+
+### แก้ไข — 6 Phases
+
+#### Phase 1-2: สร้างโครงสร้างใหม่ + ย้ายไฟล์ (git mv)
+
+**ไฟล์ที่ย้าย (21 files):**
+
+| เดิม | ใหม่ |
+|------|------|
+| `app/services/services.py` | `app/dependencies.py` |
+| `app/analytics.py` | `app/services/analytics.py` |
+| `app/services/disease_detection.py` | `app/services/disease/detection.py` |
+| `app/services/disease_search.py` | `app/services/disease/search.py` |
+| `app/services/disease_database.py` | `app/services/disease/database.py` |
+| `app/services/response_generator.py` | `app/services/disease/response.py` |
+| `app/utils/disease_constants.py` | `app/services/disease/constants.py` |
+| `app/services/product_recommendation.py` | `app/services/product/recommendation.py` |
+| `app/services/agents/__init__.py` | `app/services/rag/__init__.py` |
+| `app/services/agents/query_understanding_agent.py` | `app/services/rag/query_understanding_agent.py` |
+| `app/services/agents/retrieval_agent.py` | `app/services/rag/retrieval_agent.py` |
+| `app/services/agents/grounding_agent.py` | `app/services/rag/grounding_agent.py` |
+| `app/services/agents/response_generator_agent.py` | `app/services/rag/response_generator_agent.py` |
+| `app/services/agentic_rag.py` | `app/services/rag/orchestrator.py` |
+| `app/services/chat.py` | `app/services/chat/handler.py` |
+| `app/services/quick_classifier.py` | `app/services/chat/quick_classifier.py` |
+| `app/utils/line_helpers.py` | `app/utils/line/helpers.py` |
+| `app/utils/text_messages.py` | `app/utils/line/text_messages.py` |
+| `app/utils/flex_messages.py` | `app/utils/line/flex_messages.py` |
+| `app/utils/response_template.py` | `app/utils/line/response_template.py` |
+| `app/utils/question_templates.py` | `app/utils/line/question_templates.py` |
+
+**โฟลเดอร์ใหม่ 6 อัน:**
+- `app/routers/` — HTTP route handlers
+- `app/services/disease/` — Disease domain (constants, detection, search, database, response)
+- `app/services/product/` — Product domain (recommendation)
+- `app/services/rag/` — RAG pipeline (orchestrator + 4 agents)
+- `app/services/chat/` — Chat domain (handler, quick_classifier)
+- `app/utils/line/` — LINE-specific utilities
+
+**โฟลเดอร์ที่ลบ:**
+- `app/services/agents/` — ย้ายทั้งหมดไป `app/services/rag/`
+
+#### Phase 3: __init__.py
+
+ทุก `__init__.py` ใน domain folders เป็น comments-only (ไม่มี eager re-exports)
+เพราะมี circular import chain:
+  disease/search → chat/quick_classifier → (triggers chat/__init__.py) → chat/handler → disease/search
+
+ดังนั้นต้อง import จาก submodule โดยตรงเสมอ:
+  `from app.services.disease.detection import smart_detect_disease`  (ถูก)
+  `from app.services.disease import smart_detect_disease`             (ใช้ไม่ได้)
+
+#### Phase 4: อัปเดต imports (80+ imports ใน 18 files)
+
+**Import changes หลัก:**
+
+| Import เดิม | Import ใหม่ | จำนวนไฟล์ |
+|---|---|---|
+| `app.services.services` | `app.dependencies` | 12 |
+| `app.services.agents.*` | `app.services.rag.*` | 5 |
+| `app.services.chat` | `app.services.chat.handler` | 5 |
+| `app.utils.text_messages` | `app.utils.line.text_messages` | 5 |
+| `app.services.disease_detection` | `app.services.disease.detection` | 1 |
+| `app.services.disease_search` | `app.services.disease.search` | 2 |
+| `app.services.disease_database` | `app.services.disease.database` | 1 |
+| `app.services.response_generator` | `app.services.disease.response` | 1 |
+| `app.services.product_recommendation` | `app.services.product.recommendation` | 3 |
+| `app.services.agentic_rag` | `app.services.rag.orchestrator` | 2 |
+| `app.services.quick_classifier` | `app.services.chat.quick_classifier` | 2 |
+| `app.utils.disease_constants` | `app.services.disease.constants` | 3 |
+| `app.utils.line_helpers` | `app.utils.line.helpers` | 2 |
+| `app.utils.response_template` | `app.utils.line.response_template` | 2 |
+| `app.analytics` | `app.services.analytics` | 1 |
+
+**Lazy imports ที่อัปเดต (ป้องกัน circular dependency):**
+- `chat/handler.py` → `from app.services.rag.orchestrator import get_agentic_rag`
+- `rag/orchestrator.py` → `from app.services.chat.handler import ...`
+- `memory.py` → `from app.services.chat.handler import ICP_PRODUCT_NAMES`
+- `rag/response_generator_agent.py` → `from app.services.chat.handler import ICP_PRODUCT_NAMES`
+
+#### Phase 5: แยก main.py → 4 routers
+
+**main.py: 786 → 128 บรรทัด**
+
+เหลือเฉพาะ:
+- FastAPI init (`app = FastAPI(...)`)
+- Middleware (SessionMiddleware, CORSMiddleware)
+- Rate limiter init
+- Lifespan (startup/shutdown)
+- `app.include_router(...)` x4
+
+**4 routers ใหม่:**
+
+| Router | Routes | บรรทัด |
+|--------|--------|--------|
+| `routers/health.py` | `/`, `/health`, `/cache/stats` | 45 |
+| `routers/admin.py` | `/login` (GET+POST), `/logout`, `/cache/clear`, `/admin/regenerate-embeddings` | 115 |
+| `routers/dashboard.py` | `/dashboard`, `/api/analytics/dashboard`, `/api/analytics/health`, `/api/analytics/alerts` | 49 |
+| `routers/webhook.py` | `/webhook` + `_process_webhook_events` | 340 |
+
+#### Phase 6: Verification
+
+- `python -c "from app.main import app"` — PASSED
+- ทั้ง 17 routes registered ถูกต้อง (12 app routes + 5 FastAPI default)
+- Dockerfile/Procfile ไม่ต้องเปลี่ยน (ยัง reference `app.main:app`)
+
+### โครงสร้างใหม่
+
+```
+app/
+├── __init__.py
+├── main.py                 # SLIM: 128 lines (FastAPI init + middleware + router includes)
+├── config.py               # ไม่เปลี่ยน
+├── models.py               # ไม่เปลี่ยน
+├── prompts.py              # ไม่เปลี่ยน
+├── dependencies.py         # RENAMED จาก services/services.py
+│
+├── routers/                # NEW — แยก HTTP routes ออกจาก main.py
+│   ├── __init__.py
+│   ├── webhook.py          # LINE webhook + _process_webhook_events
+│   ├── admin.py            # login/logout, regenerate-embeddings, cache clear
+│   ├── dashboard.py        # dashboard HTML + analytics API
+│   └── health.py           # /, /health, /cache/stats
+│
+├── services/               # REORGANIZED — จัดกลุ่มตาม domain
+│   ├── __init__.py
+│   ├── analytics.py        # MOVED จาก app/analytics.py
+│   ├── cache.py
+│   ├── redis_cache.py
+│   ├── memory.py
+│   ├── user_service.py
+│   ├── welcome.py
+│   ├── context_handler.py
+│   ├── knowledge_base.py
+│   ├── reranker.py
+│   │
+│   ├── chat/               # NEW — Q&A domain
+│   │   ├── __init__.py
+│   │   ├── handler.py      # จาก services/chat.py
+│   │   └── quick_classifier.py
+│   │
+│   ├── disease/            # NEW — Disease domain
+│   │   ├── __init__.py
+│   │   ├── constants.py    # จาก utils/disease_constants.py
+│   │   ├── detection.py
+│   │   ├── search.py
+│   │   ├── database.py
+│   │   └── response.py
+│   │
+│   ├── product/            # NEW — Product domain
+│   │   ├── __init__.py
+│   │   └── recommendation.py
+│   │
+│   └── rag/                # RENAMED จาก agents/
+│       ├── __init__.py     # dataclasses (IntentType, QueryAnalysis, etc.)
+│       ├── orchestrator.py # จาก services/agentic_rag.py
+│       ├── query_understanding_agent.py
+│       ├── retrieval_agent.py
+│       ├── grounding_agent.py
+│       └── response_generator_agent.py
+│
+└── utils/                  # CLEANED — generic utilities เท่านั้น
+    ├── __init__.py
+    ├── text_processing.py
+    ├── rate_limiter.py
+    │
+    └── line/               # NEW — LINE Bot specific
+        ├── __init__.py
+        ├── helpers.py
+        ├── text_messages.py
+        ├── flex_messages.py
+        ├── response_template.py
+        └── question_templates.py
+```
+
+### สิ่งที่ไม่ทำ (ตั้งใจ)
+- ไม่แตก `product/recommendation.py` (2,691 lines) ออก — เป็น refactor แยก
+- ไม่แตก `chat/handler.py` (1,375 lines) ออก — เป็น refactor แยก
+- ไม่เปลี่ยนเป็น FastAPI Depends() pattern
+- ไม่แตก `line/flex_messages.py` (2,964 lines) — เป็น template ดูง่ายอยู่
+
+### ไฟล์ที่แก้ไข (ทั้งหมด)
+
+**ไฟล์ย้าย (21):**
+- ดูตาราง Phase 1-2
+
+**ไฟล์ใหม่ (10):**
+- `app/routers/__init__.py`
+- `app/routers/health.py`
+- `app/routers/admin.py`
+- `app/routers/dashboard.py`
+- `app/routers/webhook.py`
+- `app/services/disease/__init__.py`
+- `app/services/product/__init__.py`
+- `app/services/chat/__init__.py`
+- `app/utils/line/__init__.py`
+- `.claude/CHANGELOG_2026-02-12.txt`
+
+**ไฟล์แก้ import (18):**
+- `app/main.py` (rewritten — 786→128 lines)
+- `app/dependencies.py` (analytics import path)
+- `app/services/rag/orchestrator.py`
+- `app/services/rag/query_understanding_agent.py`
+- `app/services/rag/retrieval_agent.py`
+- `app/services/rag/grounding_agent.py`
+- `app/services/rag/response_generator_agent.py`
+- `app/services/chat/handler.py`
+- `app/services/disease/detection.py`
+- `app/services/disease/search.py`
+- `app/services/disease/response.py`
+- `app/services/product/recommendation.py`
+- `app/services/cache.py`
+- `app/services/knowledge_base.py`
+- `app/services/user_service.py`
+- `app/services/memory.py`
+- `app/services/context_handler.py`
+- `app/services/welcome.py`
+
+**ไฟล์ลบ:**
+- `app/services/agents/` (ทั้ง directory — ย้ายไป rag/)
+
+================================================================================
+## 2. Bug Fix: Usage Question "ไม่มีข้อมูลส่วนนี้ในระบบ"
+================================================================================
+
+### ปัญหา
+- คำถาม "โทมาฮอคมีกี่ขนาด" ตอบ "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ"
+  แม้ว่า DB จะมี package_size: "ถุงฟอย 1 กิโล"
+- สาเหตุ: LLM prompt มี anti-hallucination rule เข้มเกินไป
+  "ถ้าข้อมูลที่ถามไม่มีในรายการ ให้ตอบว่าไม่มีข้อมูล"
+  → LLM ตีความ "กี่ขนาด" ว่าต้องมี list ขนาดทั้งหมด → ปฏิเสธตอบ
+
+### แก้ไข (4 จุด ในไฟล์ `app/services/chat/handler.py`)
+
+1. **Prompt fix**: บอก LLM ว่าข้อมูลที่ให้คือข้อมูลทั้งหมด
+   - "ข้อมูลสินค้าด้านบนคือข้อมูลทั้งหมดที่มีในระบบ"
+   - "ถ้ามี 1 ขนาด ให้ตอบว่ามี 1 ขนาด"
+   - เปลี่ยน fallback condition: "ไม่ปรากฏเลย (ไม่มี field นั้นๆ)"
+
+2. **DB limit**: `_fetch_product_from_db()` เปลี่ยน `limit=1` → `limit=5`
+   เพื่อรองรับสินค้าหลาย variant
+
+3. **Product alias**: เพิ่ม "โทมาหอค" เป็น alias ของ "โทมาฮอค" ใน ICP_PRODUCT_NAMES
+
+4. **Merge fallback**: เพิ่ม `products.insert(0, db_product[0])` เมื่อ
+   product ที่ถามไม่อยู่ใน memory → เพิ่ม DB product เป็นตัวแรก
+
+================================================================================
+## 3. DB-Driven Product Name Registry (Feature #15)
+================================================================================
+
+### ปัญหา
+- ชื่อสินค้า ~48 ตัว hardcode ไว้ 2 ที่:
+  - `ICP_PRODUCT_NAMES` dict ใน handler.py (~54 lines) — canonical + aliases ทำมือ
+  - `_ICP_PRODUCT_LIST` list ใน query_understanding_agent.py (~10 lines) — canonical เฉยๆ
+- ทุกครั้งที่เพิ่มสินค้าใหม่ใน DB หรือ user พิมพ์ผิดแบบใหม่ → ต้องแก้ code ทุกครั้ง
+- aliases ต้องเพิ่มมือทีละตัว (เช่น "โทมาฮอก", "โทมาหอค")
+
+### แก้ไข — ProductRegistry singleton + Proxy pattern
+
+#### ไฟล์ใหม่ 1 ไฟล์
+
+**`app/services/product/registry.py`** — ProductRegistry singleton
+
+```python
+class ProductRegistry:
+    _instance = None
+    _products: Dict[str, List[str]]     # canonical → [aliases]
+    _canonical_list: List[str]           # flat list สำหรับ LLM prompt
+    _alias_index: Dict[str, str]         # lowercase alias → canonical
+    _stripped_index: Dict[str, str]      # diacritics-stripped → canonical
+```
+
+ฟังก์ชันหลัก:
+- `load_from_db(supabase_client)` — Query `products` table → auto-generate variants → build index
+- `extract_product_name(question)` — 3-stage matching: exact → diacritics-stripped → fuzzy
+- `fuzzy_match(text, threshold)` — SequenceMatcher 0.65 (sliding window)
+- `get_canonical_list()` — สำหรับ LLM prompt
+- `get_aliases(name)`, `is_known_product(name)`, `get_product_names_dict()`
+- `_ensure_loaded()` — auto-fallback ถ้ายังไม่ได้ load จาก DB
+
+**Auto-generate Thai variants** (`_generate_thai_variants(name)`):
+
+| Rule | ตัวอย่าง |
+|------|----------|
+| Consonant swap: ค↔ก, ท↔ต, ซ↔ส, ห↔ฮ, พ↔ป, บ↔ป, ฟ↔ฝ | "โทมาฮอค" → "โทมาฮอก", "โตมาฮอค" |
+| Strip diacritics (่ ้ ๊ ๋ ็ ์) | "แจ๊ส" → "แจส" |
+| Remove hyphen | "โค-ราซ" → "โคราซ" |
+| Number variants | "โมเดิน 50" → "โมเดิน50", "โมเดิน" |
+
+**Fallback**: `_FALLBACK_PRODUCTS` dict (snapshot ของ ICP_PRODUCT_NAMES ปัจจุบัน) ใช้เมื่อ DB ล่ม
+
+#### ไฟล์แก้ไข 3 ไฟล์
+
+**`app/services/chat/handler.py`:**
+- ลบ: `ICP_PRODUCT_NAMES` dict (line 75-128, 54 lines)
+- ลบ: `extract_product_name_from_question()` body (15 lines)
+- ลบ: `fuzzy_match_product_name()` body (35 lines)
+- ลบ: `from difflib import SequenceMatcher` import
+- เพิ่ม: `from app.services.product.registry import ProductRegistry`
+- เพิ่ม: `_ProductNamesProxy(dict)` class — proxy ที่ delegate ไป registry
+  - `__contains__`, `__getitem__`, `get`, `keys`, `values`, `items`, `__iter__`, `__len__`
+- `ICP_PRODUCT_NAMES = _ProductNamesProxy()` — drop-in replacement
+- `extract_product_name_from_question()` → `registry.extract_product_name()`
+- `fuzzy_match_product_name()` → `registry.fuzzy_match()`
+
+**`app/services/rag/query_understanding_agent.py`:**
+- ลบ: `_ICP_PRODUCT_LIST` list (line 23-32, 10 lines)
+- เพิ่ม: `from app.services.product.registry import ProductRegistry`
+- LLM prompt (line 126): `ProductRegistry.get_instance().get_canonical_list()`
+- Fallback (line 337): `ProductRegistry.get_instance().get_canonical_list()`
+
+**`app/main.py`:**
+- เพิ่ม: `from app.services.product.registry import ProductRegistry`
+- เพิ่มใน `lifespan()` startup:
+  ```python
+  registry = ProductRegistry.get_instance()
+  await registry.load_from_db(supabase_client)
+  logger.info(f"ProductRegistry: ... ({len(registry.get_canonical_list())} products)")
+  ```
+
+#### ไฟล์ที่ไม่ต้องแก้ (Proxy handles it)
+- `orchestrator.py` — `from handler import ICP_PRODUCT_NAMES` → proxy → registry
+- `memory.py` — `from handler import ICP_PRODUCT_NAMES, extract_product_name_from_question` → proxy
+- `response_generator_agent.py` — `from handler import ICP_PRODUCT_NAMES` → proxy
+
+### ผลลัพธ์
+- **ก่อน**: เพิ่มสินค้า → แก้ handler.py + query_understanding_agent.py ทุกครั้ง
+- **หลัง**: เพิ่มสินค้าใน DB → chatbot รู้จักอัตโนมัติ (restart หรือ redeploy)
+- **Auto variants**: "โทมาฮอค" auto-gen → "โทมาฮอก", "โตมาฮอค" (consonant swap)
+- **Backward compatible**: ไฟล์อื่นๆ 6+ ไฟล์ ไม่ต้องแก้ import เลย
+
+### Bug fix ระหว่าง implement
+
+**False positive ใน fuzzy match**: "สวัสดีครับ" → "กะรัต"
+- สาเหตุ: auto-generated variant "คะรัต" (ก→ค swap) ถูก fuzzy match กับ substring "ครับ"
+  ที่ขอบ sliding window (4 chars vs 5 chars alias) → SequenceMatcher = 0.6667 > 0.65
+- แก้ไข: เพิ่ม `if len(sub) < alias_len: continue` ใน fuzzy_match sliding window
+  → ไม่เทียบ substring ที่สั้นกว่า alias (edge artifact)
+
+### ทดสอบ (77/77 tests passed)
+
+| Test Group | จำนวน | ผลลัพธ์ |
+|---|---|---|
+| Auto Thai variant generation | 9 | OK |
+| Matching pipeline (exact/swap/diacritics/hyphen/number/legacy/fuzzy) | 27 | OK |
+| No false positives ("สวัสดีครับ", "ข้าวเป็นโรค") | 2 | OK |
+| _ProductNamesProxy backward compatibility | 12 | OK |
+| Real user questions (20 คำถาม) | 20 | OK |
+| Import chain (5 modules) | 5 | OK |
+| Registry state | 4 | OK |
+
+**ตัวอย่างคำถามที่ทดสอบ:**
+- "โทมาหอคมีกี่ขนาดคะ" → "โทมาฮอค" (auto consonant swap ฮ→ห)
+- "คาริส ใช้ยังไง" → "คาริสมา" (legacy short alias)
+- "แจส ใช้กี่ซีซี" → "แจ๊ส" (diacritics-stripped)
+- "โมเดิน50 อัตราผสม" → "โมเดิน" (auto number variant)
+- "โคราซ ดีไหม" → "โค-ราซ" (auto hyphen-removed)
+- "เกรด5 ใช้อัตรา" → "เกรค" (legacy alias)
+- "โคเบิ้ล ใช้ช่วงไหน" → "โคเบิล" (diacritics-stripped)
+- "แแกนเตอ" → "แกนเตอร์" (fuzzy match)
+- "สวัสดีครับ" → None (no false positive)

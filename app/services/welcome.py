@@ -4,7 +4,7 @@ Handles welcome messages and usage guides for new users
 """
 
 import logging
-from app.utils.text_messages import (
+from app.utils.line.text_messages import (
     get_welcome_text,
     get_usage_guide_text,
     get_product_catalog_text,

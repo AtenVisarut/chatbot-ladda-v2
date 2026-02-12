@@ -14,7 +14,7 @@ import httpx
 from app.models import DiseaseDetectionResult
 from app.config import OPENROUTER_API_KEY, USE_RAG_DETECTION
 from app.services.cache import get_image_hash, get_from_cache, set_to_cache
-from app.services.disease_database import (
+from app.services.disease.database import (
     generate_disease_prompt_section,
     get_disease_info,
     get_severity_description,
@@ -950,8 +950,8 @@ async def detect_disease_v2(image_bytes: bytes, extra_user_info: Optional[str] =
     - Token cost ลดลงมาก
     - อัพเดทโรคได้ผ่าน Database โดยไม่ต้อง deploy
     """
-    from app.services.disease_search import search_diseases, build_context_from_diseases, get_disease_by_key
-    from app.services.quick_classifier import ClassificationResult, ProblemCategory
+    from app.services.disease.search import search_diseases, build_context_from_diseases, get_disease_by_key
+    from app.services.chat.quick_classifier import ClassificationResult, ProblemCategory
 
     logger.info("🚀 Starting Disease Detection v2 (Vector Search First)")
 

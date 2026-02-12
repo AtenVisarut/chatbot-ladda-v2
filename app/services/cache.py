@@ -7,7 +7,7 @@ import threading
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from app.config import CACHE_TTL, PENDING_CONTEXT_TTL, MAX_CACHE_SIZE
-from app.services.services import supabase_client
+from app.dependencies import supabase_client
 
 logger = logging.getLogger(__name__)
 

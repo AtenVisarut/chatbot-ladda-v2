@@ -7,8 +7,8 @@ import logging
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-from app.services.services import supabase_client, openai_client
-from app.services.quick_classifier import ClassificationResult, ProblemCategory
+from app.dependencies import supabase_client, openai_client
+from app.services.chat.quick_classifier import ClassificationResult, ProblemCategory
 
 logger = logging.getLogger(__name__)
 

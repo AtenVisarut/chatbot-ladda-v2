@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import re
-from app.services.services import supabase_client
+from app.dependencies import supabase_client
 from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW
 
 logger = logging.getLogger(__name__)
@@ -382,7 +382,7 @@ async def get_conversation_summary(user_id: str) -> dict:
         # Fallback: if no products found via metadata, scan assistant message text
         if not products_mentioned:
             try:
-                from app.services.chat import ICP_PRODUCT_NAMES
+                from app.services.chat.handler import ICP_PRODUCT_NAMES
                 for msg in result.data:
                     if msg["role"] != "assistant":
                         continue
@@ -431,7 +431,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
         recent_products = product names from the last assistant recommendation in active topic
     """
     try:
-        from app.services.chat import extract_product_name_from_question, ICP_PRODUCT_NAMES
+        from app.services.chat.handler import extract_product_name_from_question, ICP_PRODUCT_NAMES
     except ImportError:
         # Fallback: return all messages as active, no past summary
         all_formatted = []

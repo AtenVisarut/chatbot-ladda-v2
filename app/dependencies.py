@@ -2,7 +2,7 @@ import logging
 from supabase import create_client, Client
 
 from app.config import OPENAI_API_KEY, SUPABASE_URL, SUPABASE_KEY
-from app.analytics import AnalyticsTracker, AlertManager
+from app.services.analytics import AnalyticsTracker, AlertManager
 
 logger = logging.getLogger(__name__)
 
