@@ -21,12 +21,14 @@ from app.services.rag import IntentType
 # =====================================================================
 
 _DISEASE_PEST_KEYWORDS = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
+_USAGE_VERBS = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
 
 def _has_new_topic(query: str) -> bool:
-    """Replicate the guard logic from orchestrator.py Strategy 0"""
+    """Replicate the guard logic from orchestrator.py Strategy 0 (with applicability exception)"""
     plant = extract_plant_type_from_question(query)
     has_kw = any(kw in query for kw in _DISEASE_PEST_KEYWORDS)
-    return bool(plant) or has_kw
+    is_applicability = bool(plant) and any(v in query for v in _USAGE_VERBS)
+    return (bool(plant) and not is_applicability) or has_kw
 
 
 class TestStrategy0Guard:
@@ -266,6 +268,143 @@ class TestEndToEndScenario:
 
 
 # =====================================================================
+# Layer 1b: Applicability pattern exception
+# =====================================================================
+
+class TestApplicabilityPattern:
+    """Layer 1b: Queries like 'ใช้ในทุเรียนได้มั้ย' should NOT be blocked
+    even though they contain a plant name, because they're asking about
+    the current product's applicability — not introducing a new topic."""
+
+    def test_applicability_durian(self):
+        """'ใช้ในทุเรียนได้มั้ย' — plant + usage verb → allowed"""
+        assert _has_new_topic("ใช้ในทุเรียนได้มั้ย") is False
+        print("  PASS: 'ใช้ในทุเรียนได้มั้ย' → allowed (applicability)")
+
+    def test_applicability_spray_mango(self):
+        """'ฉีดมะม่วงได้ไหม' — plant + ฉีด → allowed"""
+        assert _has_new_topic("ฉีดมะม่วงได้ไหม") is False
+        print("  PASS: 'ฉีดมะม่วงได้ไหม' → allowed (applicability)")
+
+    def test_applicability_spray_rice(self):
+        """'พ่นข้าวได้ไหม' — plant + พ่น → allowed"""
+        assert _has_new_topic("พ่นข้าวได้ไหม") is False
+        print("  PASS: 'พ่นข้าวได้ไหม' → allowed (applicability)")
+
+    def test_applicability_use_with_longan(self):
+        """'ใช้กับลำไยได้มั้ย' — plant + ใช้ → allowed"""
+        assert _has_new_topic("ใช้กับลำไยได้มั้ย") is False
+        print("  PASS: 'ใช้กับลำไยได้มั้ย' → allowed (applicability)")
+
+    def test_applicability_mix_orange(self):
+        """'ผสมพ่นส้มได้ไหม' — plant + ผสม → allowed"""
+        assert _has_new_topic("ผสมพ่นส้มได้ไหม") is False
+        print("  PASS: 'ผสมพ่นส้มได้ไหม' → allowed (applicability)")
+
+    def test_new_topic_still_blocked(self):
+        """'ทำทุเรียนนอกฤดู' — plant but NO usage verb → blocked"""
+        assert _has_new_topic("ทำทุเรียนนอกฤดู") is True
+        print("  PASS: 'ทำทุเรียนนอกฤดู' → blocked (no usage verb)")
+
+    def test_disease_with_usage_still_blocked(self):
+        """'ราแป้ง ฉีดอะไรดี' — has disease keyword → blocked regardless"""
+        assert _has_new_topic("ราแป้ง ฉีดอะไรดี") is True
+        print("  PASS: 'ราแป้ง ฉีดอะไรดี' → blocked (disease keyword overrides)")
+
+
+# =====================================================================
+# Layer 2b: Trust LLM when hint is from context
+# =====================================================================
+
+class TestContextHintTrustLLM:
+    """Layer 2b: When product hint is from context (not query) and LLM found
+    a specific product, trust LLM over the context hint."""
+
+    def _run_override_logic(self, hints, entities, intent):
+        """Replicate the override logic from query_understanding_agent.py"""
+        llm_fallback_keys = hints.get('_llm_fallback_keys', [])
+        _rec_intents_for_override = {
+            IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
+            IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
+            IntentType.GENERAL_AGRICULTURE,
+        }
+        if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
+            if 'product_name' not in llm_fallback_keys:
+                llm_said_none = entities.get('product_name') is None
+                hint_from_query = hints.get('_product_from_query', False)
+                if llm_said_none and intent in _rec_intents_for_override:
+                    pass  # Skip override
+                elif not llm_said_none and not hint_from_query:
+                    pass  # Keep LLM product (context hint less reliable)
+                else:
+                    entities['product_name'] = hints['product_name']
+        return entities
+
+    def test_llm_wins_over_context_hint(self):
+        """Bug scenario: hint=พาสนาว (from context), LLM=โมเดิน (correct)
+        Expected: Keep LLM product=โมเดิน"""
+        hints = {'product_name': 'พาสนาว', '_product_from_query': False}
+        entities = {'product_name': 'โมเดิน'}
+        result = self._run_override_logic(hints, entities, IntentType.PRODUCT_INQUIRY)
+        assert result.get('product_name') == 'โมเดิน', \
+            f"Expected 'โมเดิน' but got '{result.get('product_name')}'"
+        print("  PASS: LLM='โมเดิน' vs context hint='พาสนาว' → keep LLM (โมเดิน)")
+
+    def test_query_hint_overrides_llm(self):
+        """hint=โมเดิน (from query), LLM=คาริสมา (wrong)
+        Expected: Override to โมเดิน"""
+        hints = {'product_name': 'โมเดิน', '_product_from_query': True}
+        entities = {'product_name': 'คาริสมา'}
+        result = self._run_override_logic(hints, entities, IntentType.PRODUCT_INQUIRY)
+        assert result.get('product_name') == 'โมเดิน', \
+            f"Expected 'โมเดิน' but got '{result.get('product_name')}'"
+        print("  PASS: hint from query='โมเดิน' vs LLM='คาริสมา' → override to โมเดิน")
+
+    def test_context_hint_llm_none_skip(self):
+        """hint=พาสนาว (from context), LLM=None, intent=DISEASE_TREATMENT
+        Expected: Skip override (LLM correctly found no product)"""
+        hints = {'product_name': 'พาสนาว', '_product_from_query': False}
+        entities = {}  # LLM returned None
+        result = self._run_override_logic(hints, entities, IntentType.DISEASE_TREATMENT)
+        assert result.get('product_name') is None, \
+            f"Expected None but got '{result.get('product_name')}'"
+        print("  PASS: context hint='พาสนาว' + LLM=None + DISEASE_TREATMENT → skip (no inject)")
+
+    def test_query_hint_overrides_none(self):
+        """hint=โมเดิน (from query), LLM=None, intent=USAGE_INSTRUCTION
+        Expected: Override to โมเดิน"""
+        hints = {'product_name': 'โมเดิน', '_product_from_query': True}
+        entities = {}  # LLM returned None
+        result = self._run_override_logic(hints, entities, IntentType.USAGE_INSTRUCTION)
+        assert result.get('product_name') == 'โมเดิน', \
+            f"Expected 'โมเดิน' but got '{result.get('product_name')}'"
+        print("  PASS: query hint='โมเดิน' + LLM=None + USAGE_INSTRUCTION → override to โมเดิน")
+
+    def test_no_flag_defaults_to_override(self):
+        """No _product_from_query flag (backward compat) → defaults to override"""
+        hints = {'product_name': 'แมสฟอร์ด'}  # No _product_from_query key
+        entities = {'product_name': 'คาริสมา'}
+        result = self._run_override_logic(hints, entities, IntentType.PRODUCT_INQUIRY)
+        # hint_from_query defaults to False → LLM wins (not llm_said_none and not hint_from_query)
+        assert result.get('product_name') == 'คาริสมา', \
+            f"Expected 'คาริสมา' (LLM kept) but got '{result.get('product_name')}'"
+        print("  PASS: no flag (backward compat) + LLM has product → keep LLM")
+
+    def test_exact_bug_scenario_follow_up(self):
+        """Exact bug: 'โมเดิน' → bot answers → 'ใช้ในทุเรียนได้มั้ย'
+        Strategy 2 finds พาสนาว, but LLM reads context and finds โมเดิน
+        Expected: Keep LLM=โมเดิน"""
+        # Strategy 0 allowed (applicability) but no metadata product
+        # Strategy 2 found พาสนาว (wrong)
+        hints = {'product_name': 'พาสนาว', '_product_from_query': False}
+        entities = {'product_name': 'โมเดิน'}  # LLM read context correctly
+        result = self._run_override_logic(hints, entities, IntentType.PRODUCT_INQUIRY)
+        assert result.get('product_name') == 'โมเดิน', \
+            f"Expected 'โมเดิน' but got '{result.get('product_name')}'"
+        print("  PASS: Exact bug scenario → LLM='โมเดิน' kept over context hint='พาสนาว'")
+
+
+# =====================================================================
 # Run all tests
 # =====================================================================
 
@@ -305,6 +444,25 @@ if __name__ == '__main__':
     t3.test_followup_allowed()
     t3.test_disease_query_blocked()
     t3.test_pest_query_blocked()
+
+    print("\n--- Layer 1b: Applicability Pattern Exception ---")
+    t4 = TestApplicabilityPattern()
+    t4.test_applicability_durian()
+    t4.test_applicability_spray_mango()
+    t4.test_applicability_spray_rice()
+    t4.test_applicability_use_with_longan()
+    t4.test_applicability_mix_orange()
+    t4.test_new_topic_still_blocked()
+    t4.test_disease_with_usage_still_blocked()
+
+    print("\n--- Layer 2b: Trust LLM over Context Hint ---")
+    t5 = TestContextHintTrustLLM()
+    t5.test_llm_wins_over_context_hint()
+    t5.test_query_hint_overrides_llm()
+    t5.test_context_hint_llm_none_skip()
+    t5.test_query_hint_overrides_none()
+    t5.test_no_flag_defaults_to_override()
+    t5.test_exact_bug_scenario_follow_up()
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED")

@@ -250,8 +250,13 @@ required_sources:
                         IntentType.GENERAL_AGRICULTURE,
                     }
                     llm_said_none = entities.get('product_name') is None
+                    hint_from_query = hints.get('_product_from_query', False)
                     if llm_said_none and intent in _rec_intents_for_override:
                         logger.info(f"  - Skip product override: LLM correctly found no product (intent={intent}, hint='{hints['product_name']}')")
+                    elif not llm_said_none and not hint_from_query:
+                        # LLM found a specific product, but hint is from context scan (less reliable)
+                        # Trust LLM — it has full conversation context
+                        logger.info(f"  - Keep LLM product: '{entities.get('product_name')}' (context hint='{hints['product_name']}')")
                     else:
                         logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
                         entities['product_name'] = hints['product_name']

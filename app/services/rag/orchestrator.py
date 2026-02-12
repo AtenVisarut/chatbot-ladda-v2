@@ -213,7 +213,12 @@ class AgenticRAG:
                     # NOTE: 'รา' and 'ไร' omitted — too short, false-positive in ราคา/อะไร/ไร่
                     # Layer 2 (query_understanding_agent skip set) handles those edge cases
                     _disease_pest_keywords = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
-                    _has_new_topic = _plant_in_query or any(kw in query for kw in _disease_pest_keywords)
+                    _has_disease_pest_kw = any(kw in query for kw in _disease_pest_keywords)
+                    # Applicability pattern: plant + usage verb = asking "can this product be used on [plant]?"
+                    # e.g. "ใช้ในทุเรียนได้มั้ย", "ฉีดมะม่วงได้ไหม" → NOT a new topic
+                    _usage_verbs = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
+                    _is_applicability = _plant_in_query and any(v in query for v in _usage_verbs)
+                    _has_new_topic = (_plant_in_query and not _is_applicability) or _has_disease_pest_kw
                     if _has_new_topic:
                         logger.info(f"  - Strategy 0 skipped: query has new topic (plant={_plant_in_query})")
                     else:
@@ -267,6 +272,7 @@ class AgenticRAG:
                                     break
                 if detected_product:
                     hints['product_name'] = detected_product
+                    hints['_product_from_query'] = product_from_query
                 detected_problem = detect_problem_type(query)
                 if detected_problem != 'unknown':
                     hints['problem_type'] = detected_problem
