@@ -20,7 +20,7 @@ load_dotenv()
 
 from openai import OpenAI
 from app.config import OPENAI_API_KEY, EMBEDDING_MODEL
-from app.services.services import supabase_client
+from app.dependencies import supabase_client
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
