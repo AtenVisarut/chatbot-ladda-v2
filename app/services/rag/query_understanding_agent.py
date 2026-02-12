@@ -13,23 +13,12 @@ import json
 import re
 from typing import List, Dict
 
-from app.services.agents import IntentType, QueryAnalysis
+from app.services.rag import IntentType, QueryAnalysis
 from app.config import LLM_MODEL_QUERY_UNDERSTANDING
 
 logger = logging.getLogger(__name__)
 
-# ICP product names for prompt hints (subset for LLM context)
-# Product names that actually exist in the products table (42 products)
-_ICP_PRODUCT_LIST = [
-    "กะรัต", "ก็อปกัน", "คาริสมา", "ซิมเมอร์", "ซีเอ็มจี", "ทูโฟฟอส",
-    "นาแดน", "บลูไวท์", "พรีดิคท์", "พาสนาว", "พานาส", "ราเซอร์",
-    "รีโนเวท", "วอร์แรนต์", "อะนิลการ์ด", "อัพดาว", "อาร์ดอน",
-    "อาร์เทมิส", "อิมิดาโกลด์", "เกรค", "เคเซีย", "เทอราโน่",
-    "เบนซาน่า", "เมลสัน", "แกนเตอร์", "แจ๊ส", "แมสฟอร์ด",
-    "แอนดาแม็กซ์", "แอสไปร์", "โค-ราซ", "โคเบิล", "โซนิก",
-    "โทมาฮอค", "โม-เซ่", "โมเดิน", "โฮป", "ไซม๊อกซิเมท",
-    "ไดแพ๊กซ์", "ไพรซีน", "ไฮซีส", "ชุดกล่องม่วง", "เลกาซี",
-]
+from app.services.product.registry import ProductRegistry
 
 
 class QueryUnderstandingAgent:
@@ -123,7 +112,7 @@ class QueryUnderstandingAgent:
             diseases_str = ", ".join(hints['possible_diseases'])
             hint_section += f"\n[HINT] อาการในคำถามอาจเกิดจากโรค: {diseases_str} — ให้ใช้โรคเหล่านี้ใน expanded_queries เพื่อค้นหาสินค้าที่เหมาะสม"
 
-        products_str = ", ".join(_ICP_PRODUCT_LIST)
+        products_str = ", ".join(ProductRegistry.get_instance().get_canonical_list())
 
         prompt = f"""{context_section}วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
 ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ (เช่น 'ใช้ช่วงไหน' 'ผสมกี่ลิตร' 'ใช้ยังไง' 'ใช้เท่าไหร่' 'ใช้กี่ไร่'):
@@ -334,7 +323,7 @@ required_sources:
         entities = {}
 
         # Product inquiry patterns (full ICP product list)
-        product_keywords = _ICP_PRODUCT_LIST
+        product_keywords = ProductRegistry.get_instance().get_canonical_list()
         for product in product_keywords:
             if product in query_lower:
                 intent = IntentType.PRODUCT_INQUIRY

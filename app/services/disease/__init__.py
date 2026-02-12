@@ -1,0 +1,6 @@
+# Disease domain — import from submodules directly:
+#   from app.services.disease.constants import DISEASE_PATTERNS_SORTED, get_canonical
+#   from app.services.disease.detection import smart_detect_disease
+#   from app.services.disease.search import search_diseases, search_diseases_by_text, ...
+#   from app.services.disease.database import get_disease_info, ...
+#   from app.services.disease.response import generate_text_response

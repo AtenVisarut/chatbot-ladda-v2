@@ -6,7 +6,7 @@ Handles LINE user profile tracking and database operations
 import logging
 from typing import Optional, Dict
 import httpx
-from app.services.services import supabase_client
+from app.dependencies import supabase_client
 from app.config import LINE_CHANNEL_ACCESS_TOKEN
 
 logger = logging.getLogger(__name__)

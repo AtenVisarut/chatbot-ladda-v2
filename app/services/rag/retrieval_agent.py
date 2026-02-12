@@ -15,7 +15,7 @@ import hashlib
 import time
 from typing import List, Dict
 
-from app.services.agents import (
+from app.services.rag import (
     QueryAnalysis,
     RetrievedDocument,
     RetrievalResult,
@@ -722,7 +722,7 @@ class RetrievalAgent:
             'แก้', 'แก้ไข', 'ช่วย', 'อัตรา', 'ผสม', 'ฉีด', 'พ่น',
         }
         # Known disease name patterns (single source of truth)
-        from app.utils.disease_constants import DISEASE_PATTERNS_SORTED, get_canonical
+        from app.services.disease.constants import DISEASE_PATTERNS_SORTED, get_canonical
         # Try known patterns first (diacritics-tolerant)
         from app.utils.text_processing import diacritics_match
         for pattern in DISEASE_PATTERNS_SORTED:

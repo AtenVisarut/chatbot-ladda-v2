@@ -3,8 +3,8 @@ import logging
 from typing import Optional, Tuple
 
 from app.services.cache import get_pending_context, save_pending_context, delete_pending_context
-from app.utils.line_helpers import reply_line
-from app.utils.text_messages import (
+from app.utils.line.helpers import reply_line
+from app.utils.line.text_messages import (
     get_initial_questions_text,
     get_other_plant_prompt_text,
     get_growth_stage_question_text,

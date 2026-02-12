@@ -1,13 +1,12 @@
 import logging
 import re
 import asyncio
-from difflib import SequenceMatcher
 from typing import List, Dict, Optional, Tuple
-from app.services.services import openai_client, supabase_client
+from app.dependencies import openai_client, supabase_client
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
-from app.services.product_recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
-from app.services.disease_search import search_diseases_by_text, build_context_from_diseases
+from app.services.product.recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
+from app.services.disease.search import search_diseases_by_text, build_context_from_diseases
 from app.config import USE_AGENTIC_RAG
 from app.prompts import GENERAL_CHAT_PROMPT, ERROR_GENERIC, ERROR_AI_UNAVAILABLE, GREETINGS, GREETING_KEYWORDS
 
@@ -27,7 +26,7 @@ async def _get_agentic_rag():
     async with _agentic_rag_lock:
         # Double-check after acquiring lock
         if _agentic_rag is None:
-            from app.services.agentic_rag import get_agentic_rag
+            from app.services.rag.orchestrator import get_agentic_rag
             _agentic_rag = get_agentic_rag()
     return _agentic_rag
 
@@ -70,120 +69,68 @@ PRODUCT_KEYWORDS = [
 ]
 
 # =============================================================================
-# รายชื่อสินค้า ICP Ladda (สำหรับตรวจสอบชื่อยาในคำถาม)
+# รายชื่อสินค้า ICP Ladda — Proxy ไปยัง ProductRegistry (DB-driven)
+# ไฟล์อื่นที่ import ICP_PRODUCT_NAMES ยังใช้ได้เหมือนเดิม
 # =============================================================================
-ICP_PRODUCT_NAMES = {
-    # ชื่อเต็ม -> ชื่อที่ใช้ค้นหา (รองรับการพิมพ์ผิด/ย่อ)
-    "กะรัต": ["กะรัต", "กะรัต 35"],
-    "ก็อปกัน": ["ก็อปกัน", "กอปกัน", "ท็อปกัน", "ทอปกัน"],
-    "คาริสมา": ["คาริสมา", "คาริสม่า", "คาริส"],
-    "ซิมเมอร์": ["ซิมเมอร์", "ซิมเมอ"],
-    "ซีเอ็มจี": ["ซีเอ็มจี", "cmg", "ซีเอมจี"],
-    "ทูโฟฟอส": ["ทูโฟฟอส", "ทูโฟ", "ทูโฟโฟส"],
-    "นาแดน": ["นาแดน", "นาแดน 6 จี", "นาแดน-จี"],
-    "บลูไวท์": ["บลูไวท์", "บลูไวต์"],
-    "พรีดิคท์": ["พรีดิคท์", "พรีดิค", "predict"],
-    "พาสนาว": ["พาสนาว", "พาสนาว์"],
-    "พานาส": ["พานาส", "เลกาซี 20 + พานาส"],
-    "ราเซอร์": ["ราเซอร์", "เรเซอร์"],
-    "รีโนเวท": ["รีโนเวท", "รีโนเวต", "renovate"],
-    "วอร์แรนต์": ["วอร์แรนต์", "วอแรนต์", "warrant"],
-    "อะนิลการ์ด": ["อะนิลการ์ด", "อนิลการ์ด"],
-    "อัพดาว": ["อัพดาว", "อัปดาว"],
-    "อาร์ดอน": ["อาร์ดอน", "อาดอน"],
-    "อาร์เทมิส": ["อาร์เทมิส", "อาร์เทมีส", "อาเทมิส", "artemis"],
-    "อิมิดาโกลด์": ["อิมิดาโกลด์", "อิมิดา", "อิมิดาโกล", "imidagold", "อิมิดาโกลด์70", "อิมิดาโกลด์ 70"],
-    "เกรค": ["เกรค", "เกรค 5 เอสซี", "เกรด", "เกรด5", "เกรค5", "เกรด 5"],
-    "เคเซีย": ["เคเซีย", "เคเซีย์"],
-    "เทอราโน่": ["เทอราโน่", "เทอราโน", "terano"],
-    "เบนซาน่า": ["เบนซาน่า", "เบนซาน่า เอฟ"],
-    "เมลสัน": ["เมลสัน", "เมลซัน"],
-    "แกนเตอร์": ["แกนเตอร์", "แกนเตอ", "แกนเตอร"],
-    "แจ๊ส": ["แจ๊ส", "แจส", "jazz"],
-    "แมสฟอร์ด": ["แมสฟอร์ด", "แมสฟอด"],
-    "แอนดาแม็กซ์": ["แอนดาแม็กซ์", "แอนดาแมกซ์", "แอนดาแม็ก", "andamax"],
-    "แอสไปร์": ["แอสไปร์", "แอสไปร", "aspire"],
-    "โค-ราซ": ["โค-ราซ", "โคราซ"],
-    "โคเบิล": ["โคเบิล", "โคเบิ้ล"],
-    "โซนิก": ["โซนิก", "sonic"],
-    "โทมาฮอค": ["โทมาฮอค", "โทมาฮอก", "tomahawk"],
-    "โม-เซ่": ["โม-เซ่", "โมเซ่", "โมเซ"],
-    "โมเดิน": ["โมเดิน", "โมเดิน 50", "โมเดิน50"],
-    "โฮป": ["โฮป", "hope"],
-    "ไซม๊อกซิเมท": ["ไซม๊อกซิเมท", "ไซมอกซิเมท", "cymoximate"],
-    "ไดแพ๊กซ์": ["ไดแพ๊กซ์", "ไดแพกซ์"],
-    "ไพรซีน": ["ไพรซีน", "ไพรซิน"],
-    "ไฮซีส": ["ไฮซีส", "ไฮซิส", "hysis"],
-    "ชุดกล่องม่วง": ["ชุดกล่องม่วง", "กล่องม่วง"],
-    "เลกาซี": ["เลกาซี", "legacy"],
-    # เพิ่มสินค้าจาก knowledge table
-    "โตโร่": ["โตโร่", "โตโร"],
-    "โบร์แลน": ["โบร์แลน", "โบรแลน"],
-    "โคราช": ["โคราช"],
-    "ธานอส": ["ธานอส", "thanos"],
-    "ไกลโฟเสท": ["ไกลโฟเสท", "glyphosate"],
-    "ไดพิม": ["ไดพิม", "ไดพิม 90", "ไดพิม90"],
-    "อาทราซีน": ["อาทราซีน", "อาทราซีน80", "atrazine"],
-    "เวคเตอร์": ["เวคเตอร์", "vector"],
-}
+from app.services.product.registry import ProductRegistry
+
+
+class _ProductNamesProxy(dict):
+    """Dict-like proxy that delegates to ProductRegistry singleton.
+    Existing code doing `ICP_PRODUCT_NAMES.get(...)`, `ICP_PRODUCT_NAMES.keys()`,
+    `name in ICP_PRODUCT_NAMES`, etc. works without changes."""
+
+    def _reg(self):
+        return ProductRegistry.get_instance()
+
+    def __contains__(self, key):
+        return self._reg().is_known_product(key)
+
+    def __getitem__(self, key):
+        aliases = self._reg().get_aliases(key)
+        if not self._reg().is_known_product(key):
+            raise KeyError(key)
+        return aliases
+
+    def get(self, key, default=None):
+        if self._reg().is_known_product(key):
+            return self._reg().get_aliases(key)
+        return default
+
+    def keys(self):
+        return self._reg().get_canonical_list()
+
+    def values(self):
+        d = self._reg().get_product_names_dict()
+        return d.values()
+
+    def items(self):
+        return self._reg().get_product_names_dict().items()
+
+    def __iter__(self):
+        return iter(self._reg().get_canonical_list())
+
+    def __len__(self):
+        return len(self._reg().get_canonical_list())
+
+    def __bool__(self):
+        return True
+
+    def __repr__(self):
+        return f"<_ProductNamesProxy({len(self)} products)>"
+
+
+ICP_PRODUCT_NAMES = _ProductNamesProxy()
 
 
 def extract_product_name_from_question(question: str) -> Optional[str]:
-    """
-    ดึงชื่อสินค้าจากคำถาม
-    Returns: ชื่อสินค้าที่พบ หรือ None ถ้าไม่พบ
-    """
-    from app.utils.text_processing import strip_thai_diacritics
-    question_lower = question.lower()
-    question_stripped = strip_thai_diacritics(question_lower)
-
-    # Step 1: Exact substring match (เร็ว) — also try diacritics-stripped version
-    for product_name, aliases in ICP_PRODUCT_NAMES.items():
-        for alias in aliases:
-            alias_lower = alias.lower()
-            if alias_lower in question_lower or strip_thai_diacritics(alias_lower) in question_stripped:
-                return product_name
-
-    # Step 2: Fuzzy match (fallback สำหรับพิมพ์ผิด)
-    return fuzzy_match_product_name(question)
+    """ดึงชื่อสินค้าจากคำถาม — delegate ไปยัง ProductRegistry"""
+    return ProductRegistry.get_instance().extract_product_name(question)
 
 
 def fuzzy_match_product_name(text: str, threshold: float = 0.65) -> Optional[str]:
-    """
-    Fuzzy matching สำหรับชื่อสินค้าที่พิมพ์ผิด
-    เช่น "แแกนเตอ" → "แกนเตอร์", "โมเดิ้น" → "โมเดิน"
-    """
-    # แยกคำ: ทั้งคำภาษาไทยต่อกัน และคำ English
-    tokens = re.findall(r'[\u0E00-\u0E7F]+|[a-zA-Z]+', text)
-
-    best_match = None
-    best_score = 0.0
-
-    for token in tokens:
-        if len(token) < 3:  # ข้ามคำสั้นเกินไป
-            continue
-        token_lower = token.lower()
-        for product_name, aliases in ICP_PRODUCT_NAMES.items():
-            for alias in aliases:
-                alias_lower = alias.lower()
-                # Direct comparison
-                score = SequenceMatcher(None, token_lower, alias_lower).ratio()
-                if score > best_score and score >= threshold:
-                    best_score = score
-                    best_match = product_name
-
-                # Sliding window: ถ้า token ยาวกว่า alias มาก ให้ลองเทียบ substring
-                alias_len = len(alias_lower)
-                if len(token_lower) > alias_len + 1 and alias_len >= 3:
-                    for i in range(len(token_lower) - alias_len + 2):
-                        end = min(i + alias_len + 1, len(token_lower))
-                        sub = token_lower[i:end]
-                        score = SequenceMatcher(None, sub, alias_lower).ratio()
-                        if score > best_score and score >= threshold:
-                            best_score = score
-                            best_match = product_name
-
-    return best_match
+    """Fuzzy matching สำหรับชื่อสินค้าที่พิมพ์ผิด — delegate ไปยัง ProductRegistry"""
+    return ProductRegistry.get_instance().fuzzy_match(text, threshold)
 
 
 def detect_unknown_product_in_question(question: str) -> Optional[str]:
@@ -1040,14 +987,14 @@ def is_usage_question(message: str) -> bool:
 async def _fetch_product_from_db(product_name: str) -> list:
     """ดึงข้อมูลสินค้าจาก DB ตรงๆ สำหรับ enrich memory data"""
     try:
-        from app.services.services import supabase_client as _sb
+        from app.dependencies import supabase_client as _sb
         if not _sb:
             return []
         result = _sb.table('products').select(
             'product_name, active_ingredient, target_pest, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, '
             'absorption_method, mechanism_of_action'
-        ).ilike('product_name', f'%{product_name}%').limit(1).execute()
+        ).ilike('product_name', f'%{product_name}%').limit(5).execute()
         return result.data if result.data else []
     except Exception as e:
         logger.error(f"_fetch_product_from_db error: {e}")
@@ -1091,6 +1038,7 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
             db_product = await _fetch_product_from_db(product_in_question)
             if db_product:
                 # Merge DB data into memory products
+                merged = False
                 for p in products:
                     if product_in_question.lower() in p.get('product_name', '').lower():
                         db_p = db_product[0]
@@ -1099,7 +1047,12 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                                      'active_ingredient', 'applicable_crops']:
                             if db_p.get(key) and not p.get(key):
                                 p[key] = db_p[key]
+                        merged = True
                         break
+                # ถ้าสินค้าที่ถามไม่อยู่ใน memory → เพิ่ม DB product เข้าไปเป็นตัวแรก
+                if not merged:
+                    logger.info(f"📦 Product '{product_in_question}' not in memory, adding from DB")
+                    products.insert(0, db_product[0])
 
         # สร้าง prompt สำหรับ AI
         products_text = ""
@@ -1144,9 +1097,10 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
 - ตอบกระชับ ตรงประเด็น ไม่เกิน 8-10 บรรทัด
 
 [ห้ามมั่วข้อมูล — กฎเด็ดขาด]
-- ตอบเฉพาะข้อมูลที่ปรากฏในรายการสินค้าด้านบนเท่านั้น
+- ข้อมูลสินค้าด้านบนคือข้อมูลทั้งหมดที่มีในระบบ ให้ตอบตามข้อมูลที่ให้มา
+- ถ้าถามขนาดบรรจุ/จำนวนขนาด → ตอบตามข้อมูล "ขนาดบรรจุ" ที่แสดงด้านบน (ถ้ามี 1 ขนาด ให้ตอบว่ามี 1 ขนาด)
 - ห้ามแต่งข้อมูลขนาดบรรจุ น้ำหนัก ราคา กลไกการออกฤทธิ์ หรือการดูดซึมเอง
-- ถ้าข้อมูลที่ถามไม่มีในรายการด้านบน ให้ตอบว่า "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ"
+- ถ้าข้อมูลที่ถามไม่ปรากฏเลยในรายการด้านบน (ไม่มี field นั้นๆ) ให้ตอบว่า "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ"
 - ห้ามเดา ห้ามใช้ความรู้ทั่วไป ใช้เฉพาะข้อมูลที่ให้มาเท่านั้น
 
 [คำนวณอัตราผสม] (ถ้าผู้ใช้บอกขนาดถังหรือพื้นที่)
@@ -1268,7 +1222,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
 
                         # Track analytics if product recommendation
                         if is_prod_q:
-                            from app.services.services import analytics_tracker
+                            from app.dependencies import analytics_tracker
                             if analytics_tracker:
                                 product_pattern = r'\d+\.\s+([^\n]+?)(?:\n|$)'
                                 product_matches = re.findall(product_pattern, answer)
@@ -1305,7 +1259,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
 
             # Track analytics if product recommendation
             if is_prod_q:
-                from app.services.services import analytics_tracker
+                from app.dependencies import analytics_tracker
                 if analytics_tracker:
                     product_pattern = r'\d+\.\s+([^\n]+?)(?:\n|$)'
                     product_matches = re.findall(product_pattern, answer)

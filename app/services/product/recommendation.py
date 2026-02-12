@@ -2,7 +2,7 @@ import logging
 import json
 from typing import List, Dict, Tuple
 from app.models import DiseaseDetectionResult, ProductRecommendation
-from app.services.services import supabase_client, openai_client
+from app.dependencies import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question
 from app.services.reranker import rerank_products_with_llm, simple_relevance_boost

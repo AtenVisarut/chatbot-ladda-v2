@@ -12,7 +12,7 @@ Responsibilities:
 import logging
 import json
 
-from app.services.agents import (
+from app.services.rag import (
     QueryAnalysis,
     RetrievalResult,
     GroundingResult,
@@ -104,7 +104,7 @@ class ResponseGeneratorAgent:
                 # Also try extracting disease from original query (LLM may have changed disease name)
                 if not has_disease_match and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     from app.utils.text_processing import diacritics_match as _dm
-                    from app.utils.disease_constants import DISEASE_PATTERNS_SORTED as _DP, get_canonical as _gc
+                    from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP, get_canonical as _gc
                     original_disease = ''
                     for pattern in _DP:
                         if _dm(query_analysis.original_query, pattern):
@@ -354,7 +354,7 @@ class ResponseGeneratorAgent:
 
         # Also extract disease from original query (LLM may misidentify)
         from app.utils.text_processing import diacritics_match as _dm_gen
-        from app.utils.disease_constants import DISEASE_PATTERNS_SORTED as _DP_GEN, get_canonical as _gc_gen
+        from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_GEN, get_canonical as _gc_gen
         original_disease_gen = ''
         for _pat in _DP_GEN:
             if _dm_gen(query_analysis.original_query, _pat):
@@ -490,7 +490,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         ถ้าเจอสินค้าที่ไม่มีใน database → ลบออกจากคำตอบ
         """
         try:
-            from app.services.chat import ICP_PRODUCT_NAMES
+            from app.services.chat.handler import ICP_PRODUCT_NAMES
             import re
 
             # Build set of allowed product names from retrieved docs + ICP list
