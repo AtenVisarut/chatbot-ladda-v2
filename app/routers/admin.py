@@ -89,6 +89,7 @@ async def regenerate_embeddings_endpoint(request: Request):
                 f"ศัตรูพืชที่กำจัดได้: {product.get('target_pest', '')}",
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
                 f"กลุ่มสาร: {product.get('product_group', '')}",
+                f"ความเป็นพิษต่อพืช: {product.get('phytotoxicity', '')}",
             ]
             text = " | ".join([p for p in text_parts if p])
 

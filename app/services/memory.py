@@ -199,6 +199,7 @@ async def save_recommended_products(user_id: str, products: list, disease_name: 
                 "package_size": prod_dict.get("package_size", ""),
                 "absorption_method": prod_dict.get("absorption_method", ""),
                 "mechanism_of_action": prod_dict.get("mechanism_of_action", ""),
+                "phytotoxicity": prod_dict.get("phytotoxicity", ""),
             })
 
         if not products_data:

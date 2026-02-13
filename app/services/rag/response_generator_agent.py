@@ -313,6 +313,8 @@ class ResponseGeneratorAgent:
                 part += f"  การดูดซึม: {str(meta['absorption_method'])}\n"
             if meta.get('package_size'):
                 part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
+            if meta.get('phytotoxicity'):
+                part += f"  ความเป็นพิษต่อพืช: {meta['phytotoxicity']}\n"
             if meta.get('strategy_group'):
                 part += f"  Strategy Group: {meta['strategy_group']}\n"
             product_context_parts.append(part)
@@ -555,6 +557,8 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 parts.append(f"   - อัตราใช้: {meta['usage_rate']}")
             if meta.get('package_size'):
                 parts.append(f"   - ขนาดบรรจุ: {meta['package_size']}")
+            if meta.get('phytotoxicity'):
+                parts.append(f"   - ความเป็นพิษต่อพืช: {meta['phytotoxicity']}")
             parts.append("")
 
         parts.append(f"\n{PRODUCT_CTA}")

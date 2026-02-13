@@ -126,6 +126,7 @@ class RetrievalAgent:
                 'absorption_method': item.get('absorption_method'),
                 'strategy_group': item.get('strategy_group'),
                 'package_size': item.get('package_size'),
+                'phytotoxicity': item.get('phytotoxicity'),
             }
         )
 

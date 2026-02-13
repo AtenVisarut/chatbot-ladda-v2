@@ -1028,7 +1028,7 @@ async def _fetch_product_from_db(product_name: str) -> list:
         result = _sb.table('products').select(
             'product_name, active_ingredient, target_pest, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, '
-            'absorption_method, mechanism_of_action'
+            'absorption_method, mechanism_of_action, phytotoxicity'
         ).ilike('product_name', f'%{product_name}%').limit(5).execute()
         return result.data if result.data else []
     except Exception as e:
@@ -1071,7 +1071,7 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         # Enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields เช่น package_size)
         _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
                         'how_to_use', 'usage_rate', 'usage_period', 'target_pest',
-                        'active_ingredient', 'applicable_crops']
+                        'active_ingredient', 'applicable_crops', 'phytotoxicity']
         if product_in_question:
             db_product = await _fetch_product_from_db(product_in_question)
             if db_product:
@@ -1130,6 +1130,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 products_text += f"\n   • การดูดซึม: {p.get('absorption_method')}"
             if p.get('mechanism_of_action'):
                 products_text += f"\n   • กลไกการออกฤทธิ์: {p.get('mechanism_of_action')}"
+            if p.get('phytotoxicity'):
+                products_text += f"\n   • ความเป็นพิษต่อพืช: {p.get('phytotoxicity')}"
             products_text += "\n"
 
         prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืชจาก ICP Ladda
