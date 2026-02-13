@@ -58,6 +58,41 @@ def is_agriculture_question(message: str) -> bool:
 
 
 # =============================================================================
+# Non-agriculture detection (สำหรับ RAG-first routing)
+# ใช้จับข้อความสั้นที่ชัดเจนว่าไม่เกี่ยวกับเกษตร เช่น ทักทาย/ขอบคุณ/ลา
+# ถ้าไม่ชัดว่า non-agri → ส่ง RAG เป็น default (ปลอดภัยกว่า general chat)
+# =============================================================================
+_NON_AGRI_KEYWORDS = [
+    # ขอบคุณ / รับทราบ
+    "ขอบคุณ", "ขอบใจ", "thank",
+    # ลาก่อน
+    "บาย", "ลาก่อน", "ไว้คุยกัน", "bye",
+    # หัวเราะ / อารมณ์
+    "555", "ฮ่าๆ", "ฮ่าฮ่า",
+    # ถามเกี่ยวกับ bot
+    "ชื่ออะไร", "เป็นใคร", "อายุเท่าไหร่", "เป็นคน", "เป็น ai",
+    # รับทราบสั้นๆ
+    "โอเค", "เข้าใจแล้ว", "ได้เลย", "ตกลง", "ok",
+    # ชม
+    "เก่งมาก", "เจ๋ง",
+]
+
+
+def _is_clearly_non_agriculture(message: str) -> bool:
+    """ตรวจสอบว่าข้อความเป็น non-agriculture ชัดเจน (สั้น + ไม่เกี่ยวกับเกษตร)
+
+    ใช้สำหรับ RAG-first routing:
+    - ถ้า True → ส่ง general chat (neutered, ไม่มี expertise เกษตร)
+    - ถ้า False → ส่ง RAG เป็น default (ปลอดภัยกว่า)
+    - เงื่อนไข: ข้อความสั้น (≤ 20 chars) + มี keyword non-agri
+    """
+    msg = message.strip().lower()
+    if len(msg) > 20:
+        return False
+    return any(kw in msg for kw in _NON_AGRI_KEYWORDS)
+
+
+# =============================================================================
 # Keywords สำหรับตรวจจับคำถามเกี่ยวกับสินค้า/ผลิตภัณฑ์
 # =============================================================================
 PRODUCT_KEYWORDS = [
@@ -1194,16 +1229,39 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         keywords = extract_keywords_from_question(message)
 
         # 5. Route based on intent
-        # Priority 1: Q&A เกี่ยวกับการเกษตร/สินค้า/โรค → Vector Search จาก 3 tables
+
+        # 5a. Greeting fast path — no LLM needed
+        # Guard: short keywords (ดี, hi ≤2 chars) require very short message (≤8 chars)
+        # to avoid false-positive on messages like "ใช้ตัวไหนดี"
+        msg_stripped = message.strip().lower()
+        _is_greeting = False
+        if len(msg_stripped) < 30:
+            for _gkw in GREETING_KEYWORDS:
+                if _gkw in msg_stripped:
+                    if len(_gkw) <= 2 and len(msg_stripped) > 8:
+                        continue
+                    _is_greeting = True
+                    break
+        if _is_greeting:
+            import random
+            greeting_answer = random.choice(GREETINGS)
+            logger.info(f"Greeting detected: '{message[:30]}' → instant reply")
+            await add_to_memory(user_id, "assistant", greeting_answer)
+            return greeting_answer
+
+        # 5b. Classify intent
         is_agri_q = is_agriculture_question(message) or keywords["pests"] or keywords["crops"]
         is_prod_q = is_product_question(message) or keywords["is_product_query"]
         is_fert_q = keywords.get("is_fertilizer_query", False)
-
-        # เช็คว่ามีชื่อสินค้า ICP ในข้อความหรือไม่ (รวม fuzzy match)
         has_product_name = extract_product_name_from_question(message) is not None
 
-        if is_agri_q or is_prod_q or is_fert_q or has_product_name:
-            logger.info(f"🔍 Routing to Q&A (agri={is_agri_q}, product={is_prod_q}, fertilizer={is_fert_q}, has_product_name={has_product_name})")
+        # 5c. RAG-first routing: default to RAG, only skip for clearly non-agriculture
+        explicit_match = is_agri_q or is_prod_q or is_fert_q or has_product_name
+        is_non_agri = _is_clearly_non_agriculture(message)
+        route_to_rag = explicit_match or not is_non_agri
+
+        if route_to_rag:
+            logger.info(f"🔍 Routing to RAG ({'explicit' if explicit_match else 'default'}: agri={is_agri_q}, product={is_prod_q}, fertilizer={is_fert_q}, product_name={has_product_name})")
 
             # Use AgenticRAG if enabled
             if USE_AGENTIC_RAG:
@@ -1282,37 +1340,22 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             return answer
             
         else:
-            # Quick greeting check — no LLM needed
-            msg_stripped = message.strip().lower()
-            if len(msg_stripped) < 30 and any(kw in msg_stripped for kw in GREETING_KEYWORDS):
-                import random
-                greeting_answer = random.choice(GREETINGS)
-                logger.info(f"Greeting detected: '{message[:30]}' → instant reply")
-                await add_to_memory(user_id, "assistant", greeting_answer)
-                return greeting_answer
-
-            logger.info("Routing to general chat")
+            # Clearly non-agriculture → safe general chat (neutered, no product/disease expertise)
+            logger.info(f"💬 Routing to general chat (non-agri: '{message[:30]}')")
 
             if not openai_client:
                 logger.error("OpenAI client not available for general chat")
                 return ERROR_AI_UNAVAILABLE
-
-            user_prompt = f"""บริบทการสนทนาก่อนหน้า:
-{context if context else "(เริ่มสนทนาใหม่)"}
-
-ข้อความจากผู้ใช้: {message}
-
-ตอบกลับอย่างเป็นธรรมชาติ เหมือนคุยกับเพื่อน:"""
 
             try:
                 response = await openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": GENERAL_CHAT_PROMPT},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": message}
                     ],
-                    max_tokens=300,
-                    temperature=0.7
+                    max_tokens=150,
+                    temperature=0.3
                 )
                 answer = post_process_answer(response.choices[0].message.content)
             except Exception as llm_err:
