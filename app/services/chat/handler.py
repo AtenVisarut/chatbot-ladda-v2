@@ -1068,7 +1068,10 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
             if not products:
                 return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
 
-        # ถ้ามีชื่อสินค้าในคำถาม → enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields ใหม่)
+        # Enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields เช่น package_size)
+        _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
+                        'how_to_use', 'usage_rate', 'usage_period', 'target_pest',
+                        'active_ingredient', 'applicable_crops']
         if product_in_question:
             db_product = await _fetch_product_from_db(product_in_question)
             if db_product:
@@ -1077,9 +1080,7 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 for p in products:
                     if product_in_question.lower() in p.get('product_name', '').lower():
                         db_p = db_product[0]
-                        for key in ['package_size', 'absorption_method', 'mechanism_of_action',
-                                     'how_to_use', 'usage_rate', 'usage_period', 'target_pest',
-                                     'active_ingredient', 'applicable_crops']:
+                        for key in _ENRICH_KEYS:
                             if db_p.get(key) and not p.get(key):
                                 p[key] = db_p[key]
                         merged = True
@@ -1088,6 +1089,26 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 if not merged:
                     logger.info(f"📦 Product '{product_in_question}' not in memory, adding from DB")
                     products.insert(0, db_product[0])
+        else:
+            # ไม่มีชื่อสินค้าในคำถาม (เช่น "กี่กระสอบ", "1ขวดฉีดได้กี่ไร่")
+            # → enrich ทุกตัวใน memory ที่ยังขาด field สำคัญ
+            for p in products:
+                pname = p.get('product_name', '')
+                if not pname:
+                    continue
+                # ถ้ามี field สำคัญครบแล้ว → ข้าม
+                if p.get('package_size') and p.get('how_to_use') and p.get('usage_rate'):
+                    continue
+                try:
+                    db_rows = await _fetch_product_from_db(pname)
+                    if db_rows:
+                        db_p = db_rows[0]
+                        for key in _ENRICH_KEYS:
+                            if db_p.get(key) and not p.get(key):
+                                p[key] = db_p[key]
+                        logger.info(f"📦 Enriched '{pname}' from DB (follow-up without product name)")
+                except Exception as e:
+                    logger.warning(f"Failed to enrich '{pname}': {e}")
 
         # สร้าง prompt สำหรับ AI
         products_text = ""
@@ -1305,9 +1326,18 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         ]
                         if mentioned_products:
                             rag_metadata["type"] = "product_recommendation"
-                            rag_metadata["products"] = [
-                                {"product_name": p} for p in mentioned_products[:5]
-                            ]
+                            # Enrich from DB so follow-up questions have full data (package_size etc.)
+                            enriched_products = []
+                            for mp in mentioned_products[:5]:
+                                try:
+                                    db_rows = await _fetch_product_from_db(mp)
+                                    if db_rows:
+                                        enriched_products.append(db_rows[0])
+                                    else:
+                                        enriched_products.append({"product_name": mp})
+                                except Exception:
+                                    enriched_products.append({"product_name": mp})
+                            rag_metadata["products"] = enriched_products
                         await add_to_memory(user_id, "assistant", answer, metadata=rag_metadata)
                         return answer
 
