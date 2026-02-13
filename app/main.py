@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from app.config import (
     LINE_CHANNEL_ACCESS_TOKEN,
+    FB_PAGE_ACCESS_TOKEN,
     OPENAI_API_KEY,
     SECRET_KEY,
 )
@@ -22,7 +23,7 @@ from app.services.product.registry import ProductRegistry
 from app.utils.rate_limiter import cleanup_rate_limit_data
 
 # Routers
-from app.routers import health, admin, dashboard, webhook
+from app.routers import health, admin, dashboard, webhook, facebook_webhook
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +60,7 @@ async def lifespan(app_instance: FastAPI):
     logger.info(f"OpenAI API: {'✓' if OPENAI_API_KEY else '✗'}")
     logger.info(f"Supabase: {'✓' if supabase_client else '✗'}")
     logger.info(f"LINE Bot: {'✓' if LINE_CHANNEL_ACCESS_TOKEN else '✗'}")
+    logger.info(f"Facebook: {'✓' if FB_PAGE_ACCESS_TOKEN else '✗'}")
     logger.info(f"Analytics: {'✓' if analytics_tracker else '✗'}")
     logger.info("=" * 60)
 
@@ -122,6 +124,7 @@ app.include_router(health.router)
 app.include_router(admin.router)
 app.include_router(dashboard.router)
 app.include_router(webhook.router)
+app.include_router(facebook_webhook.router)
 
 
 if __name__ == "__main__":

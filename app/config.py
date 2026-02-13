@@ -14,6 +14,11 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # For Gemini 3.0 flash (di
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# Facebook Messenger
+FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
+FB_VERIFY_TOKEN = os.getenv("FB_VERIFY_TOKEN", "")
+FB_APP_SECRET = os.getenv("FB_APP_SECRET", "")
+
 # Admin Authentication
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ladda")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ladda123")
