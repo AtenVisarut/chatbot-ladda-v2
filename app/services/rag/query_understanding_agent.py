@@ -1,11 +1,11 @@
 """
-Query Understanding Agent
+Query Understanding Agent for พี่ม้าบิน (Fertilizer Recommendation Chatbot)
 
 Responsibilities:
 - Semantic intent detection using LLM (not keyword matching)
-- Entity extraction: product_name, plant_type, disease_name, pest_name
+- Entity extraction: crop, growth_stage, fertilizer_formula
 - Query expansion for multi-query retrieval
-- Determine required sources: products, diseases
+- Determine required sources: mahbin_npk
 """
 
 import logging
@@ -18,13 +18,25 @@ from app.config import LLM_MODEL_QUERY_UNDERSTANDING
 
 logger = logging.getLogger(__name__)
 
-from app.services.product.registry import ProductRegistry
+# 6 crops in the mahbin_npk table
+SUPPORTED_CROPS = ["นาข้าว", "ข้าวโพด", "อ้อย", "มันสำปะหลัง", "ปาล์มน้ำมัน", "ยางพารา"]
+
+# Fertilizer-related keywords for fallback analysis
+FERTILIZER_KEYWORDS = [
+    "ปุ๋ย", "สูตร", "N-P-K", "NPK",
+    "ไนโตรเจน", "ฟอสฟอรัส", "โพแทสเซียม",
+    "เร่งต้น", "แตกกอ", "รับรวง", "เสริมผลผลิต",
+    "ใส่ปุ๋ย", "แนะนำปุ๋ย", "ธาตุอาหาร", "บำรุง",
+]
+
+# Pattern to match fertilizer formulas like "46-0-0", "16-20-0", etc.
+FORMULA_PATTERN = re.compile(r'\b(\d{1,2})-(\d{1,2})-(\d{1,2})\b')
 
 
 class QueryUnderstandingAgent:
     """
     Agent 1: Query Understanding
-    Uses LLM to semantically understand user queries
+    Uses LLM to semantically understand user queries about fertilizer recommendations
     """
 
     def __init__(self, openai_client=None):
@@ -37,7 +49,7 @@ class QueryUnderstandingAgent:
         Args:
             query: Current user message
             context: Conversation history for understanding follow-up messages
-            hints: Pre-detected hints dict with keys: product_name, problem_type
+            hints: Pre-detected hints dict with keys: crop, growth_stage, fertilizer_formula
 
         Returns:
             QueryAnalysis with intent, entities, expanded_queries, required_sources
@@ -73,56 +85,34 @@ class QueryUnderstandingAgent:
             context_section = f"""บริบทการสนทนาก่อนหน้า:
 {context[:4000]}
 
-สำคัญ: ถ้าคำถามเป็นการถามต่อเนื่อง (เช่น "ใช้กับพืชนี้ได้ไหม" "ตัวไหนเหมาะกับ..." "ใช้ช่วงไหน") ต้องดูว่าก่อนหน้านี้พูดถึงสินค้าตัวไหน แล้วใส่ชื่อสินค้านั้นใน entities.product_name เสมอ
+สำคัญ: ถ้าคำถามเป็นการถามต่อเนื่อง (เช่น "ใส่ตอนไหน" "ใส่เท่าไหร่" "ใช้สูตรอะไร") ต้องดูว่าก่อนหน้านี้พูดถึงพืชหรือสูตรปุ๋ยอะไร แล้วใส่ใน entities ให้ครบ
 
 """
 
         # Build hint/constraint sections
         # [CONSTRAINT] = dictionary-matched, LLM must NOT override
         # [HINT] = softer suggestion, LLM may adjust
-        # [HINT_LLM] = from LLM fallback extraction, Agent 1 can adjust freely
         hint_section = ""
-        llm_fallback_keys = hints.get('_llm_fallback_keys', [])
-        if hints.get('product_name'):
-            if 'product_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.product_name เท่านั้น"
-        if hints.get('disease_name'):
-            if 'disease_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อโรค: \"{hints['disease_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อโรค: \"{hints['disease_name']}\" — ห้ามเปลี่ยนชื่อโรค ต้องใช้ชื่อนี้ใน entities.disease_name เท่านั้น (ห้ามแปลหรือเปลี่ยนเป็นชื่ออื่น)"
-        if hints.get('plant_type'):
-            if 'plant_type' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อพืช: \"{hints['plant_type']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['plant_type']}\" — ใช้ชื่อนี้ใน entities.plant_type"
-        if hints.get('pest_name'):
-            if 'pest_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
-        if hints.get('problem_type') and hints['problem_type'] != 'unknown':
-            problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
-            hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
+        if hints.get('crop'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['crop']}\" — ใช้ชื่อนี้ใน entities.crop"
+        if hints.get('growth_stage'):
+            hint_section += f"\n[HINT] ระบบตรวจพบระยะการเจริญเติบโต: \"{hints['growth_stage']}\" — ใช้ใน entities.growth_stage"
+        if hints.get('fertilizer_formula'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบสูตรปุ๋ย: \"{hints['fertilizer_formula']}\" — ใช้ใน entities.fertilizer_formula"
         if hints.get('resolved_slang'):
             hint_section += f"\n[HINT] ภาษาชาวบ้าน: {hints['resolved_slang']}"
-        if hints.get('possible_diseases'):
-            diseases_str = ", ".join(hints['possible_diseases'])
-            hint_section += f"\n[HINT] อาการในคำถามอาจเกิดจากโรค: {diseases_str} — ให้ใช้โรคเหล่านี้ใน expanded_queries เพื่อค้นหาสินค้าที่เหมาะสม"
 
-        products_str = ", ".join(ProductRegistry.get_instance().get_canonical_list())
+        crops_str = ", ".join(SUPPORTED_CROPS)
 
         prompt = f"""{context_section}วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
-ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ (เช่น 'ใช้ช่วงไหน' 'ผสมกี่ลิตร' 'ใช้ยังไง' 'ใช้เท่าไหร่' 'ใช้กี่ไร่'):
-- ดูบริบทก่อนหน้าเพื่อหาสินค้าที่น้องลัดดาแนะนำล่าสุด
-- ใส่ชื่อสินค้านั้นใน entities.product_name
+ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ (เช่น 'ใส่ตอนไหน' 'ใส่เท่าไหร่' 'ใช้สูตรอะไร' 'ใส่กี่กิโล'):
+- ดูบริบทก่อนหน้าเพื่อหาพืชและสูตรปุ๋ยที่พี่ม้าบินแนะนำล่าสุด
+- ใส่ชื่อพืชนั้นใน entities.crop
 - intent ควรเป็น usage_instruction
 {hint_section}
 
-รายชื่อสินค้า ICP ในระบบ: [{products_str}]
-(ถ้าชื่อในคำถามคล้ายชื่อสินค้าใดๆ ให้ถือว่าเป็น product_inquiry)
+พืชในฐานข้อมูล: [{crops_str}]
+(ฐานข้อมูลมี 19 แถว ครอบคลุม 6 พืช พร้อมสูตรปุ๋ย อัตราใส่ และระยะการใส่)
 
 คำถาม: "{query}"
 
@@ -131,52 +121,46 @@ class QueryUnderstandingAgent:
     "intent": "<intent_type>",
     "confidence": <0.0-1.0>,
     "entities": {{
-        "product_name": "<ชื่อสินค้าถ้ามี หรือ null>",
-        "plant_type": "<ชื่อพืชถ้ามี หรือ null>",
-        "disease_name": "<ชื่อโรคถ้ามี หรือ null>",
-        "pest_name": "<ชื่อแมลง/ศัตรูพืชถ้ามี หรือ null>",
-        "weed_type": "<ประเภทวัชพืชถ้ามี หรือ null>",
-        "growth_stage": "<ระยะการเจริญเติบโตถ้ามี หรือ null>"
+        "crop": "<ชื่อพืชถ้ามี หรือ null>",
+        "growth_stage": "<ระยะการเจริญเติบโตถ้ามี หรือ null>",
+        "fertilizer_formula": "<สูตรปุ๋ย เช่น 46-0-0 ถ้ามี หรือ null>"
     }},
     "expanded_queries": ["<คำค้นหาภาษาไทย1>", "<คำค้นหาภาษาไทย2>", "<คำค้นหาภาษาไทย3>"],
-    "required_sources": ["<source1>", "<source2>"]
+    "required_sources": ["mahbin_npk"]
 }}
 
 intent_type ที่เป็นไปได้:
-- product_inquiry: ถามเกี่ยวกับสินค้าเฉพาะ (เช่น "โมเดิน ใช้ยังไง", "แกนเตอร์ คืออะไร")
-- product_recommendation: ขอแนะนำสินค้า (เช่น "แนะนำยากำจัดแมลง")
-- disease_treatment: การรักษาโรคพืช (เช่น "ราน้ำค้าง รักษายังไง", "เป็นรากเน่า")
-- pest_control: การกำจัดแมลง (เช่น "กำจัดเพลี้ยในทุเรียน")
-- weed_control: การกำจัดวัชพืช (เช่น "หญ้าในนาข้าว")
-- nutrient_supplement: การเสริมธาตุอาหาร (เช่น "ดอกร่วง ติดดอก")
-- usage_instruction: วิธีใช้/อัตราผสม (เช่น "อัตราการใช้", "ผสมกี่ซีซี")
-- general_agriculture: คำถามเกษตรทั่วไป
+- fertilizer_recommendation: ขอแนะนำปุ๋ยสำหรับพืช/ระยะ (เช่น "ปุ๋ยอ้อย ใส่อะไรดี", "แนะนำปุ๋ยนาข้าว", "ปุ๋ยรองพื้นข้าวโพด")
+- usage_instruction: วิธีใช้/อัตราใส่ปุ๋ย (เช่น "ใส่ปุ๋ยกี่กิโลต่อไร่", "46-0-0 ใส่ตอนไหน", "อัตราใส่ปุ๋ยมันสำปะหลัง")
+- product_inquiry: ถามเกี่ยวกับสูตรปุ๋ยเฉพาะ (เช่น "สูตร 46-0-0 คืออะไร", "ปุ๋ย 15-15-15 ใช้กับอะไร")
+- general_agriculture: คำถามเกษตรทั่วไป (เช่น "ดินเปรี้ยว แก้ยังไง", "ข้าวใบเหลือง")
 - greeting: ทักทาย (เช่น "สวัสดี", "ดีจ้า")
-- unknown: ไม่เกี่ยวกับเกษตร
+- unknown: ไม่เกี่ยวกับเกษตรหรือปุ๋ย
 
 required_sources:
-- ใช้ ["products"] เสมอ (ข้อมูลสินค้าเป็นแหล่งหลักเพียงแหล่งเดียว)
+- ใช้ ["mahbin_npk"] เสมอ (ข้อมูลปุ๋ยแนะนำเป็นแหล่งหลักเพียงแหล่งเดียว)
 
 กฎสำคัญ:
-- [CONSTRAINT] คือข้อมูลที่ระบบตรวจจับได้จากพจนานุกรม — ห้ามเปลี่ยนแปลง ห้ามแปล ห้ามเปลี่ยนชื่อ ต้องใส่ค่าตามที่ระบุเท่านั้น
+- [CONSTRAINT] คือข้อมูลที่ระบบตรวจจับได้จากพจนานุกรม — ห้ามเปลี่ยนแปลง ต้องใส่ค่าตามที่ระบุเท่านั้น
 - [HINT] คือคำแนะนำ — สามารถปรับได้ตามบริบท
-- [HINT_LLM] คือ entity ที่ AI อีกตัวตรวจพบ — ใช้เป็นแนวทางเริ่มต้นแต่สามารถปรับเปลี่ยนได้ตามที่คุณวิเคราะห์
-- ถ้าคำถามมีคำว่า "ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "แก้ยังไง", "ฉีดอะไร", "พ่นอะไร" → ต้องเป็น product-related intent (ห้ามเป็น unknown)
-- ถ้าคำถามพูดถึงอาการพืช/สภาพพืช (เช่น ใบเพสลาด, ใบไหม้, ใบเหลือง, ดอกร่วง, ผลร่วง, รากเน่า) → จัดเป็น disease_treatment หรือ nutrient_supplement
+- ถ้าคำถามมีคำว่า "ปุ๋ย", "สูตร", "ใส่อะไร", "ใส่ปุ๋ย", "แนะนำปุ๋ย" → ต้องเป็น fertilizer-related intent (ห้ามเป็น unknown)
+- ถ้าคำถามพูดถึงระยะพืช (เช่น เร่งต้น, แตกกอ, รับรวง, รองพื้น, แต่งหน้า, บำรุงต้น, เร่งผลผลิต) → ใส่ใน growth_stage
+- ถ้าคำถามมีสูตร X-X-X (เช่น 46-0-0, 16-20-0) → ใส่ใน fertilizer_formula
+- ชื่อพืชในฐานข้อมูลคือ: {crops_str} — ถ้าผู้ใช้พูดถึงพืชเหล่านี้ ให้ใช้ชื่อตรงตามฐานข้อมูล (เช่น "ข้าว" → "นาข้าว", "ปาล์ม" → "ปาล์มน้ำมัน", "ยาง" → "ยางพารา", "มัน"/"มันสำ" → "มันสำปะหลัง")
 - ห้ามสร้าง query ภาษาอังกฤษ (ฐานข้อมูลเป็นภาษาไทย)
 - สร้างคำค้นหาภาษาไทยเท่านั้น
-- รวมชื่อสินค้า + พืช + ปัญหา ในรูปแบบต่างๆ
+- รวมชื่อพืช + สูตรปุ๋ย + ระยะการใส่ ในรูปแบบต่างๆ
 
 ตัวอย่าง:
-1. "คาริส ใช้ยังไง" → intent=product_inquiry, product_name="คาริสมา", expanded_queries=["คาริสมา วิธีใช้", "คาริสมา อัตราผสม", "คาริสมา"]
-2. "เป็นรากเน่า ใช้ยาไรครับ" → intent=disease_treatment, disease_name="รากเน่า", expanded_queries=["รากเน่า ยาป้องกัน", "โรครากเน่า สารป้องกัน", "รากเน่า"]
+1. "ปุ๋ยนาข้าว ใส่อะไรดี" → intent=fertilizer_recommendation, crop="นาข้าว", expanded_queries=["ปุ๋ยนาข้าว", "สูตรปุ๋ยนาข้าว", "ปุ๋ยแนะนำ นาข้าว"]
+2. "สูตร 46-0-0 ใช้กับอะไร" → intent=product_inquiry, fertilizer_formula="46-0-0", expanded_queries=["ปุ๋ย 46-0-0", "สูตร 46-0-0 พืช", "46-0-0 วิธีใช้"]
 3. "สวัสดีครับ" → intent=greeting, confidence=0.95
-4. "ทูโฟโฟส ใช้ยังไง" → intent=product_inquiry, product_name="ทูโฟฟอส", expanded_queries=["ทูโฟฟอส วิธีใช้", "ทูโฟฟอส อัตรา", "ทูโฟฟอส"]
-5. "แมลงในข้าว กำจัดยังไง" → intent=pest_control, plant_type="ข้าว", expanded_queries=["กำจัดแมลง ข้าว", "ยาฆ่าแมลง ข้าว", "แมลงศัตรูข้าว"]
-6. "ข้าวเป็นราน้ำค้าง" → intent=disease_treatment, plant_type="ข้าว", disease_name="ราน้ำค้าง", expanded_queries=["ราน้ำค้าง ข้าว", "ป้องกันราน้ำค้าง", "ราน้ำค้าง"]
-7. "โมเดิน 50 อัตราผสมเท่าไหร่" → intent=usage_instruction, product_name="โมเดิน", expanded_queries=["โมเดิน อัตราผสม", "โมเดิน 50 วิธีใช้", "โมเดิน"]
-8. "ใบเพสลาด ใช้สารอะไรรักษา" → intent=nutrient_supplement, plant_type="ทุเรียน", expanded_queries=["ใบเพสลาด ทุเรียน", "สารชะลอการเจริญเติบโต ทุเรียน", "เพสลาด"]
-9. "ทุเรียนใบเหลือง ใช้ยาอะไร" → intent=disease_treatment, plant_type="ทุเรียน", expanded_queries=["ทุเรียน ใบเหลือง", "โรคทุเรียน", "ยารักษาทุเรียน"]
+4. "ปุ๋ยข้าวโพด ช่วงเร่งต้น" → intent=fertilizer_recommendation, crop="ข้าวโพด", growth_stage="เร่งต้น", expanded_queries=["ปุ๋ยข้าวโพด เร่งต้น", "สูตรปุ๋ย ข้าวโพด รองพื้น", "ปุ๋ยข้าวโพด"]
+5. "ใส่ปุ๋ยอ้อยกี่กิโลต่อไร่" → intent=usage_instruction, crop="อ้อย", expanded_queries=["อัตราใส่ปุ๋ย อ้อย", "ปุ๋ยอ้อย กิโลต่อไร่", "วิธีใส่ปุ๋ย อ้อย"]
+6. "ปุ๋ยรองพื้นมันสำปะหลัง" → intent=fertilizer_recommendation, crop="มันสำปะหลัง", growth_stage="รองพื้น", expanded_queries=["ปุ๋ยรองพื้น มันสำปะหลัง", "สูตรปุ๋ย มันสำปะหลัง รองพื้น", "ปุ๋ยมันสำปะหลัง"]
+7. "ปาล์มน้ำมัน ใส่ปุ๋ยตอนไหน" → intent=usage_instruction, crop="ปาล์มน้ำมัน", expanded_queries=["ช่วงใส่ปุ๋ย ปาล์มน้ำมัน", "ปุ๋ยปาล์มน้ำมัน ระยะใส่", "ปุ๋ยปาล์ม"]
+8. "ยางพารา แนะนำสูตรปุ๋ย" → intent=fertilizer_recommendation, crop="ยางพารา", expanded_queries=["สูตรปุ๋ย ยางพารา", "ปุ๋ยยางพารา แนะนำ", "ปุ๋ยยางพารา"]
+9. "16-20-0 ใส่ข้าวได้ไหม" → intent=product_inquiry, crop="นาข้าว", fertilizer_formula="16-20-0", expanded_queries=["ปุ๋ย 16-20-0 นาข้าว", "สูตร 16-20-0", "ปุ๋ยนาข้าว"]
 """
 
         response = await self.openai_client.chat.completions.create(
@@ -184,7 +168,7 @@ required_sources:
             messages=[
                 {
                     "role": "system",
-                    "content": "คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์คำถามการเกษตร ตอบเป็น JSON เท่านั้น ไม่มี markdown"
+                    "content": "คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์คำถามเกี่ยวกับปุ๋ยและการเกษตร ตอบเป็น JSON เท่านั้น ไม่มี markdown"
                 },
                 {"role": "user", "content": prompt}
             ],
@@ -205,12 +189,9 @@ required_sources:
 
             # Map intent string to IntentType enum
             intent_map = {
+                "fertilizer_recommendation": IntentType.FERTILIZER_RECOMMENDATION,
                 "product_inquiry": IntentType.PRODUCT_INQUIRY,
                 "product_recommendation": IntentType.PRODUCT_RECOMMENDATION,
-                "disease_treatment": IntentType.DISEASE_TREATMENT,
-                "pest_control": IntentType.PEST_CONTROL,
-                "weed_control": IntentType.WEED_CONTROL,
-                "nutrient_supplement": IntentType.NUTRIENT_SUPPLEMENT,
                 "usage_instruction": IntentType.USAGE_INSTRUCTION,
                 "general_agriculture": IntentType.GENERAL_AGRICULTURE,
                 "greeting": IntentType.GREETING,
@@ -223,88 +204,28 @@ required_sources:
             entities = {k: v for k, v in data.get("entities", {}).items() if v is not None}
 
             # Post-LLM override: pre-extracted entities take priority
-            # This prevents LLM from "translating" ราชมพู→ฟอซาเรียม etc.
-            # SKIP override for [HINT_LLM] entities — let Agent 1 adjust freely
-            llm_fallback_keys = hints.get('_llm_fallback_keys', [])
-            if hints.get('disease_name') and entities.get('disease_name') != hints['disease_name']:
-                if 'disease_name' not in llm_fallback_keys:
-                    logger.info(f"  - Override disease: LLM='{entities.get('disease_name')}' → pre-extracted='{hints['disease_name']}'")
-                    entities['disease_name'] = hints['disease_name']
-                else:
-                    logger.info(f"  - LLM fallback disease: keeping Agent 1 value='{entities.get('disease_name')}' (hint was '{hints['disease_name']}')")
-            if hints.get('plant_type') and not entities.get('plant_type'):
-                entities['plant_type'] = hints['plant_type']
-            if hints.get('pest_name') and entities.get('pest_name') != hints['pest_name']:
-                if 'pest_name' not in llm_fallback_keys:
-                    logger.info(f"  - Override pest: LLM='{entities.get('pest_name')}' → pre-extracted='{hints['pest_name']}'")
-                    entities['pest_name'] = hints['pest_name']
-                else:
-                    logger.info(f"  - LLM fallback pest: keeping Agent 1 value='{entities.get('pest_name')}' (hint was '{hints['pest_name']}')")
-            if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
-                if 'product_name' not in llm_fallback_keys:
-                    # If LLM says None + intent is recommendation → respect LLM's None
-                    # (user is asking for NEW recommendations, not follow-up about existing product)
-                    _rec_intents_for_override = {
-                        IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
-                        IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
-                        IntentType.GENERAL_AGRICULTURE,
-                    }
-                    llm_said_none = entities.get('product_name') is None
-                    hint_from_query = hints.get('_product_from_query', False)
-                    if llm_said_none and intent in _rec_intents_for_override:
-                        logger.info(f"  - Skip product override: LLM correctly found no product (intent={intent}, hint='{hints['product_name']}')")
-                    elif not llm_said_none and not hint_from_query:
-                        # LLM found a specific product, but hint is from context scan (less reliable)
-                        # Trust LLM — it has full conversation context
-                        logger.info(f"  - Keep LLM product: '{entities.get('product_name')}' (context hint='{hints['product_name']}')")
-                    else:
-                        logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
-                        entities['product_name'] = hints['product_name']
-                else:
-                    logger.info(f"  - LLM fallback product: keeping Agent 1 value='{entities.get('product_name')}' (hint was '{hints['product_name']}')")
-
-            # Remove LLM-hallucinated product_name for recommendation/treatment queries
-            # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)
-            _recommendation_intents = {
-                IntentType.DISEASE_TREATMENT, IntentType.PEST_CONTROL,
-                IntentType.PRODUCT_RECOMMENDATION, IntentType.WEED_CONTROL,
-                IntentType.NUTRIENT_SUPPLEMENT,
-            }
-            if (intent in _recommendation_intents
-                    and entities.get('product_name')
-                    and not hints.get('product_name')):
-                logger.info(f"  - Remove hallucinated product: LLM added '{entities['product_name']}' but user didn't mention any product")
-                del entities['product_name']
+            if hints.get('crop') and not entities.get('crop'):
+                entities['crop'] = hints['crop']
+            if hints.get('growth_stage') and not entities.get('growth_stage'):
+                entities['growth_stage'] = hints['growth_stage']
+            if hints.get('fertilizer_formula') and not entities.get('fertilizer_formula'):
+                entities['fertilizer_formula'] = hints['fertilizer_formula']
 
             # Get expanded queries
             expanded_queries = data.get("expanded_queries", [query])
             if not expanded_queries:
                 expanded_queries = [query]
 
-            # Inject disease variants into expanded queries for better retrieval
-            if hints.get('disease_variants'):
-                for variant in hints['disease_variants']:
-                    if variant not in expanded_queries and variant != query:
-                        expanded_queries.append(variant)
-
             # Inject extra search terms from farmer slang resolution
             if hints.get('extra_search_terms'):
-                plant_type = entities.get('plant_type', '')
+                crop = entities.get('crop', '')
                 for term in hints['extra_search_terms']:
-                    search_q = f"{term} {plant_type}".strip() if plant_type else term
+                    search_q = f"{term} {crop}".strip() if crop else term
                     if search_q not in expanded_queries:
                         expanded_queries.append(search_q)
 
-            # Inject possible diseases from symptom mapping
-            if hints.get('possible_diseases'):
-                plant_type = entities.get('plant_type', '')
-                for disease in hints['possible_diseases']:
-                    search_q = f"{disease} {plant_type}".strip() if plant_type else disease
-                    if search_q not in expanded_queries:
-                        expanded_queries.append(search_q)
-
-            # Force products-only source (products table is the sole data source)
-            required_sources = ["products"]
+            # Force mahbin_npk-only source
+            required_sources = ["mahbin_npk"]
 
             return QueryAnalysis(
                 original_query=query,
@@ -328,61 +249,70 @@ required_sources:
         confidence = 0.5
         entities = {}
 
-        # Product inquiry patterns (full ICP product list)
-        product_keywords = ProductRegistry.get_instance().get_canonical_list()
-        for product in product_keywords:
-            if product in query_lower:
-                intent = IntentType.PRODUCT_INQUIRY
-                entities["product_name"] = product
+        # Extract fertilizer formula (X-X-X pattern) first
+        formula_match = FORMULA_PATTERN.search(query)
+        if formula_match:
+            entities["fertilizer_formula"] = formula_match.group(0)
+            intent = IntentType.PRODUCT_INQUIRY
+            confidence = 0.8
+
+        # Fertilizer recommendation patterns
+        fertilizer_rec_keywords = [
+            "แนะนำปุ๋ย", "ใส่ปุ๋ยอะไร", "ใส่อะไรดี", "ปุ๋ยอะไรดี",
+            "ใช้ปุ๋ยอะไร", "สูตรปุ๋ย", "เลือกปุ๋ย",
+        ]
+        if any(kw in query_lower for kw in fertilizer_rec_keywords):
+            if intent == IntentType.UNKNOWN or intent == IntentType.PRODUCT_INQUIRY:
+                intent = IntentType.FERTILIZER_RECOMMENDATION
                 confidence = 0.8
-                break
 
-        # Disease treatment patterns
-        disease_keywords = ["โรค", "ราน้ำค้าง", "ราแป้ง", "ใบไหม้", "เชื้อรา", "รักษา"]
-        if any(kw in query_lower for kw in disease_keywords):
-            if intent == IntentType.UNKNOWN:
-                intent = IntentType.DISEASE_TREATMENT
+        # General fertilizer keywords (if not already matched)
+        if intent == IntentType.UNKNOWN:
+            if any(kw in query_lower for kw in FERTILIZER_KEYWORDS):
+                intent = IntentType.FERTILIZER_RECOMMENDATION
                 confidence = 0.7
-
-        # Pest control patterns
-        pest_keywords = ["แมลง", "เพลี้ย", "หนอน", "ด้วง", "กำจัด", "ฆ่า"]
-        if any(kw in query_lower for kw in pest_keywords):
-            if intent == IntentType.UNKNOWN:
-                intent = IntentType.PEST_CONTROL
-                confidence = 0.7
-
-        # Weed control patterns
-        weed_keywords = ["หญ้า", "วัชพืช", "ยาฆ่าหญ้า"]
-        if any(kw in query_lower for kw in weed_keywords):
-            if intent == IntentType.UNKNOWN:
-                intent = IntentType.WEED_CONTROL
-                confidence = 0.7
-
-        # Nutrient supplement patterns
-        nutrient_keywords = ["บำรุง", "ธาตุอาหาร", "ดอกร่วง", "ติดดอก", "ติดผล"]
-        if any(kw in query_lower for kw in nutrient_keywords):
-            if intent == IntentType.UNKNOWN:
-                intent = IntentType.NUTRIENT_SUPPLEMENT
-                confidence = 0.6
 
         # Usage instruction patterns
-        usage_keywords = ["วิธีใช้", "อัตรา", "ผสม", "ใช้ยังไง"]
+        usage_keywords = ["วิธีใส่", "อัตราใส่", "ใส่กี่กิโล", "ใส่เท่าไหร่", "ใส่ตอนไหน",
+                          "วิธีใช้", "อัตรา", "กิโลต่อไร่", "ใช้ยังไง"]
         if any(kw in query_lower for kw in usage_keywords):
             if intent == IntentType.UNKNOWN:
                 intent = IntentType.USAGE_INSTRUCTION
                 confidence = 0.7
 
         # Greeting patterns
-        greeting_keywords = ["สวัสดี", "ดีจ้า", "หวัดดี", "hello"]
+        greeting_keywords = ["สวัสดี", "ดีจ้า", "หวัดดี", "hello", "ดีครับ", "ดีค่ะ"]
         if any(kw in query_lower for kw in greeting_keywords):
             intent = IntentType.GREETING
             confidence = 0.9
 
-        # Extract plant type
-        plants = ["ข้าว", "ทุเรียน", "มะม่วง", "ส้ม", "พริก", "ข้าวโพด", "อ้อย", "ลำไย"]
-        for plant in plants:
-            if plant in query_lower:
-                entities["plant_type"] = plant
+        # Extract crop name
+        crop_aliases = {
+            "ข้าว": "นาข้าว",
+            "นาข้าว": "นาข้าว",
+            "ข้าวโพด": "ข้าวโพด",
+            "อ้อย": "อ้อย",
+            "มันสำปะหลัง": "มันสำปะหลัง",
+            "มันสำ": "มันสำปะหลัง",
+            "ปาล์มน้ำมัน": "ปาล์มน้ำมัน",
+            "ปาล์ม": "ปาล์มน้ำมัน",
+            "ยางพารา": "ยางพารา",
+            "ยาง": "ยางพารา",
+        }
+        # Sort by length descending so longer aliases match first (e.g., "มันสำปะหลัง" before "มันสำ")
+        for alias in sorted(crop_aliases.keys(), key=len, reverse=True):
+            if alias in query_lower:
+                entities["crop"] = crop_aliases[alias]
+                break
+
+        # Extract growth stage keywords
+        growth_stage_keywords = [
+            "เร่งต้น", "แตกกอ", "รับรวง", "รองพื้น", "แต่งหน้า",
+            "บำรุงต้น", "เร่งผลผลิต", "เสริมผลผลิต", "ตั้งท้อง",
+        ]
+        for stage in growth_stage_keywords:
+            if stage in query_lower:
+                entities["growth_stage"] = stage
                 break
 
         return QueryAnalysis(
@@ -395,7 +325,7 @@ required_sources:
         )
 
     def _determine_sources(self, intent: IntentType) -> List[str]:
-        """Determine which data sources to query based on intent — products only"""
+        """Determine which data sources to query based on intent — mahbin_npk only"""
         if intent == IntentType.GREETING:
             return []
-        return ["products"]
+        return ["mahbin_npk"]

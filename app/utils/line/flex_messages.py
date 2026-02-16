@@ -319,7 +319,7 @@ def create_welcome_flex() -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "ยินดีต้อนรับสู่ Chatbot Ladda",
+        "altText": "ยินดีต้อนรับสู่พี่ม้าบิน",
         "contents": {
             "type": "bubble",
             "size": "giga",
@@ -359,7 +359,7 @@ def create_welcome_flex() -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "ยินดีต้อนรับค่ะ!",
+                        "text": "ยินดีต้อนรับครับ!",
                         "weight": "bold",
                         "size": "xl",
                         "margin": "md",
@@ -566,7 +566,7 @@ def create_registration_required_flex() -> Dict:
                     },
                     {
                         "type": "text",
-                        "text": "กรุณาลงทะเบียนข้อมูลพื้นฐานก่อนนะคะ",
+                        "text": "กรุณาลงทะเบียนข้อมูลพื้นฐานก่อนนะครับ",
                         "size": "sm",
                         "color": "#666666",
                         "align": "center",
@@ -1573,7 +1573,7 @@ def create_usage_guide_flex() -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "วิธีใช้งาน Chatbot Ladda",
+        "altText": "วิธีใช้งานพี่ม้าบิน",
         "contents": {
             "type": "bubble",
             "size": "mega",
@@ -1761,7 +1761,7 @@ def create_product_catalog_flex() -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "ผลิตภัณฑ์ ICP Ladda",
+        "altText": "สูตรปุ๋ยแนะนำ",
         "contents": {
             "type": "bubble",
             "size": "kilo",
@@ -1771,7 +1771,7 @@ def create_product_catalog_flex() -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "🌾 ผลิตภัณฑ์ ICP Ladda",
+                        "text": "🌾 สูตรปุ๋ยแนะนำ",
                         "color": "#ffffff",
                         "size": "lg",
                         "weight": "bold",
@@ -1854,8 +1854,8 @@ def create_product_catalog_flex() -> Dict:
                         "style": "link",
                         "action": {
                             "type": "uri",
-                            "label": "🔗 เว็บไซต์ ICP Ladda",
-                            "uri": "https://www.icpladda.com/about/"
+                            "label": "🔗 ข้อมูลเพิ่มเติม",
+                            "uri": "https://www.google.com"
                         }
                     }
                 ]
@@ -1871,7 +1871,7 @@ def create_initial_questions_flex() -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "ได้รับรูปแล้วค่ะ กรุณาเลือกชนิดพืช",
+        "altText": "ได้รับรูปแล้วครับ กรุณาเลือกชนิดพืช",
         "contents": {
             "type": "bubble",
             "size": "kilo",
@@ -1881,7 +1881,7 @@ def create_initial_questions_flex() -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "✅ ได้รับรูปแล้วค่ะ",
+                        "text": "✅ ได้รับรูปแล้วครับ",
                         "color": "#ffffff",
                         "size": "lg",
                         "weight": "bold"
@@ -2493,10 +2493,10 @@ def create_analyzing_flex(with_info: bool = False) -> Dict:
     สร้าง Flex Message แสดงสถานะกำลังวิเคราะห์
     """
     if with_info:
-        title = "รับทราบข้อมูลค่ะ"
+        title = "รับทราบข้อมูลครับ"
         subtitle = "กำลังวิเคราะห์อย่างละเอียด..."
     else:
-        title = "เข้าใจค่ะ"
+        title = "เข้าใจครับ"
         subtitle = "กำลังวิเคราะห์จากรูปภาพ..."
 
     return {
@@ -2578,7 +2578,7 @@ def create_chat_response_flex(question: str, answer: str) -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "💬 คำตอบจาก Ladda",
+                        "text": "💬 คำตอบจากพี่ม้าบิน",
                         "color": "#ffffff",
                         "size": "md",
                         "weight": "bold"
@@ -2635,7 +2635,7 @@ def create_liff_registration_flex(liff_url: str) -> Dict:
                     },
                     {
                         "type": "text",
-                        "text": "ICP Ladda - ผู้ช่วยเกษตรกรอัจฉริยะ",
+                        "text": "พี่ม้าบิน - ผู้ช่วยเกษตรกรอัจฉริยะ",
                         "color": "#ffffff",
                         "size": "sm",
                         "align": "center",
@@ -2767,7 +2767,7 @@ def create_liff_welcome_flex(liff_url: str) -> Dict:
     """
     return {
         "type": "flex",
-        "altText": "ยินดีต้อนรับสู่ Chatbot Ladda",
+        "altText": "ยินดีต้อนรับสู่พี่ม้าบิน",
         "contents": {
             "type": "bubble",
             "size": "giga",
@@ -2807,7 +2807,7 @@ def create_liff_welcome_flex(liff_url: str) -> Dict:
                 "contents": [
                     {
                         "type": "text",
-                        "text": "ยินดีต้อนรับค่ะ!",
+                        "text": "ยินดีต้อนรับครับ!",
                         "weight": "bold",
                         "size": "xl",
                         "margin": "md",

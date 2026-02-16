@@ -1,5 +1,5 @@
 """
-Agentic RAG Pipeline for ICP Ladda Chatbot
+Agentic RAG Pipeline for พี่ม้าบิน Chatbot (Fertilizer Recommendation)
 
 4-Agent Architecture:
 1. QueryUnderstandingAgent - Semantic intent detection, entity extraction, query expansion
@@ -15,16 +15,18 @@ from enum import Enum
 
 class IntentType(str, Enum):
     """Types of user intents"""
-    PRODUCT_INQUIRY = "product_inquiry"       # ถามเกี่ยวกับสินค้าเฉพาะ
-    PRODUCT_RECOMMENDATION = "product_recommendation"  # ขอแนะนำสินค้า
-    DISEASE_TREATMENT = "disease_treatment"   # การรักษาโรคพืช
-    PEST_CONTROL = "pest_control"             # การกำจัดแมลง/ศัตรูพืช
-    WEED_CONTROL = "weed_control"             # การกำจัดวัชพืช
-    NUTRIENT_SUPPLEMENT = "nutrient_supplement"  # การเสริมธาตุอาหาร/บำรุง
-    USAGE_INSTRUCTION = "usage_instruction"   # วิธีใช้/อัตราผสม
+    PRODUCT_INQUIRY = "product_inquiry"       # ถามเกี่ยวกับสูตรปุ๋ยเฉพาะ
+    PRODUCT_RECOMMENDATION = "product_recommendation"  # ขอแนะนำสูตรปุ๋ย
+    FERTILIZER_RECOMMENDATION = "fertilizer_recommendation"  # ขอแนะนำปุ๋ยตามพืช/ระยะ
+    USAGE_INSTRUCTION = "usage_instruction"   # วิธีใช้/อัตราใส่
     GENERAL_AGRICULTURE = "general_agriculture"  # คำถามเกษตรทั่วไป
     GREETING = "greeting"                     # ทักทาย
     UNKNOWN = "unknown"                       # ไม่ทราบ
+    # Deprecated — kept for import compatibility but unused in fertilizer context
+    DISEASE_TREATMENT = "disease_treatment"
+    PEST_CONTROL = "pest_control"
+    WEED_CONTROL = "weed_control"
+    NUTRIENT_SUPPLEMENT = "nutrient_supplement"
 
 
 @dataclass
@@ -34,16 +36,16 @@ class QueryAnalysis:
     intent: IntentType
     confidence: float
     entities: Dict[str, Any] = field(default_factory=dict)
-    # Extracted entities: product_name, plant_type, disease_name, pest_name, etc.
+    # Extracted entities: crop, growth_stage, fertilizer_formula, plant_type, etc.
     expanded_queries: List[str] = field(default_factory=list)
     required_sources: List[str] = field(default_factory=list)
-    # Sources: products, diseases
+    # Sources: mahbin_npk
 
     def __post_init__(self):
         if not self.expanded_queries:
             self.expanded_queries = [self.original_query]
         if not self.required_sources:
-            self.required_sources = ["products"]
+            self.required_sources = ["mahbin_npk"]
 
 
 @dataclass
@@ -52,11 +54,11 @@ class RetrievedDocument:
     id: str
     title: str
     content: str
-    source: str  # products, diseases
+    source: str  # mahbin_npk
     similarity_score: float
     rerank_score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    # Metadata: product_name, chemical_name, usage_rate, target_pest, category, etc.
+    # Metadata: crop, growth_stage, fertilizer_formula, usage_rate, primary_nutrients, benefits
 
 
 @dataclass

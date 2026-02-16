@@ -51,9 +51,9 @@ async def clear_cache_endpoint(request: Request):
 @router.post("/admin/regenerate-embeddings")
 async def regenerate_embeddings_endpoint(request: Request):
     """
-    Regenerate embeddings for products after data changes.
-    Body (optional): {"product_name": "อาร์เทมิส"}  — regenerate one product
-    Body empty or {}                                  — regenerate ALL products
+    Regenerate embeddings for mahbin_npk fertilizer data after changes.
+    Body (optional): {"crop": "นาข้าว"}  — regenerate one crop
+    Body empty or {}                      — regenerate ALL rows
     """
     if not request.session.get("user"):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -66,30 +66,30 @@ async def regenerate_embeddings_endpoint(request: Request):
     except Exception:
         body = {}
 
-    product_name = body.get("product_name")
+    crop_filter = body.get("crop")
 
-    # Fetch products to regenerate
-    if product_name:
-        result = supabase_client.table('products').select('*').ilike('product_name', f'%{product_name}%').execute()
+    # Fetch rows to regenerate
+    if crop_filter:
+        result = supabase_client.table('mahbin_npk').select('*').ilike('crop', f'%{crop_filter}%').execute()
     else:
-        result = supabase_client.table('products').select('*').execute()
+        result = supabase_client.table('mahbin_npk').select('*').execute()
 
     if not result.data:
-        return {"status": "error", "message": f"ไม่พบสินค้า: {product_name}" if product_name else "ไม่พบสินค้าในระบบ"}
+        return {"status": "error", "message": f"ไม่พบข้อมูลพืช: {crop_filter}" if crop_filter else "ไม่พบข้อมูลในระบบ"}
 
-    products = result.data
+    rows = result.data
     success_count = 0
     errors = []
 
-    for product in products:
+    for row in rows:
         try:
             text_parts = [
-                f"ชื่อสินค้า: {product['product_name']}",
-                f"สารสำคัญ: {product.get('active_ingredient', '')}",
-                f"ศัตรูพืชที่กำจัดได้: {product.get('target_pest', '')}",
-                f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
-                f"กลุ่มสาร: {product.get('product_group', '')}",
-                f"ความเป็นพิษต่อพืช: {product.get('phytotoxicity', '')}",
+                f"พืช: {row.get('crop', '')}",
+                f"ระยะการเติบโต: {row.get('growth_stage', '')}",
+                f"สูตรปุ๋ย: {row.get('fertilizer_formula', '')}",
+                f"อัตราการใช้: {row.get('usage_rate', '')}",
+                f"ธาตุอาหารหลัก: {row.get('primary_nutrients', '')}",
+                f"ประโยชน์: {row.get('benefits', '')}",
             ]
             text = " | ".join([p for p in text_parts if p])
 
@@ -99,13 +99,13 @@ async def regenerate_embeddings_endpoint(request: Request):
             )
             embedding = resp.data[0].embedding
 
-            supabase_client.table('products').update({
+            supabase_client.table('mahbin_npk').update({
                 'embedding': embedding
-            }).eq('id', product['id']).execute()
+            }).eq('id', row['id']).execute()
 
             success_count += 1
         except Exception as e:
-            errors.append(f"{product['product_name']}: {str(e)}")
+            errors.append(f"{row.get('crop', '?')} / {row.get('growth_stage', '?')}: {str(e)}")
 
     # Clear caches so new embeddings take effect immediately
     await clear_all_caches()
@@ -113,7 +113,7 @@ async def regenerate_embeddings_endpoint(request: Request):
     return {
         "status": "success",
         "regenerated": success_count,
-        "total": len(products),
+        "total": len(rows),
         "errors": errors if errors else None,
         "cache_cleared": True
     }

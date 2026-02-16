@@ -63,7 +63,7 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
 
         context_parts = []
         for msg in messages:
-            role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+            role = "ผู้ใช้" if msg["role"] == "user" else "พี่ม้าบิน"
             content = msg["content"][:MEMORY_CONTENT_PREVIEW]  # Use config value
 
             # Add product info from metadata if available
@@ -427,7 +427,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
 
     Returns:
         (active_messages: list[str], past_summary: str, recent_products: list[str])
-        active_messages = formatted strings "ผู้ใช้: ..." or "น้องลัดดา: ..."
+        active_messages = formatted strings "ผู้ใช้: ..." or "พี่ม้าบิน: ..."
         past_summary = short summary of past topics (or "")
         recent_products = product names from the last assistant recommendation in active topic
     """
@@ -437,7 +437,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
         # Fallback: return all messages as active, no past summary
         all_formatted = []
         for msg in formatted_messages:
-            role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+            role = "ผู้ใช้" if msg["role"] == "user" else "พี่ม้าบิน"
             content = msg["content"][:MEMORY_CONTENT_PREVIEW]
             metadata = msg.get("metadata", {})
             if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
@@ -460,7 +460,7 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
     # Format all messages first
     formatted = []
     for msg in formatted_messages:
-        role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+        role = "ผู้ใช้" if msg["role"] == "user" else "พี่ม้าบิน"
         content = msg["content"][:MEMORY_CONTENT_PREVIEW]
         metadata = msg.get("metadata", {})
         if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
@@ -609,7 +609,7 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
             # No current query — format all messages as before (backward compat)
             active_texts = []
             for msg in messages:
-                role = "ผู้ใช้" if msg["role"] == "user" else "น้องลัดดา"
+                role = "ผู้ใช้" if msg["role"] == "user" else "พี่ม้าบิน"
                 content = msg["content"][:MEMORY_CONTENT_PREVIEW]
                 metadata = msg.get("metadata", {})
                 if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":

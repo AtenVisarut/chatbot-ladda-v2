@@ -92,7 +92,7 @@ async def handle_context_interrupt(user_id: str, text: str, ctx: dict, reply_tok
     if is_cancel_command(text):
         logger.info(f"❌ User {user_id} cancelled flow")
         await delete_pending_context(user_id)
-        await reply_line(reply_token, "ยกเลิกแล้วค่ะ ส่งรูปใหม่ได้เลย 📷")
+        await reply_line(reply_token, "ยกเลิกแล้วครับ ส่งรูปใหม่ได้เลย 📷")
         return (True, None)
 
     # === 2. ตรวจจับคำสั่งทำต่อ ===

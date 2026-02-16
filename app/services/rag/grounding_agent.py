@@ -1,5 +1,5 @@
 """
-Grounding Agent
+Grounding Agent (Fertilizer version)
 
 Responsibilities:
 - Verify that answer is grounded in retrieved documents
@@ -111,14 +111,12 @@ class GroundingAgent:
                 'title': doc.title,
                 'source': doc.source,
                 'content': doc.content[:300],
-                'product_name': doc.metadata.get('product_name'),
-                'chemical_name': doc.metadata.get('chemical_name'),
+                'crop': doc.metadata.get('crop'),
+                'growth_stage': doc.metadata.get('growth_stage'),
+                'fertilizer_formula': doc.metadata.get('fertilizer_formula'),
                 'usage_rate': doc.metadata.get('usage_rate'),
-                'target_pest': doc.metadata.get('target_pest'),
-                'category': doc.metadata.get('category'),
-                'applicable_crops': doc.metadata.get('applicable_crops'),
-                'selling_point': doc.metadata.get('selling_point'),
-                'strategy_group': doc.metadata.get('strategy_group'),
+                'primary_nutrients': doc.metadata.get('primary_nutrients'),
+                'benefits': doc.metadata.get('benefits'),
             }
             summaries.append(summary)
         return summaries
@@ -137,22 +135,18 @@ class GroundingAgent:
         for i, summary in enumerate(doc_summaries, 1):
             part = f"[เอกสาร {i}]\n"
             part += f"หัวข้อ: {summary['title']}\n"
-            if summary.get('product_name'):
-                part += f"สินค้า: {summary['product_name']}"
-                if summary.get('chemical_name'):
-                    part += f" (สารสำคัญ: {summary['chemical_name']})"
-                part += "\n"
-            if summary.get('applicable_crops'):
-                part += f"พืชที่ใช้ได้: {str(summary['applicable_crops'])[:150]}\n"
-            if summary.get('selling_point'):
-                part += f"จุดเด่น: {str(summary['selling_point'])[:150]}\n"
+            if summary.get('crop'):
+                part += f"พืช: {summary['crop']}\n"
+            if summary.get('growth_stage'):
+                part += f"ระยะ: {summary['growth_stage']}\n"
+            if summary.get('fertilizer_formula'):
+                part += f"สูตรปุ๋ย: {summary['fertilizer_formula']}\n"
+            if summary.get('primary_nutrients'):
+                part += f"ธาตุอาหารหลัก: {summary['primary_nutrients']}\n"
             if summary.get('usage_rate'):
                 part += f"อัตราใช้: {summary['usage_rate']}\n"
-            if summary.get('target_pest'):
-                target = str(summary['target_pest'])[:150]
-                part += f"ใช้กำจัด: {target}\n"
-            if summary.get('strategy_group'):
-                part += f"Strategy Group: {summary['strategy_group']}\n"
+            if summary.get('benefits'):
+                part += f"ประโยชน์: {str(summary['benefits'])[:150]}\n"
             if summary.get('content'):
                 part += f"เนื้อหา: {summary['content']}\n"
             context_parts.append(part)
@@ -162,8 +156,8 @@ class GroundingAgent:
         # Build allowed products list
         allowed_products = []
         for summary in doc_summaries:
-            if summary.get('product_name'):
-                allowed_products.append(summary['product_name'])
+            if summary.get('fertilizer_formula'):
+                allowed_products.append(summary['fertilizer_formula'])
         allowed_products_str = ", ".join(set(allowed_products)) if allowed_products else "(ไม่มี)"
 
         prompt = f"""ตรวจสอบว่าเอกสารที่ค้นได้มีข้อมูลเพียงพอที่จะตอบคำถามได้หรือไม่
@@ -175,27 +169,26 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 ข้อมูลจากฐานข้อมูล:
 {context}
 
-สินค้าที่พบ: [{allowed_products_str}]
+สูตรปุ๋ยที่พบ: [{allowed_products_str}]
 
 ตอบเป็น JSON (ไม่มี markdown):
 {{
     "is_grounded": true/false,
     "confidence": 0.0-1.0,
-    "relevant_products": ["ชื่อสินค้าที่เกี่ยวข้องกับคำถาม"],
-    "available_fields": ["field ที่มีข้อมูล เช่น usage_rate, how_to_use, target_pest"],
-    "missing_info": ["ข้อมูลที่ขาดหาย เช่น อัตราการใช้ไม่มี"],
+    "relevant_products": ["สูตรปุ๋ยที่เกี่ยวข้องกับคำถาม"],
+    "available_fields": ["field ที่มีข้อมูล เช่น usage_rate, benefits, growth_stage"],
+    "missing_info": ["ข้อมูลที่ขาดหาย"],
     "citations": [
         {{"doc_id": "X", "title": "...", "quoted_text": "ข้อความอ้างอิง"}}
     ]
 }}
 
 กฎ:
-1. is_grounded=true ถ้ามีสินค้าอย่างน้อย 1 ตัวที่เกี่ยวข้องกับคำถาม
-2. relevant_products ต้องมีเฉพาะสินค้าที่ตรงกับคำถามจริงๆ
-3. ถ้าถามเฉพาะสินค้า X แต่ไม่พบ X → is_grounded=false
-4. confidence สูง (>0.8) ถ้าสินค้าตรงกับคำถามเป๊ะ
-5. ถ้าสินค้าหลายตัวคล้ายกัน (เช่น ต่างความเข้มข้น) ให้เลือกตัวที่ "พืชที่ใช้ได้" ระบุเน้นพืชที่ผู้ใช้ถามถึงเป็นลำดับแรก
-6. สินค้า Strategy Skyrocket/Expand เกี่ยวข้องมากกว่า Standard เสมอ"""
+1. is_grounded=true ถ้ามีสูตรปุ๋ยอย่างน้อย 1 สูตรที่เกี่ยวข้องกับคำถาม
+2. relevant_products ต้องมีเฉพาะสูตรปุ๋ยที่ตรงกับพืชและระยะที่ถาม
+3. ถ้าถามเฉพาะพืช X แต่ไม่พบข้อมูลสำหรับ X → is_grounded=false
+4. confidence สูง (>0.8) ถ้าพืชและระยะตรงเป๊ะ
+5. ถ้ามีหลายสูตรสำหรับพืชเดียวกัน ทุกสูตรที่ตรงระยะถือว่าเกี่ยวข้อง"""
 
         response = await self.openai_client.chat.completions.create(
             model=LLM_MODEL_GROUNDING,
@@ -226,7 +219,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 citations.append(Citation(
                     doc_id=str(cit.get("doc_id", "")),
                     doc_title=cit.get("title", ""),
-                    source="products",
+                    source="mahbin_npk",
                     quoted_text=cit.get("quoted_text", ""),
                     confidence=data.get("confidence", 0.5)
                 ))
@@ -264,19 +257,23 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             )
 
         # Build answer from top documents
-        top_doc = docs[0]
-        answer_parts = ["จากข้อมูลในฐานข้อมูล:\n"]
+        answer_parts = ["จากข้อมูลในระบบ:\n"]
 
         for i, doc in enumerate(docs[:3], 1):
-            product_name = doc.metadata.get('product_name') or doc.title
-            chemical = doc.metadata.get('chemical_name')
-            if chemical:
-                product_name = f"{product_name} ({chemical})"
+            formula = doc.metadata.get('fertilizer_formula') or doc.title
+            crop = doc.metadata.get('crop', '')
+            growth_stage = doc.metadata.get('growth_stage', '')
+            nutrients = doc.metadata.get('primary_nutrients', '')
 
-            answer_parts.append(f"{i}. {product_name}")
+            display = f"{formula}"
+            if nutrients:
+                display = f"{formula} ({nutrients})"
 
-            if doc.metadata.get('target_pest'):
-                answer_parts.append(f"   - ใช้กำจัด: {str(doc.metadata['target_pest'])[:100]}")
+            answer_parts.append(f"{i}. {display}")
+            if crop:
+                answer_parts.append(f"   - พืช: {crop}")
+            if growth_stage:
+                answer_parts.append(f"   - ระยะ: {growth_stage}")
             if doc.metadata.get('usage_rate'):
                 answer_parts.append(f"   - อัตราใช้: {doc.metadata['usage_rate']}")
             answer_parts.append("")

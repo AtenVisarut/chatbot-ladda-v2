@@ -103,7 +103,7 @@ async def _process_webhook_events(events: list):
 
             # Check rate limit
             if not await check_user_rate_limit(user_id):
-                await reply_line(reply_token, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ ⏳")
+                await reply_line(reply_token, "ขออภัยครับ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะครับ ⏳")
                 continue
 
             # Ensure user exists (auto-register new users)
@@ -121,7 +121,7 @@ async def _process_webhook_events(events: list):
             if event_type == "message" and event.get("message", {}).get("type") == "image":
                 from app.config import ENABLE_IMAGE_DIAGNOSIS
                 if not ENABLE_IMAGE_DIAGNOSIS:
-                    await reply_line(reply_token, "น้องลัดดายังไม่สามารถสแกนโรคพืชจากภาพได้ค่ะ ลัดดาจะรับได้เฉพาะข้อความเท่านั้นนะคะ ขอบคุณค่ะ")
+                    await reply_line(reply_token, "พี่ม้าบินยังไม่สามารถสแกนโรคพืชจากภาพได้ครับ ลัดดาจะรับได้เฉพาะข้อความเท่านั้นนะครับ ขอบคุณครับ")
                     continue
 
                 message_id = event["message"]["id"]
@@ -167,7 +167,7 @@ async def _process_webhook_events(events: list):
 
                 except Exception as e:
                     logger.error(f"Error processing image: {e}")
-                    await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาดในการรับรูปภาพ โปรดลองใหม่อีกครั้ง 😢")
+                    await reply_line(reply_token, "ขออภัยครับ เกิดข้อผิดพลาดในการรับรูปภาพ โปรดลองใหม่อีกครั้ง 😢")
 
             # 3. Handle Text Message
             elif event_type == "message" and event.get("message", {}).get("type") == "text":
@@ -286,7 +286,7 @@ async def _process_webhook_events(events: list):
                             image_bytes = await get_image_content_from_line(message_id_from_ctx)
                         except Exception as e:
                             logger.error(f"Failed to download image: {e}")
-                            await reply_line(reply_token, "ขออภัยค่ะ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
+                            await reply_line(reply_token, "ขออภัยครับ ไม่สามารถดาวน์โหลดรูปภาพได้ กรุณาส่งรูปใหม่อีกครั้ง 😢")
                             await delete_pending_context(user_id)
                             continue
 
@@ -407,7 +407,7 @@ async def _process_webhook_events(events: list):
                                         disease_name=detection_result.disease_name
                                     )
                                 else:
-                                    await push_line(user_id, "ขออภัยค่ะ ไม่พบผลิตภัณฑ์ที่เหมาะสมสำหรับระยะนี้ 😢")
+                                    await push_line(user_id, "ขออภัยครับ ไม่พบผลิตภัณฑ์ที่เหมาะสมสำหรับระยะนี้ 😢")
 
                                 # Add to memory
                                 await add_to_memory(user_id, "user", f"[พืช] {plant_type} [ระยะ] {growth_stage}")
@@ -427,7 +427,7 @@ async def _process_webhook_events(events: list):
 
                         except Exception as e:
                             logger.error(f"Error processing growth stage response: {e}", exc_info=True)
-                            await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง 😢")
+                            await reply_line(reply_token, "ขออภัยครับ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง 😢")
                             await delete_pending_context(user_id)
 
                     else:
@@ -444,7 +444,7 @@ async def _process_webhook_events(events: list):
                     # Normal text message handling
                     if text.lower() in ["ล้างความจำ", "reset", "clear"]:
                         await clear_memory(user_id)
-                        await reply_line(reply_token, "ล้างความจำเรียบร้อยค่ะ เริ่มต้นใหม่ได้เลย! ✨")
+                        await reply_line(reply_token, "ล้างความจำเรียบร้อยครับ เริ่มต้นใหม่ได้เลย! ✨")
 
                     elif text.lower() in ["ช่วยเหลือ", "help", "เมนู"]:
                         # Use Flex Message for help menu
@@ -459,7 +459,7 @@ async def _process_webhook_events(events: list):
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
                 # Reply with a sticker
-                await reply_line(reply_token, "ขอบคุณค่ะ! 😊", with_sticker=True)
+                await reply_line(reply_token, "ขอบคุณครับ! 😊", with_sticker=True)
 
         logger.info(f"✅ Background webhook processing completed in {time.time() - start_time:.2f}s")
 
@@ -468,6 +468,6 @@ async def _process_webhook_events(events: list):
         # Try to send error reply if we have a valid reply_token
         try:
             if 'reply_token' in dir() and reply_token:
-                await reply_line(reply_token, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะคะ")
+                await reply_line(reply_token, "ขออภัยครับ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะครับ")
         except Exception:
             pass  # reply_token may have expired

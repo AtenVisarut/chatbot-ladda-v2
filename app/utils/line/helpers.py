@@ -138,7 +138,7 @@ async def push_line(user_id: str, message: Union[str, Dict, List], with_sticker:
         try:
             simple_payload = {
                 "to": user_id,
-                "messages": [{"type": "text", "text": "ขออภัยค่ะ เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง 🙏"}]
+                "messages": [{"type": "text", "text": "ขออภัยครับ เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง 🙏"}]
             }
             async with httpx.AsyncClient(timeout=10.0) as client:
                 await client.post(url, headers=headers, json=simple_payload)
