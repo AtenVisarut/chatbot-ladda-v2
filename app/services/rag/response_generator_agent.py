@@ -11,7 +11,6 @@ Responsibilities:
 
 import logging
 import json
-import re
 
 from app.services.rag import (
     QueryAnalysis,
@@ -134,25 +133,13 @@ class ResponseGeneratorAgent:
                         if has_disease_match:
                             break
 
-                # Check if we have fertilizer docs (bypass no-data for fertilizer queries)
-                has_fertilizer_docs = any(
-                    d.source == 'mahbin_npk' for d in retrieval_result.documents
-                )
-
                 if not has_documents or (
                     grounding_result.confidence < 0.2
                     and not has_crop_specific_top
                     and not (has_product_in_query and has_documents)
                     and not has_disease_match
-                    and not has_fertilizer_docs
                 ):
                     return self._generate_no_data_response(query_analysis)
-
-                # Fertilizer docs found — override confidence
-                if has_fertilizer_docs:
-                    final_confidence = max(final_confidence, 0.70)
-                    final_grounded = True
-                    logger.info(f"  - Confidence override: fertilizer docs → {final_confidence:.2f}")
 
                 # Product found but grounding failed — let LLM explain using actual data
                 if has_product_in_query and has_documents:
@@ -226,13 +213,8 @@ class ResponseGeneratorAgent:
         if not self.openai_client:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
-        # Separate fertilizer docs from product docs
-        all_top_docs = retrieval_result.documents[:8]
-        fert_docs = [d for d in all_top_docs if d.source == 'mahbin_npk']
-        product_only_docs = [d for d in all_top_docs if d.source != 'mahbin_npk']
-
         # Keep all products (including Standard) — just sort by strategy_group priority
-        docs_to_use = product_only_docs[:5]
+        docs_to_use = retrieval_result.documents[:5]
 
         # Sort by strategy_group priority: Skyrocket > Expand > Natural > Standard
         # ensures Skyrocket/Expand appear first in product context sent to LLM
@@ -338,25 +320,6 @@ class ResponseGeneratorAgent:
             product_context_parts.append(part)
 
         product_context = "\n".join(product_context_parts)
-
-        # Build fertilizer recommendation context
-        fertilizer_context = ""
-        if fert_docs:
-            fert_parts = []
-            for i, doc in enumerate(fert_docs, 1):
-                meta = doc.metadata
-                part = f"[คำแนะนำสูตรปุ๋ย {i}]"
-                part += f"\n  พืช: {meta.get('crop', '')}"
-                part += f"\n  ระยะพืช: {meta.get('growth_stage', '')}"
-                part += f"\n  สูตรปุ๋ย: {meta.get('fertilizer_formula', '')}"
-                if meta.get('usage_rate'):
-                    part += f"\n  อัตราการใช้: {meta['usage_rate']}"
-                if meta.get('primary_nutrients'):
-                    part += f"\n  ธาตุหลัก: {meta['primary_nutrients']}"
-                if meta.get('benefits'):
-                    part += f"\n  ประโยชน์: {meta['benefits']}"
-                fert_parts.append(part)
-            fertilizer_context = "\n\n".join(fert_parts)
 
         # Relevant products from grounding — inject crop-specific products from retrieval
         relevant = list(grounding_result.relevant_products)
@@ -468,23 +431,13 @@ class ResponseGeneratorAgent:
                     crop_note = f"\nหมายเหตุ: {pname} เป็นสินค้าที่เน้นสำหรับ{plant_type}โดยเฉพาะ ให้แนะนำเป็นตัวแรก\n"
                     break
 
-        # Build fertilizer context section for prompt
-        fertilizer_prompt_section = ""
-        if fertilizer_context:
-            fertilizer_prompt_section = f"""
-คำแนะนำสูตรปุ๋ย (ข้อมูลทั่วไป ไม่ใช่สินค้า ICP Ladda):
-{fertilizer_context}
-
-หมายเหตุ: ข้อมูลสูตรปุ๋ยข้างต้นเป็นคำแนะนำทั่วไป สามารถหาซื้อได้จากร้านเคมีเกษตรทั่วไปหรือตัวแทนจำหน่าย ICP Ladda
-"""
-
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
 ข้อมูลสินค้าที่ผ่านการตรวจสอบแล้ว:
 {product_context}
-{fertilizer_prompt_section}
+
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
 {crop_note}{disease_mismatch_note}{disease_match_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
@@ -531,12 +484,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         'ข้าว', 'ทุเรียน', 'มะม่วง', 'ลำไย', 'มังคุด', 'อ้อย', 'ข้าวโพด',
         # Generic terms
         'ดื้อยา', 'ดื้อสาร', 'ใบ', 'ดอก', 'ผล', 'ราก', 'กิ่ง', 'ลำต้น',
-        # Fertilizer formulas and terms
-        'สูตร', 'ปุ๋ย', 'NPK',
     }
-
-    # Pattern for NPK fertilizer formulas (e.g. "16-20-0", "46-0-0")
-    _NPK_PATTERN = re.compile(r'^\d{1,2}-\d{1,2}-\d{1,2}')
 
     def _validate_product_names(self, answer: str, docs: list) -> str:
         """
@@ -567,10 +515,6 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
                 # Skip non-product quoted text (weed species, disease, pest, crop names)
                 if any(kw in product_mention for kw in self._NON_PRODUCT_KEYWORDS):
-                    continue
-
-                # Skip NPK fertilizer formulas (e.g. "16-20-0", "46-0-0")
-                if self._NPK_PATTERN.match(product_mention):
                     continue
 
                 is_known = any(

@@ -106,34 +106,20 @@ class GroundingAgent:
         """Extract key information from documents for grounding"""
         summaries = []
         for doc in docs[:10]:  # Limit to top 10
-            if doc.source == 'mahbin_npk':
-                summary = {
-                    'id': doc.id,
-                    'title': doc.title,
-                    'source': doc.source,
-                    'content': doc.content[:300],
-                    'crop': doc.metadata.get('crop'),
-                    'growth_stage': doc.metadata.get('growth_stage'),
-                    'fertilizer_formula': doc.metadata.get('fertilizer_formula'),
-                    'usage_rate': doc.metadata.get('usage_rate'),
-                    'primary_nutrients': doc.metadata.get('primary_nutrients'),
-                    'benefits': doc.metadata.get('benefits'),
-                }
-            else:
-                summary = {
-                    'id': doc.id,
-                    'title': doc.title,
-                    'source': doc.source,
-                    'content': doc.content[:300],
-                    'product_name': doc.metadata.get('product_name'),
-                    'chemical_name': doc.metadata.get('chemical_name'),
-                    'usage_rate': doc.metadata.get('usage_rate'),
-                    'target_pest': doc.metadata.get('target_pest'),
-                    'category': doc.metadata.get('category'),
-                    'applicable_crops': doc.metadata.get('applicable_crops'),
-                    'selling_point': doc.metadata.get('selling_point'),
-                    'strategy_group': doc.metadata.get('strategy_group'),
-                }
+            summary = {
+                'id': doc.id,
+                'title': doc.title,
+                'source': doc.source,
+                'content': doc.content[:300],
+                'product_name': doc.metadata.get('product_name'),
+                'chemical_name': doc.metadata.get('chemical_name'),
+                'usage_rate': doc.metadata.get('usage_rate'),
+                'target_pest': doc.metadata.get('target_pest'),
+                'category': doc.metadata.get('category'),
+                'applicable_crops': doc.metadata.get('applicable_crops'),
+                'selling_point': doc.metadata.get('selling_point'),
+                'strategy_group': doc.metadata.get('strategy_group'),
+            }
             summaries.append(summary)
         return summaries
 
@@ -151,39 +137,22 @@ class GroundingAgent:
         for i, summary in enumerate(doc_summaries, 1):
             part = f"[เอกสาร {i}]\n"
             part += f"หัวข้อ: {summary['title']}\n"
-            if summary.get('source') == 'mahbin_npk':
-                # Fertilizer recommendation doc
-                part += f"ประเภท: คำแนะนำสูตรปุ๋ย\n"
-                if summary.get('crop'):
-                    part += f"พืช: {summary['crop']}\n"
-                if summary.get('growth_stage'):
-                    part += f"ระยะพืช: {summary['growth_stage']}\n"
-                if summary.get('fertilizer_formula'):
-                    part += f"สูตรปุ๋ย: {summary['fertilizer_formula']}\n"
-                if summary.get('usage_rate'):
-                    part += f"อัตราใช้: {summary['usage_rate']}\n"
-                if summary.get('primary_nutrients'):
-                    part += f"ธาตุหลัก: {summary['primary_nutrients']}\n"
-                if summary.get('benefits'):
-                    part += f"ประโยชน์: {summary['benefits']}\n"
-            else:
-                # Product doc
-                if summary.get('product_name'):
-                    part += f"สินค้า: {summary['product_name']}"
-                    if summary.get('chemical_name'):
-                        part += f" (สารสำคัญ: {summary['chemical_name']})"
-                    part += "\n"
-                if summary.get('applicable_crops'):
-                    part += f"พืชที่ใช้ได้: {str(summary['applicable_crops'])[:150]}\n"
-                if summary.get('selling_point'):
-                    part += f"จุดเด่น: {str(summary['selling_point'])[:150]}\n"
-                if summary.get('usage_rate'):
-                    part += f"อัตราใช้: {summary['usage_rate']}\n"
-                if summary.get('target_pest'):
-                    target = str(summary['target_pest'])[:150]
-                    part += f"ใช้กำจัด: {target}\n"
-                if summary.get('strategy_group'):
-                    part += f"Strategy Group: {summary['strategy_group']}\n"
+            if summary.get('product_name'):
+                part += f"สินค้า: {summary['product_name']}"
+                if summary.get('chemical_name'):
+                    part += f" (สารสำคัญ: {summary['chemical_name']})"
+                part += "\n"
+            if summary.get('applicable_crops'):
+                part += f"พืชที่ใช้ได้: {str(summary['applicable_crops'])[:150]}\n"
+            if summary.get('selling_point'):
+                part += f"จุดเด่น: {str(summary['selling_point'])[:150]}\n"
+            if summary.get('usage_rate'):
+                part += f"อัตราใช้: {summary['usage_rate']}\n"
+            if summary.get('target_pest'):
+                target = str(summary['target_pest'])[:150]
+                part += f"ใช้กำจัด: {target}\n"
+            if summary.get('strategy_group'):
+                part += f"Strategy Group: {summary['strategy_group']}\n"
             if summary.get('content'):
                 part += f"เนื้อหา: {summary['content']}\n"
             context_parts.append(part)

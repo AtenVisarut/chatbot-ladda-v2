@@ -130,111 +130,6 @@ class RetrievalAgent:
             }
         )
 
-    # Keywords that trigger fertilizer recommendation search
-    FERTILIZER_KEYWORDS = [
-        'ปุ๋ย', 'สูตร', 'NPK', 'บำรุง', 'รองพื้น', 'เร่งต้น', 'แตกกอ',
-        'รับรวง', 'เร่งหวาน', 'ระเบิดหัว', 'ธาตุอาหาร', 'ไนโตรเจน',
-        'ฟอสฟอรัส', 'โพแทสเซียม', 'เร่งดอก', 'เร่งผล', 'บำรุงต้น',
-    ]
-
-    async def _search_mahbin_npk(
-        self, query_analysis: QueryAnalysis
-    ) -> List[RetrievedDocument]:
-        """Search mahbin_npk table by crop and growth_stage (ilike filter)"""
-        if not self.supabase:
-            return []
-
-        try:
-            entities = query_analysis.entities
-            crop = entities.get('plant_type', '')
-
-            # Also try extracting crop from original query if entity is empty
-            if not crop:
-                known_crops = ['นาข้าว', 'ข้าว', 'ข้าวโพด', 'อ้อย', 'มันสำปะหลัง',
-                               'ปาล์มน้ำมัน', 'ปาล์ม', 'ยางพารา', 'ยาง']
-                for kc in known_crops:
-                    if kc in query_analysis.original_query:
-                        crop = kc
-                        break
-
-            if not crop:
-                logger.info("    Fertilizer search: no crop detected, skipping")
-                return []
-
-            # Map common crop names to DB crop values
-            crop_map = {
-                'ข้าว': 'นาข้าว', 'นาข้าว': 'นาข้าว',
-                'ข้าวโพด': 'ข้าวโพด',
-                'อ้อย': 'อ้อย',
-                'มันสำปะหลัง': 'มันสำปะหลัง', 'มัน': 'มันสำปะหลัง',
-                'ปาล์มน้ำมัน': 'ปาล์มน้ำมัน', 'ปาล์ม': 'ปาล์มน้ำมัน',
-                'ยางพารา': 'ยางพารา', 'ยาง': 'ยางพารา',
-            }
-            db_crop = crop_map.get(crop, crop)
-
-            # Query with crop filter
-            growth_stage = entities.get('growth_stage', '')
-
-            if growth_stage:
-                # Try crop + stage first
-                result = self.supabase.table('mahbin_npk') \
-                    .select('*') \
-                    .ilike('crop', f'%{db_crop}%') \
-                    .ilike('growth_stage', f'%{growth_stage}%') \
-                    .execute()
-
-                if not result.data:
-                    # Fallback: crop only
-                    result = self.supabase.table('mahbin_npk') \
-                        .select('*') \
-                        .ilike('crop', f'%{db_crop}%') \
-                        .execute()
-            else:
-                result = self.supabase.table('mahbin_npk') \
-                    .select('*') \
-                    .ilike('crop', f'%{db_crop}%') \
-                    .execute()
-
-            if not result.data:
-                logger.info(f"    Fertilizer search: no results for crop='{db_crop}'")
-                return []
-
-            # Convert to RetrievedDocument
-            docs = []
-            for item in result.data:
-                content = (
-                    f"สูตรปุ๋ยแนะนำ: {item.get('fertilizer_formula', '')}\n"
-                    f"พืช: {item.get('crop', '')}\n"
-                    f"ระยะพืช: {item.get('growth_stage', '')}\n"
-                    f"อัตราการใช้: {item.get('usage_rate', '')}\n"
-                    f"ธาตุหลัก: {item.get('primary_nutrients', '')}\n"
-                    f"ประโยชน์: {item.get('benefits', '')}"
-                )
-                doc = RetrievedDocument(
-                    id=f"fert_{item.get('id', '')}",
-                    title=f"สูตรปุ๋ย {item.get('fertilizer_formula', '')} สำหรับ{item.get('crop', '')}",
-                    content=content,
-                    source='mahbin_npk',
-                    similarity_score=0.90,
-                    rerank_score=0.85,
-                    metadata={
-                        'crop': item.get('crop'),
-                        'growth_stage': item.get('growth_stage'),
-                        'fertilizer_formula': item.get('fertilizer_formula'),
-                        'usage_rate': item.get('usage_rate'),
-                        'primary_nutrients': item.get('primary_nutrients'),
-                        'benefits': item.get('benefits'),
-                    }
-                )
-                docs.append(doc)
-
-            logger.info(f"    Fertilizer search: {len(docs)} docs for crop='{db_crop}', stage='{growth_stage}'")
-            return docs
-
-        except Exception as e:
-            logger.error(f"Fertilizer recommendation search error: {e}")
-            return []
-
     async def _direct_product_lookup(self, product_name: str) -> List[RetrievedDocument]:
         """Direct database lookup by product name (exact/ilike match)"""
         if not self.supabase:
@@ -467,18 +362,6 @@ class RetrievalAgent:
             multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
             all_docs.extend(multi_docs)
 
-            # Stage 1.1: Fertilizer recommendation search (if query is about fertilizer/nutrients)
-            fertilizer_docs = []
-            is_fertilizer_query = (
-                query_analysis.intent == IntentType.NUTRIENT_SUPPLEMENT
-                or any(kw in query_analysis.original_query for kw in self.FERTILIZER_KEYWORDS)
-            )
-            if is_fertilizer_query:
-                fertilizer_docs = await self._search_mahbin_npk(query_analysis)
-                if fertilizer_docs:
-                    all_docs.extend(fertilizer_docs)
-                    logger.info(f"  - Fertilizer recommendations found: {len(fertilizer_docs)} docs")
-
             # Stage 1.2: Consolidated disease fallback (runs ONCE after all vector searches)
             # Checks if disease is in any retrieved doc's target_pest
             # If not, does a single direct DB lookup instead of per-query fallbacks
@@ -689,13 +572,11 @@ class RetrievalAgent:
                                 break
 
             # Stage 4: Filter by rerank threshold
-            fertilizer_doc_ids = {doc.id for doc in fertilizer_docs} if fertilizer_docs else set()
             filtered_docs = [
                 doc for doc in reranked_docs
                 if doc.rerank_score >= self.rerank_threshold or doc.similarity_score >= self.vector_threshold
                 or doc.id in direct_lookup_ids
                 or doc.id in disease_fallback_ids
-                or doc.id in fertilizer_doc_ids
             ]
 
             # Ensure we have at least some results
@@ -995,27 +876,18 @@ class RetrievalAgent:
             doc_texts = []
             for i, doc in enumerate(docs[:15], 1):  # Limit to top 15
                 text = f"[{i}] {doc.title}"
-                if doc.source == 'mahbin_npk':
-                    # Fertilizer doc summary
-                    text += f" | พืช: {doc.metadata.get('crop', '')}"
-                    text += f" | ระยะ: {doc.metadata.get('growth_stage', '')}"
-                    text += f" | อัตรา: {doc.metadata.get('usage_rate', '')}"
-                    text += f" | ประโยชน์: {str(doc.metadata.get('benefits', ''))[:80]}"
-                    text += " | ประเภท: คำแนะนำสูตรปุ๋ย"
-                else:
-                    # Product doc summary
-                    if doc.metadata.get('product_name'):
-                        text += f" | สินค้า: {doc.metadata['product_name']}"
-                    if doc.metadata.get('target_pest'):
-                        text += f" | ใช้กำจัด: {str(doc.metadata['target_pest'])[:80]}"
-                    if doc.metadata.get('applicable_crops'):
-                        text += f" | พืช: {str(doc.metadata['applicable_crops'])[:80]}"
-                    if doc.metadata.get('selling_point'):
-                        text += f" | จุดเด่น: {str(doc.metadata['selling_point'])[:80]}"
-                    if doc.metadata.get('category'):
-                        text += f" | ประเภท: {doc.metadata['category']}"
-                    if doc.metadata.get('strategy_group'):
-                        text += f" | Strategy: {doc.metadata['strategy_group']}"
+                if doc.metadata.get('product_name'):
+                    text += f" | สินค้า: {doc.metadata['product_name']}"
+                if doc.metadata.get('target_pest'):
+                    text += f" | ใช้กำจัด: {str(doc.metadata['target_pest'])[:80]}"
+                if doc.metadata.get('applicable_crops'):
+                    text += f" | พืช: {str(doc.metadata['applicable_crops'])[:80]}"
+                if doc.metadata.get('selling_point'):
+                    text += f" | จุดเด่น: {str(doc.metadata['selling_point'])[:80]}"
+                if doc.metadata.get('category'):
+                    text += f" | ประเภท: {doc.metadata['category']}"
+                if doc.metadata.get('strategy_group'):
+                    text += f" | Strategy: {doc.metadata['strategy_group']}"
                 doc_texts.append(text)
 
             docs_str = "\n".join(doc_texts)
