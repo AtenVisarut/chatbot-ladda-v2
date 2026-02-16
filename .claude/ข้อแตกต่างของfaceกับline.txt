@@ -1,0 +1,197 @@
+================================================================================
+ข้อแตกต่างระหว่าง Facebook Messenger กับ LINE Webhook
+================================================================================
+
+## 1. Webhook Structure
+
+### LINE
+- Endpoint: POST /webhook
+- Signature: X-Line-Signature header (HMAC-SHA256 ด้วย Channel Secret)
+- Events: body → {"events": [{type, replyToken, source, message, ...}]}
+- 1 request มีได้หลาย events
+
+### Facebook
+- Endpoint 2 อัน:
+  - GET  /facebook/webhook → one-time verification (hub.mode, hub.verify_token, hub.challenge)
+  - POST /facebook/webhook → receive messages
+- Signature: X-Hub-Signature-256 header (HMAC-SHA256 ด้วย App Secret)
+- Events: body → {"object":"page", "entry": [{"messaging": [{sender, recipient, message, ...}]}]}
+- ซ้อน 2 ชั้น: entry[] → messaging[]
+
+### สรุป
+- LINE ไม่มี GET verify (ตั้ง URL ใน LINE Console แล้วใช้ได้เลย)
+- Facebook ต้อง verify ผ่าน GET ก่อน 1 ครั้ง + ต้อง subscribe Page กับ App ด้วย API
+
+================================================================================
+
+## 2. การตอบกลับ (Reply vs Push)
+
+### LINE
+- **Reply** (ใช้ reply_token): ตอบกลับ event → ฟรี ไม่เสียค่า messaging
+  - reply_token มีอายุ ~30 วินาที ใช้ได้ครั้งเดียว
+  - ถ้าหมดอายุ ต้องใช้ Push แทน (เสียเงิน)
+- **Push** (ใช้ user_id): ส่งข้อความถึง user โดยไม่ต้องมี event
+  - เสียค่า messaging ตาม plan (Free plan 500 msg/เดือน)
+- ฟังก์ชัน: reply_line(reply_token, text), push_line(user_id, text)
+
+### Facebook
+- **ไม่มี reply_token** — ส่งข้อความโดยใช้ PSID (Page-Scoped ID) ทุกครั้ง
+- ใช้ Send API: POST /me/messages?access_token=...
+  - payload: {"recipient": {"id": psid}, "message": {"text": "..."}}
+- ฟรีไม่จำกัด (ภายใน 24 ชม. หลัง user ส่งข้อความมา)
+- ฟังก์ชัน: send_facebook_message(psid, text)
+
+### สรุป
+- LINE: ตอบต้องใช้ reply_token (มีอายุ) → ต้อง reply เร็ว
+- Facebook: ตอบใช้ PSID → ไม่มีเวลาจำกัดของ token (แต่มี 24hr messaging window)
+
+================================================================================
+
+## 3. ข้อจำกัดความยาวข้อความ
+
+### LINE
+- Text message: สูงสุด 5,000 ตัวอักษร
+- ส่งได้หลายข้อความใน 1 reply (สูงสุด 5 messages ต่อ 1 reply)
+
+### Facebook
+- Text message: สูงสุด **2,000 ตัวอักษร**
+- ส่งได้ทีละ 1 ข้อความ → ถ้ายาวเกินต้อง split
+
+### สรุป
+- Facebook จำกัดกว่า LINE 2.5 เท่า → ต้องมี split_message() ตัดที่ขอบ newline
+- LINE ส่งยาวได้เลย ไม่ต้อง split
+
+================================================================================
+
+## 4. User ID
+
+### LINE
+- User ID format: U + hex 32 ตัว (เช่น U1234567890abcdef...)
+- ได้จาก event.source.userId
+- ใช้ได้ทั้ง reply และ push
+
+### Facebook
+- PSID (Page-Scoped ID): ตัวเลขล้วน (เช่น 6728492748293)
+- ได้จาก event.sender.id
+- PSID ต่างกันในแต่ละ Page (user คนเดียว คุยกับ Page A กับ Page B ได้ PSID คนละอัน)
+
+### ใน Chatbot-ladda
+- LINE user_id ใช้ตรงๆ เช่น "U1234..."
+- Facebook user_id ใส่ prefix: "fb:{psid}" เช่น "fb:6728492748293"
+- เพื่อกันชน (ไม่ให้ memory ของ LINE user ปนกับ FB user)
+
+================================================================================
+
+## 5. ฟีเจอร์ที่รองรับ
+
+### LINE (ใน Chatbot-ladda)
+- Text message                ✅
+- Image message               ✅ (วิเคราะห์โรคพืช + แนะนำสินค้า)
+- Sticker                     ✅ (ตอบ emoji)
+- Follow event                ✅ (welcome message)
+- Rich Menu / Flex Message    ✅
+- Quick Reply                 ✅
+- 2-Step Flow                 ✅ (เลือกพืช → เลือกระยะ → วิเคราะห์)
+
+### Facebook (ใน Chatbot-ladda — Phase 1)
+- Text message                ✅
+- Image message               ❌ (แจ้งให้ใช้ LINE แทน)
+- Sticker                     ❌
+- Follow event                ❌
+- Quick Reply                 ❌ (ยังไม่ได้ implement)
+- 2-Step Flow                 ❌
+
+### สรุป
+- Facebook ตอนนี้รองรับแค่ text-only Q&A (ใช้ RAG pipeline เหมือน LINE)
+- Image analysis (วิเคราะห์โรคพืช) ยังไม่รองรับบน Facebook
+
+================================================================================
+
+## 6. Authentication / Credentials
+
+### LINE
+- LINE_CHANNEL_ACCESS_TOKEN — สำหรับ reply/push messages
+- LINE_CHANNEL_SECRET — สำหรับ verify webhook signature
+
+### Facebook
+- FB_PAGE_ACCESS_TOKEN — สำหรับ Send API (ส่งข้อความ)
+- FB_VERIFY_TOKEN — string อะไรก็ได้ ใช้ตอน verify webhook (ครั้งเดียว)
+- FB_APP_SECRET — สำหรับ verify X-Hub-Signature-256
+
+### สรุป
+- LINE ใช้ 2 keys
+- Facebook ใช้ 3 keys (เพิ่ม verify_token สำหรับ one-time setup)
+
+================================================================================
+
+## 7. Setup Steps ที่ต่างกัน
+
+### LINE
+1. สร้าง Channel ใน LINE Developers Console
+2. ตั้ง Webhook URL
+3. ใส่ Channel Secret + Channel Access Token ใน env
+4. เปิด Use webhook → ใช้งานได้เลย
+
+### Facebook
+1. สร้าง App ใน Meta Developer Console
+2. เพิ่ม "Messenger" product ใน App
+3. เชื่อม Facebook Page กับ App
+4. Generate Page Access Token
+5. ตั้ง Webhook URL + Verify Token → Facebook ส่ง GET verify
+6. Subscribe webhook fields (messages, messaging_postbacks)
+7. **Subscribe Page กับ App** (ผ่าน API: POST /{page-id}/subscribed_apps)
+8. ขอสิทธิ์ pages_messaging
+9. (ถ้าจะใช้จริง) App Review → เปลี่ยนเป็น Live mode
+
+### สรุป
+- LINE: 4 ขั้นตอน
+- Facebook: 9 ขั้นตอน (ซับซ้อนกว่ามาก โดยเฉพาะ subscribe Page + permissions)
+
+================================================================================
+
+## 8. Timeout / Response Time
+
+### LINE
+- ต้อง return 200 ภายใน ~30 วินาที (ไม่งั้น LINE จะ retry + timeout)
+- reply_token หมดอายุ ~30 วินาที
+- Chatbot-ladda: return 200 ทันที → process ใน asyncio.create_task
+
+### Facebook
+- ต้อง return 200 ภายใน 20 วินาที (ไม่งั้น Facebook จะ retry + mark webhook unhealthy)
+- ไม่มี reply_token → ส่งข้อความกลับได้ทีหลัง (ภายใน 24 ชม.)
+- Chatbot-ladda: return 200 ทันที → process ใน asyncio.create_task (เหมือน LINE)
+
+### สรุป
+- ทั้งคู่ต้อง return เร็ว → ใช้ background task เหมือนกัน
+- Facebook ให้เวลาน้อยกว่า (20 vs 30 วินาที)
+- แต่ Facebook ไม่มี token หมดอายุ → ส่งข้อความกลับทีหลังได้ง่ายกว่า
+
+================================================================================
+
+## 9. Typing Indicator
+
+### LINE
+- ไม่มี typing indicator API อย่างเป็นทางการ (มี แต่ต้อง chatMode = "chat")
+
+### Facebook
+- มี sender_action: "typing_on" / "typing_off"
+- Chatbot-ladda: send_typing_on(psid) ก่อนประมวลผล
+
+================================================================================
+
+## 10. ไฟล์ที่เกี่ยวข้อง
+
+### LINE
+- app/routers/webhook.py — webhook handler (340 บรรทัด, รองรับ text + image + sticker + follow)
+- app/utils/line/helpers.py — verify_line_signature, reply_line, push_line, get_image_content_from_line
+- app/utils/line/text_messages.py — text templates
+- app/utils/line/flex_messages.py — rich card templates
+
+### Facebook
+- app/routers/facebook_webhook.py — webhook handler (122 บรรทัด, text only)
+- app/utils/facebook/helpers.py — verify_fb_signature, send_facebook_message, send_typing_on, split_message
+
+### Shared (ใช้ร่วมกัน)
+- app/services/chat/handler.py — handle_natural_conversation() (core Q&A logic)
+- app/services/memory.py — conversation memory (แยก user_id LINE vs fb:PSID)
+- app/services/rag/ — RAG pipeline (ใช้ร่วมกันทั้ง 2 platform)
