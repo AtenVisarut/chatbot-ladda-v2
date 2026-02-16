@@ -80,14 +80,14 @@ async def _process_fb_message(event: dict) -> None:
         if not text:
             # Could be image, sticker, etc. — Phase 2
             if message.get("attachments"):
-                await send_facebook_message(psid, "พี่ม้าบินยังไม่สามารถสแกนโรคพืชจากภาพได้ครับ พี่ม้าบินจะรับได้เฉพาะข้อความเท่านั้นนะครับ ขอบคุณครับ")
+                await send_facebook_message(psid, "น้องลัดดายังไม่สามารถสแกนโรคพืชจากภาพได้ค่ะ ลัดดาจะรับได้เฉพาะข้อความเท่านั้นนะคะ ขอบคุณค่ะ")
             return
 
         logger.info(f"FB message from {psid}: {text}")
 
         # Rate limit check
         if not await check_user_rate_limit(user_id):
-            await send_facebook_message(psid, "ขออภัยครับ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะครับ")
+            await send_facebook_message(psid, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ")
             return
 
         # Ensure user exists
@@ -97,7 +97,7 @@ async def _process_fb_message(event: dict) -> None:
         # Quick commands
         if text.lower() in ["ล้างความจำ", "reset", "clear"]:
             await clear_memory(user_id)
-            await send_facebook_message(psid, "ล้างความจำเรียบร้อยครับ เริ่มต้นใหม่ได้เลย!")
+            await send_facebook_message(psid, "ล้างความจำเรียบร้อยค่ะ เริ่มต้นใหม่ได้เลย!")
             return
 
         # Send typing indicator
@@ -116,6 +116,6 @@ async def _process_fb_message(event: dict) -> None:
     except Exception as e:
         logger.error(f"Error processing FB message from {psid}: {e}", exc_info=True)
         try:
-            await send_facebook_message(psid, "ขออภัยครับ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะครับ")
+            await send_facebook_message(psid, "ขออภัยค่ะ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้งนะคะ")
         except Exception:
             pass

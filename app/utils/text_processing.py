@@ -225,11 +225,12 @@ def extract_keywords_from_question(question: str) -> dict:
     # Product-related keywords
     product_keywords = [
         # Thai
-        "ผลิตภัณฑ์", "สินค้า", "สาร", "ปุ๋ย", "สูตรปุ๋ย",
-        "ม้าบิน", "mahbin",
-        "แนะนำ", "ใช้", "ใส่ปุ๋ย", "ป้องกัน",
+        "ผลิตภัณฑ์", "สินค้า", "ยา", "สาร", "ปุ๋ย",
+        "icp", "ladda", "icpl", "ไอซีพี", "ลัดดา",
+        "โมเดิน", "ไดอะซินอน", "อิมิดาโคลพริด", "ไซเพอร์เมทริน",
+        "แนะนำ", "ใช้", "พ่น", "ฉีด", "กำจัด", "ป้องกัน",
         # English
-        "product", "products", "fertilizer", "recommend"
+        "product", "products", "fertilizer", "pesticide", "insecticide", "fungicide", "recommend"
     ]
 
     # Fertilizer-specific keywords (NEW)
@@ -237,9 +238,17 @@ def extract_keywords_from_question(question: str) -> dict:
         # ประเภทปุ๋ย/สารบำรุง
         "ปุ๋ย", "สารบำรุง", "ธาตุอาหาร", "ฮอร์โมน", "สารเร่ง",
         "ปุ๋ยเคมี", "ปุ๋ยอินทรีย์", "ปุ๋ยชีวภาพ",
-        "สูตรปุ๋ย", "npk", "ไนโตรเจน", "ฟอสฟอรัส", "โพแทสเซียม",
-        # ระยะการเติบโต
-        "เร่งต้น", "แตกกอ", "รับรวง", "ย่างปล้อง", "บำรุงต้น",
+        # ชื่อสินค้าปุ๋ย ICP (จาก CSV)
+        "กระรัต", "การูก้า", "คอนทาฟ", "ซอยบอม", "ซีเอ็มจี",
+        "ท๊อปกัน", "พานาส", "ราเซอร์", "เวคเตอร์", "รีโนเวท",
+        "อิมิดาโกลด์", "เกรค", "เทอราโน", "เมทามอร์ป", "แมสฟอร์ด",
+        "แอนดาแม็กซ์", "แอ็คนาว", "โฮป", "ไกลโฟเสท", "อัพดาว",
+        "ไดพิม", "ไฮซีส", "บอมส์", "พรีดิคท์", "วอแรนด์",
+        "อินเนอร์", "เบนซาน่า", "แจ๊ส", "นาแดน", "คาซ่า",
+        "ซิมเมอร์", "อาทราซีน", "คาริสมา",
+        # ประเภทสารเคมี
+        "สารกำจัดแมลง", "สารป้องกันโรค", "สารกำจัดวัชพืช",
+        "ยาฆ่าแมลง", "ยาฆ่าหญ้า", "ยาฆ่าเชื้อรา",
         # คำถามเกี่ยวกับปุ๋ย
         "อัตราใช้", "อัตราผสม", "วิธีใช้ปุ๋ย", "ใส่ปุ๋ย",
         # English
@@ -377,3 +386,119 @@ def validate_numbers_against_source(answer: str, source_docs: list) -> dict:
     return {"valid": valid, "mismatches": mismatches}
 
 
+def generate_thai_disease_variants(disease_name: str) -> List[str]:
+    """
+    Generate Thai disease name variants for fuzzy matching.
+
+    Handles:
+    1. โรค prefix add/remove
+    2. สี prefix in color names (ราสีชมพู ↔ ราชมพู)
+    3. Common transliteration variants (แอคแทคโนส ↔ แอนแทรคโนส)
+    4. N-gram substrings for fuzzy matching
+
+    Returns list of variants including the original name.
+    """
+    variants = {disease_name}
+
+    # Strip โรค prefix for matching, but also keep variant with it
+    bare = disease_name
+    if bare.startswith("โรค"):
+        bare = bare[len("โรค"):]
+        variants.add(bare)
+    else:
+        variants.add("โรค" + bare)
+
+    # Known transliteration variants (common misspellings by Thai farmers)
+    _SPELLING_VARIANTS = {
+        "แอคแทคโนส": "แอนแทรคโนส",
+        "แอนแทรคโนส": "แอคแทคโนส",
+        "แอนแทรกโนส": "แอนแทรคโนส",
+        "แอนเทรคโนส": "แอนแทรคโนส",
+        "แอนแทคโนส": "แอนแทรคโนส",
+        "ไฟท็อปโทร่า": "ไฟทอปธอร่า",
+        "ไฟทอปธอร่า": "ไฟท็อปโทร่า",
+        "ไฟธอปทอร่า": "ไฟทอปธอร่า",
+        "ไฟท็อปธอร่า": "ไฟทอปธอร่า",
+        "ไฟท็อป": "ไฟท็อปธอร่า",
+        "ไฟทิป": "ไฟท็อปธอร่า",
+        "ไฟทอป": "ไฟท็อปธอร่า",
+        "ฟิวซาเลี่ยม": "ฟิวซาเรียม",
+        "ฟิวเซอเรียม": "ฟิวซาเรียม",
+        "ฟูซาเรียม": "ฟิวซาเรียม",
+        "ฟิวสาเรียม": "ฟิวซาเรียม",
+        "ฟอซาเรียม": "ฟิวซาเรียม",
+        "ดาวนี่มิลดิว": "ราน้ำค้าง",
+        "พาวเดอรี่มิลดิว": "ราแป้ง",
+    }
+
+    # Add spelling variants
+    for variant_from, variant_to in _SPELLING_VARIANTS.items():
+        if variant_from in bare:
+            new_bare = bare.replace(variant_from, variant_to)
+            variants.add(new_bare)
+            variants.add("โรค" + new_bare)
+
+    _COLORS = ["ชมพู", "น้ำตาล", "เทา", "ขาว", "ดำ", "ม่วง", "เหลือง", "ส้ม"]
+
+    for color in _COLORS:
+        # รา+สี+color ↔ รา+color
+        with_si = f"ราสี{color}"
+        without_si = f"รา{color}"
+        if with_si in bare or without_si in bare:
+            variants.add(bare.replace(with_si, without_si))
+            variants.add(bare.replace(without_si, with_si))
+            variants.add("โรค" + bare.replace(with_si, without_si))
+            variants.add("โรค" + bare.replace(without_si, with_si))
+
+        # จุด+สี+color ↔ จุด+color
+        jud_with_si = f"จุดสี{color}"
+        jud_without_si = f"จุด{color}"
+        if jud_with_si in bare or jud_without_si in bare:
+            variants.add(bare.replace(jud_with_si, jud_without_si))
+            variants.add(bare.replace(jud_without_si, jud_with_si))
+            variants.add("โรค" + bare.replace(jud_with_si, jud_without_si))
+            variants.add("โรค" + bare.replace(jud_without_si, jud_with_si))
+
+    return list(variants)
+
+
+# =============================================================================
+# Symptom → Pathogen Mapping
+# =============================================================================
+SYMPTOM_PATHOGEN_MAP = {
+    "กิ่งแห้ง": ["ฟิวซาเรียม", "แอนแทรคโนส", "ราสีชมพู"],
+    "ผลเน่า": ["แอนแทรคโนส", "ไฟทอปธอร่า"],
+    "รากเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม", "พิเทียม"],
+    "ใบจุด": ["เซอโคสปอร่า", "แอนแทรคโนส"],
+    "ยางไหล": ["ไฟทอปธอร่า"],
+    "ใบไหม้": ["ไฟทอปธอร่า", "แอนแทรคโนส"],
+    "ราแป้ง": ["ราแป้ง", "โอดิอัม"],
+    "ราดำ": ["ราดำ"],
+    "โคนเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม"],
+    "ลำต้นเน่า": ["ไฟทอปธอร่า", "ฟิวซาเรียม"],
+    "ใบร่วง": ["แอนแทรคโนส", "ไฟทอปธอร่า"],
+}
+
+
+def resolve_symptom_to_pathogens(query: str) -> List[str]:
+    """
+    ตรวจจับอาการพืชในคำถามและ map กลับไปหาโรคที่เป็นไปได้
+
+    Args:
+        query: คำถามผู้ใช้
+
+    Returns:
+        list ของชื่อโรคที่เป็นไปได้ (deduplicated)
+        เช่น "กิ่งแห้ง" → ["ฟิวซาเรียม", "แอนแทรคโนส", "ราสีชมพู"]
+    """
+    result = []
+    seen = set()
+
+    for symptom, pathogens in SYMPTOM_PATHOGEN_MAP.items():
+        if symptom in query:
+            for p in pathogens:
+                if p not in seen:
+                    seen.add(p)
+                    result.append(p)
+
+    return result

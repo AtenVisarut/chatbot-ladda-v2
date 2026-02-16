@@ -3,11 +3,10 @@ Response Template Builder
 Builds detailed disease response using templates (NO AI generation)
 Reduces token usage by 85-90%
 """
-from __future__ import annotations
 
 import logging
 from typing import List, Dict, Optional
-from app.models import ProductRecommendation
+from app.models import DiseaseDetectionResult, ProductRecommendation
 
 logger = logging.getLogger(__name__)
 

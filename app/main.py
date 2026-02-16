@@ -1,4 +1,4 @@
-# พี่ม้าบิน Fertilizer Chatbot v2.5.1
+# LINE Plant Disease Detection Bot v2.5.1
 import logging
 import asyncio
 import os
@@ -56,7 +56,7 @@ async def periodic_cleanup():
 async def lifespan(app_instance: FastAPI):
     # Startup
     logger.info("=" * 60)
-    logger.info("Starting พี่ม้าบิน Fertilizer Chatbot")
+    logger.info("Starting LINE Plant Pest & Disease Detection Bot (Refactored)")
     logger.info(f"OpenAI API: {'✓' if OPENAI_API_KEY else '✗'}")
     logger.info(f"Supabase: {'✓' if supabase_client else '✗'}")
     logger.info(f"LINE Bot: {'✓' if LINE_CHANNEL_ACCESS_TOKEN else '✗'}")
@@ -96,8 +96,8 @@ async def lifespan(app_instance: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="พี่ม้าบิน Fertilizer Chatbot",
-    description="AI-powered fertilizer recommendation chatbot with Agentic RAG",
+    title="LINE Plant Disease Detection Bot",
+    description="AI-powered plant disease detection with Multi-Agent System",
     version="2.0.0",
     lifespan=lifespan
 )

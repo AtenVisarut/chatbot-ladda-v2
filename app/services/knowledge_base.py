@@ -138,7 +138,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
             )
             answer = post_process_answer(response.choices[0].message.content)
         else:
-            answer = "ขออภัยครับ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
+            answer = "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
         
         # Cache result
         # Use "knowledge" as cache type
