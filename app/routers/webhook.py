@@ -119,6 +119,11 @@ async def _process_webhook_events(events: list):
 
             # 2. Handle Image Message (Interactive Diagnosis)
             if event_type == "message" and event.get("message", {}).get("type") == "image":
+                from app.config import ENABLE_IMAGE_DIAGNOSIS
+                if not ENABLE_IMAGE_DIAGNOSIS:
+                    await reply_line(reply_token, "ตอนนี้ยังไม่รองรับการวิเคราะห์รูปภาพค่ะ กรุณาพิมพ์อาการหรือชื่อโรคเป็นข้อความแทนนะคะ 📝")
+                    continue
+
                 message_id = event["message"]["id"]
                 logger.info(f"Received image from {user_id}")
 
@@ -196,6 +201,14 @@ async def _process_webhook_events(events: list):
                 # ============================================================================#
 
                 if ctx:
+                    # === ถ้าปิด image diagnosis แล้วมี pending context ค้าง → ลบทิ้งแล้วไป normal flow ===
+                    from app.config import ENABLE_IMAGE_DIAGNOSIS
+                    if not ENABLE_IMAGE_DIAGNOSIS:
+                        await delete_pending_context(user_id)
+                        answer = await handle_natural_conversation(user_id, text)
+                        await reply_line(reply_token, answer)
+                        continue
+
                     # === NEW: ตรวจจับ interrupt ก่อนประมวลผล ===
                     was_handled, new_ctx = await handle_context_interrupt(user_id, text, ctx, reply_token)
                     if was_handled:
