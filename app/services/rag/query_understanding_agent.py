@@ -177,6 +177,9 @@ required_sources:
 7. "โมเดิน 50 อัตราผสมเท่าไหร่" → intent=usage_instruction, product_name="โมเดิน", expanded_queries=["โมเดิน อัตราผสม", "โมเดิน 50 วิธีใช้", "โมเดิน"]
 8. "ใบเพสลาด ใช้สารอะไรรักษา" → intent=nutrient_supplement, plant_type="ทุเรียน", expanded_queries=["ใบเพสลาด ทุเรียน", "สารชะลอการเจริญเติบโต ทุเรียน", "เพสลาด"]
 9. "ทุเรียนใบเหลือง ใช้ยาอะไร" → intent=disease_treatment, plant_type="ทุเรียน", expanded_queries=["ทุเรียน ใบเหลือง", "โรคทุเรียน", "ยารักษาทุเรียน"]
+10. "ปุ๋ยข้าวโพดระยะรองพื้นใช้สูตรไหน" → intent=nutrient_supplement, plant_type="ข้าวโพด", growth_stage="รองพื้น", expanded_queries=["ปุ๋ยข้าวโพด รองพื้น", "สูตรปุ๋ยข้าวโพด", "ปุ๋ยเร่งต้น ข้าวโพด"]
+11. "ปุ๋ยนาข้าวระยะแตกกอ" → intent=nutrient_supplement, plant_type="ข้าว", growth_stage="แตกกอ", expanded_queries=["ปุ๋ยนาข้าว แตกกอ", "สูตรปุ๋ยข้าว", "ปุ๋ยเร่งแตกกอ"]
+12. "ปุ๋ยอ้อยใช้สูตรอะไร" → intent=nutrient_supplement, plant_type="อ้อย", expanded_queries=["ปุ๋ยอ้อย", "สูตรปุ๋ยอ้อย", "ปุ๋ยบำรุงอ้อย"]
 """
 
         response = await self.openai_client.chat.completions.create(
