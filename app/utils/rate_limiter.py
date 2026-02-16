@@ -17,10 +17,12 @@ from typing import Tuple
 from app.config import (
     USER_RATE_LIMIT,
     USER_RATE_WINDOW,
-    IMAGE_COOLDOWN,
-    MAX_CONCURRENT_ANALYSIS,
     USE_REDIS_CACHE
 )
+
+# Legacy image analysis constants (disease detection removed)
+IMAGE_COOLDOWN = 10
+MAX_CONCURRENT_ANALYSIS = 10
 
 logger = logging.getLogger(__name__)
 

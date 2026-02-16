@@ -10,7 +10,6 @@ load_dotenv()
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # For Gemini 3.0 flash (disease detection)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -33,13 +32,6 @@ MAX_CACHE_SIZE = 5000  # Maximum cache entries (เพิ่มจาก 1000 �
 USER_RATE_LIMIT = 20  # requests per minute
 USER_RATE_WINDOW = 60  # seconds
 
-# Image diagnosis feature toggle
-# Set to "1" to enable image-based disease diagnosis, "0" to disable (default)
-ENABLE_IMAGE_DIAGNOSIS = os.getenv("ENABLE_IMAGE_DIAGNOSIS", "0") == "1"
-
-# Image analysis throttling
-IMAGE_COOLDOWN = int(os.getenv("IMAGE_COOLDOWN", "10"))  # seconds between image requests per user
-MAX_CONCURRENT_ANALYSIS = int(os.getenv("MAX_CONCURRENT_ANALYSIS", "10"))  # max concurrent image analyses
 
 # Redis configuration (for scale-out support)
 # Set REDIS_URL or UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
@@ -53,10 +45,6 @@ MAX_MEMORY_MESSAGES = 50  # Keep last 50 messages for context (ปรับจ�
 MEMORY_CONTEXT_WINDOW = 10  # Use last 10 messages for context
 MEMORY_CONTENT_PREVIEW = 800  # Characters to show in context preview (เพิ่มจาก 300 เพื่อให้ชื่อสินค้าไม่ถูกตัด)
 
-# RAG-based Disease Detection
-# Set to "1" to use RAG + Vector Search (faster, cheaper)
-# Set to "0" to use original hardcoded database (default for rollback)
-USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
 
 # ============================================================================#
 # AGENTIC RAG CONFIGURATION

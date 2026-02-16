@@ -15,7 +15,8 @@ from enum import Enum
 import httpx
 from openai import AsyncOpenAI
 
-from app.config import OPENROUTER_API_KEY
+import os
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 logger = logging.getLogger(__name__)
 
