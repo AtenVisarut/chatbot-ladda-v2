@@ -21,8 +21,8 @@ def verify_facebook_webhook(mode: str, token: str, challenge: str) -> str | None
 def verify_fb_signature(body: bytes, signature: str) -> bool:
     """Verify X-Hub-Signature-256 header on incoming POST requests."""
     if not FB_APP_SECRET:
-        logger.warning("FB_APP_SECRET not set, skipping signature verification")
-        return True
+        logger.error("FB_APP_SECRET not set — rejecting request for security")
+        return False
     if not signature or not signature.startswith("sha256="):
         return False
     expected = hmac.new(

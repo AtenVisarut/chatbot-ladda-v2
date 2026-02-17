@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 def verify_line_signature(body: bytes, signature: str) -> bool:
     if not LINE_CHANNEL_SECRET:
-        logger.warning("LINE_CHANNEL_SECRET not set, skipping signature verification")
-        return True
+        logger.error("LINE_CHANNEL_SECRET not set — rejecting request for security")
+        return False
     hash_digest = hmac.new(
         LINE_CHANNEL_SECRET.encode('utf-8'),
         body,

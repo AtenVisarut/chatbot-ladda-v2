@@ -41,9 +41,15 @@ async def verify(
 async def receive(request: Request):
     body = await request.body()
 
-    # Optional: verify signature
+    # Reject oversized payloads (FB messages typically < 50 KB)
+    MAX_BODY_SIZE = 1024 * 256  # 256 KB
+    if len(body) > MAX_BODY_SIZE:
+        logger.warning(f"FB payload too large: {len(body)} bytes")
+        return Response(content="Payload too large", status_code=413)
+
+    # Verify signature (mandatory when FB_APP_SECRET is configured)
     signature = request.headers.get("X-Hub-Signature-256", "")
-    if signature and not verify_fb_signature(body, signature):
+    if not verify_fb_signature(body, signature):
         logger.warning("Invalid Facebook signature")
         return Response(content="Invalid signature", status_code=403)
 

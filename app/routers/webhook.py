@@ -61,6 +61,13 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
         raise HTTPException(status_code=400, detail="Missing X-Line-Signature header")
 
     body = await request.body()
+
+    # Reject oversized payloads (LINE messages typically < 50 KB)
+    MAX_BODY_SIZE = 1024 * 256  # 256 KB
+    if len(body) > MAX_BODY_SIZE:
+        logger.warning(f"Payload too large: {len(body)} bytes")
+        raise HTTPException(status_code=413, detail="Payload too large")
+
     body_str = body.decode('utf-8')
 
     # Verify signature
