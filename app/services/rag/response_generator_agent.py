@@ -24,17 +24,13 @@ from app.config import LLM_MODEL_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
     GREETINGS,
-    PRODUCT_CTA,
     ERROR_PROCESSING,
     ERROR_NO_DATA,
-    LOW_CONFIDENCE_NOTE,
     get_no_data_response,
 )
 
 logger = logging.getLogger(__name__)
 
-# Configuration
-LOW_CONFIDENCE_THRESHOLD = 0.5
 
 
 class ResponseGeneratorAgent:
@@ -173,10 +169,6 @@ class ResponseGeneratorAgent:
                 num_check = validate_numbers_against_source(answer, retrieval_result.documents[:5])
                 if not num_check["valid"]:
                     logger.warning(f"  - Number validation: {len([m for m in num_check['mismatches'] if not m['found_in_source']])} mismatches found")
-
-            # Add low confidence indicator if needed
-            if final_confidence < LOW_CONFIDENCE_THRESHOLD:
-                answer = self._add_low_confidence_note(answer)
 
             return AgenticRAGResponse(
                 answer=answer,
@@ -561,7 +553,6 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 parts.append(f"   - ความเป็นพิษต่อพืช: {meta['phytotoxicity']}")
             parts.append("")
 
-        parts.append(f"\n{PRODUCT_CTA}")
         return "\n".join(parts)
 
     def _generate_greeting_response(self, query_analysis: QueryAnalysis) -> AgenticRAGResponse:
@@ -594,10 +585,4 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             sources_used=[]
         )
 
-    def _add_low_confidence_note(self, answer: str) -> str:
-        """Add note when confidence is low"""
-        note = f"\n\n{LOW_CONFIDENCE_NOTE}"
-        if note not in answer:
-            answer += note
-        return answer
 

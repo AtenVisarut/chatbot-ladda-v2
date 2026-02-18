@@ -23,7 +23,6 @@ from app.services.rag import (
 )
 from app.prompts import (
     GROUNDING_SYSTEM_PROMPT,
-    PRODUCT_CTA,
     ERROR_NO_RELEVANT_DOCS,
     ERROR_GROUNDING_FAILED,
     ERROR_NO_DATA,
@@ -280,8 +279,6 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             if doc.metadata.get('usage_rate'):
                 answer_parts.append(f"   - อัตราใช้: {doc.metadata['usage_rate']}")
             answer_parts.append("")
-
-        answer_parts.append(f"\n{PRODUCT_CTA}")
 
         # Build citations
         citations = []
