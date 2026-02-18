@@ -302,7 +302,7 @@ class ProductRegistry:
         # Step 3: Fuzzy match (fallback)
         return self.fuzzy_match(question)
 
-    def fuzzy_match(self, text: str, threshold: float = 0.65) -> Optional[str]:
+    def fuzzy_match(self, text: str, threshold: float = 0.75) -> Optional[str]:
         """
         Fuzzy matching for misspelled product names.
         e.g. "แแกนเตอ" → "แกนเตอร์", "โมเดิ้น" → "โมเดิน"
@@ -314,7 +314,7 @@ class ProductRegistry:
         best_score = 0.0
 
         for token in tokens:
-            if len(token) < 3:
+            if len(token) < 4:
                 continue
             token_lower = token.lower()
             for alias, canonical in self._alias_index.items():

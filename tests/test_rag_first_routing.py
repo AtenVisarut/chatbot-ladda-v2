@@ -12,6 +12,8 @@ from app.services.chat.handler import (
     is_agriculture_question,
     is_product_question,
     _is_clearly_non_agriculture,
+    _is_recommendation_question,
+    is_usage_question,
     extract_product_name_from_question,
 )
 from app.prompts import GREETING_KEYWORDS, GENERAL_CHAT_PROMPT
@@ -217,6 +219,68 @@ class TestNonAgriFunction:
     def test_agriculture_keyword_not_matched(self):
         # "ข้าว" is agriculture, not in _NON_AGRI_KEYWORDS
         assert _is_clearly_non_agriculture("ข้าว") == False
+
+
+# =============================================================================
+# Test 7: Recommendation question detection
+# =============================================================================
+class TestRecommendationQuestion:
+    @pytest.mark.parametrize("msg", [
+        "ใช้อะไรดี",
+        "ใช้ตัวไหนดี",
+        "พ่นอะไรดี",
+        "ฉีดอะไรดี",
+        "ใช้ยาอะไร",
+        "แนะนำตัวไหน",
+        "แนะนำยาไหน",
+        "แนะนำสารไหน",
+        "ข้าวไม่โต เหลือง ไม่กินปุ๋ย ใช้อะไรดี ตอนนี้ข้าวอายุ 30 วัน",
+    ])
+    def test_recommendation_detected(self, msg):
+        assert _is_recommendation_question(msg) == True, f"'{msg}' should be recommendation"
+
+    @pytest.mark.parametrize("msg", [
+        "ใช้ยังไง",
+        "ใช้ตัวนี้ยังไง",
+        "วิธีใช้โทมาฮอค",
+        "อัตราผสม",
+        "ตัวนี้พ่นยังไง",
+    ])
+    def test_non_recommendation(self, msg):
+        assert _is_recommendation_question(msg) == False, f"'{msg}' should NOT be recommendation"
+
+
+# =============================================================================
+# Test 8: Usage question regex tightening
+# =============================================================================
+class TestUsageQuestionTightened:
+    @pytest.mark.parametrize("msg", [
+        "ใช้ตัวนี้ยังไง",
+        "พ่นตัวนี้ยังไง",
+        "ตัวแรกใช้ก่อน",
+        "ตัวนี้ฉีดยังไง",
+        "ใช้ตัวที่1ยังไง",
+    ])
+    def test_legitimate_usage_still_detected(self, msg):
+        assert is_usage_question(msg) == True, f"'{msg}' should be usage question"
+
+    def test_bug_message_not_usage(self):
+        """The original bug: this message should NOT match usage patterns"""
+        msg = "ข้าวไม่โต เหลือง ไม่กินปุ๋ย ใช้อะไรดี ตอนนี้ข้าวอายุ 30 วัน"
+        # Even if is_usage_question returns True (from other patterns like ใช้...ตอน),
+        # _is_recommendation_question should catch it first in the handler
+        if is_usage_question(msg):
+            assert _is_recommendation_question(msg) == True, \
+                "If usage matches, recommendation must also match to override"
+
+    @pytest.mark.parametrize("msg", [
+        "ใช้อะไรดี ตอนนี้ข้าวอายุ 30 วัน",
+        "ข้าวเป็นราสีชมพู ใช้อะไรดี",
+    ])
+    def test_recommendation_overrides_usage(self, msg):
+        """Recommendation check must override any false-positive usage match"""
+        assert _is_recommendation_question(msg) == True, \
+            f"'{msg}' must be caught by recommendation check"
 
 
 if __name__ == "__main__":

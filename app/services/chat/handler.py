@@ -976,6 +976,25 @@ async def answer_agriculture_question(question: str, context: str = "") -> str:
 
 
 # =============================================================================
+# คำถามแนะนำสินค้า ("ใช้อะไรดี" ≠ "ใช้ยังไง")
+# =============================================================================
+RECOMMENDATION_PATTERNS = [
+    r"ใช้อะไร(?:ดี)?",
+    r"ใช้ตัวไหน(?:ดี)?",
+    r"ใช้ยาอะไร",
+    r"พ่นอะไร(?:ดี)?",
+    r"ฉีดอะไร(?:ดี)?",
+    r"แนะนำ(?:ตัว|ยา|สาร)ไหน",
+]
+
+
+def _is_recommendation_question(message: str) -> bool:
+    """'ใช้อะไรดี' (what to use?) ≠ 'ใช้ยังไง' (how to use?)"""
+    msg = message.strip().lower()
+    return any(re.search(p, msg) for p in RECOMMENDATION_PATTERNS)
+
+
+# =============================================================================
 # คำถามเกี่ยวกับวิธีใช้สินค้า / การพ่นยา / การฉีด
 # =============================================================================
 USAGE_QUESTION_PATTERNS = [
@@ -997,8 +1016,8 @@ USAGE_QUESTION_PATTERNS = [
     r"(?:พ่น|ฉีด).*(?:กี่|บ่อย|ถี่)",
     r"(?:ละลาย|เจือจาง).*(?:น้ำ|ยัง)",
     # ถามต่อจากสินค้าที่แนะนำ
-    r"(?:ตัว)?(?:นี้|นั้น|แรก|ที่\d).*(?:ใช้|พ่น|ฉีด)",
-    r"(?:ใช้|พ่น|ฉีด).*(?:ตัว)?(?:นี้|นั้น|แรก|ที่\d)",
+    r"(?:ตัว)(?:นี้|นั้น|แรก|ที่\d).{0,6}(?:ใช้|พ่น|ฉีด)",
+    r"(?:ใช้|พ่น|ฉีด).{0,6}(?:ตัว)?(?:นี้|นั้น|แรก|ที่\d)",
     # บรรจุภัณฑ์/ขนาด/ราคา (follow-up questions)
     r"(?:บรรจุ|ขนาด|ราคา).*(?:เท่าไหร่|เท่าไร|กี่|ไหน)",
     r"(?:บรรจุภัณฑ์|บรรภัณ|ขนาดบรรจุ)",
@@ -1231,12 +1250,22 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         #    For short ambiguous messages, only route if conversation context involves products
         _is_usage = is_usage_question(message)
-        if _is_usage and len(message.strip()) < 20 and not extract_product_name_from_question(message):
-            # Short follow-up without product name — check if context has product history
-            has_product_context = "สินค้าที่แนะนำ" in context or extract_product_name_from_question(context[-500:] if context else "") is not None
-            if not has_product_context:
+
+        if _is_usage:
+            # Layer 1: คำถามแนะนำสินค้า → ไป RAG ไม่ใช่ usage flow
+            if _is_recommendation_question(message):
                 _is_usage = False
-                logger.info(f"Short follow-up '{message[:30]}' has no product context, skip usage flow")
+                logger.info(f"Recommendation question '{message[:40]}', skip usage → RAG")
+
+            # Layer 2: ไม่มีชื่อสินค้าในข้อความ + ไม่มีใน context → skip
+            if _is_usage and not extract_product_name_from_question(message):
+                has_product_context = (
+                    "สินค้าที่แนะนำ" in context
+                    or extract_product_name_from_question(context[-500:] if context else "") is not None
+                )
+                if not has_product_context:
+                    _is_usage = False
+                    logger.info(f"No product in msg/context '{message[:40]}', skip usage → RAG")
 
         if _is_usage:
             logger.info(f"🔧 Detected usage question: {message[:50]}...")

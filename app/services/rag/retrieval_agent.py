@@ -350,6 +350,7 @@ class RetrievalAgent:
             # Stage 0: Direct product lookup if entity has product_name
             all_docs = []
             direct_lookup_ids = set()
+            symptom_fallback_ids = set()
             product_name = query_analysis.entities.get('product_name')
             if product_name:
                 direct_docs = await self._direct_product_lookup(product_name)
@@ -398,6 +399,23 @@ class RetrievalAgent:
                             disease_fallback_ids = {doc.id for doc in fallback_docs}
                             all_docs.extend(fallback_docs)
                             logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via target_pest")
+
+            # Stage 1.3: Symptom-based target_pest fallback
+            # Matches symptom phrases (ไม่โต, ไม่กินปุ๋ย, เหลือง, etc.) against DB target_pest
+            if query_analysis.intent in (
+                IntentType.NUTRIENT_SUPPLEMENT, IntentType.PRODUCT_RECOMMENDATION,
+                IntentType.GENERAL_AGRICULTURE, IntentType.UNKNOWN,
+            ):
+                symptom_docs = await self._search_by_symptom_keywords(
+                    query_analysis.original_query, query_analysis
+                )
+                if symptom_docs:
+                    existing_ids = {d.id for d in all_docs}
+                    new_docs = [d for d in symptom_docs if d.id not in existing_ids]
+                    if new_docs:
+                        symptom_fallback_ids = {d.id for d in new_docs}
+                        all_docs.extend(new_docs)
+                        logger.info(f"  - Symptom fallback found: {len(new_docs)} new docs via target_pest")
 
             # Stage 1.5: Fallback keyword search if no results
             if not all_docs:
@@ -460,6 +478,14 @@ class RetrievalAgent:
                 reranked_docs = boosted + others
                 if boosted:
                     logger.info(f"  - Boosted {len(boosted)} disease fallback docs to top")
+
+            # Stage 3.53: Boost symptom fallback docs to top (matched via target_pest symptom keywords)
+            if symptom_fallback_ids:
+                boosted = [doc for doc in reranked_docs if doc.id in symptom_fallback_ids]
+                others = [doc for doc in reranked_docs if doc.id not in symptom_fallback_ids]
+                reranked_docs = boosted + others
+                if boosted:
+                    logger.info(f"  - Boosted {len(boosted)} symptom fallback docs to top")
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
@@ -577,6 +603,7 @@ class RetrievalAgent:
                 if doc.rerank_score >= self.rerank_threshold or doc.similarity_score >= self.vector_threshold
                 or doc.id in direct_lookup_ids
                 or doc.id in disease_fallback_ids
+                or doc.id in symptom_fallback_ids
             ]
 
             # Ensure we have at least some results
@@ -764,6 +791,62 @@ class RetrievalAgent:
             return []
         except Exception as e:
             logger.error(f"Target pest fallback search error: {e}")
+            return []
+
+    async def _search_by_symptom_keywords(
+        self, query: str, query_analysis: QueryAnalysis
+    ) -> List[RetrievedDocument]:
+        """Fallback: search products by symptom keywords matched against target_pest column.
+
+        Unlike _search_by_target_pest (disease-specific), this matches general symptom
+        phrases like ไม่โต, ไม่กินปุ๋ย, เหลือง etc. against the DB — no hardcoded product names.
+        """
+        if not self.supabase:
+            return []
+
+        try:
+            # Symptom phrases to look for in the query (ordered longest-first to prefer specific matches)
+            symptom_patterns = [
+                r'รวงไม่สม่ำเสมอ', r'แตกกอไม่ดี',
+                r'ไม่กินปุ๋ย', r'ไม่แตกกอ', r'ไม่ออกดอก', r'ไม่ติดผล',
+                r'เมาตอซัง', r'ใบเหลือง', r'ใบไหม้', r'ใบจุด',
+                r'ดอกร่วง', r'ผลร่วง', r'ผลเน่า', r'รากเน่า', r'ลำต้นเน่า',
+                r'ต้นเตี้ย', r'รากดำ', r'เหี่ยว',
+                r'ไม่โต', r'เหลือง',
+            ]
+
+            matched_symptoms = []
+            for pattern in symptom_patterns:
+                if re.search(pattern, query):
+                    matched_symptoms.append(pattern)
+
+            if not matched_symptoms:
+                return []
+
+            logger.info(f"    Symptom keyword fallback: matched {matched_symptoms}")
+
+            # Build OR filter: target_pest.ilike.%keyword%
+            or_conditions = [f"target_pest.ilike.%{s}%" for s in matched_symptoms]
+            or_filter = ",".join(or_conditions)
+
+            query_builder = self.supabase.table('products').select('*').or_(or_filter).limit(10)
+
+            # Narrow by plant type if available
+            plant_type = query_analysis.entities.get('plant_type', '')
+            if plant_type:
+                query_builder = query_builder.ilike('applicable_crops', f'%{plant_type}%')
+
+            result = query_builder.execute()
+
+            if not result.data:
+                return []
+
+            docs = [self._build_doc_from_row(item, similarity=0.60) for item in result.data]
+            logger.info(f"    Symptom keyword fallback: {len(docs)} docs found")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Symptom keyword fallback search error: {e}")
             return []
 
     async def _search_diseases(self, query: str, top_k: int) -> List[RetrievedDocument]:
