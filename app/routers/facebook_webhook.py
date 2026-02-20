@@ -97,8 +97,11 @@ async def _process_fb_message(event: dict) -> None:
             return
 
         # Ensure user exists
-        from app.services.user_service import ensure_user_exists
+        from app.services.user_service import ensure_user_exists, register_user_ladda
         await ensure_user_exists(user_id)
+
+        # Register/update user in user_ladda(LINE,FACE) table
+        await register_user_ladda(user_id, None)
 
         # Quick commands
         if text.lower() in ["ล้างความจำ", "reset", "clear"]:

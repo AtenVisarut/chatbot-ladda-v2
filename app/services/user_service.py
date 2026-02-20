@@ -136,6 +136,63 @@ async def is_registration_completed(user_id: str) -> bool:
         return False
 
 
+async def register_user_ladda(user_id: str, display_name: Optional[str] = None) -> bool:
+    """
+    Register or update user in user_ladda(LINE,FACE) table.
+
+    - New user → insert row
+    - Existing user → update updated_at (and display_name if provided)
+
+    Args:
+        user_id: LINE user ID or fb:{psid} for Facebook users
+        display_name: Display name (optional, mainly from LINE profile)
+    """
+    try:
+        if not supabase_client:
+            logger.warning("Supabase client not available — skip register_user_ladda")
+            return False
+
+        # Check if user already exists
+        result = supabase_client.table('user_ladda(LINE,FACE)') \
+            .select('id, line_user_id') \
+            .eq('line_user_id', user_id) \
+            .execute()
+
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+
+        if result.data and len(result.data) > 0:
+            # Existing user → update updated_at (+ display_name if provided)
+            update_data = {"updated_at": now}
+            if display_name:
+                update_data["display_name"] = display_name
+
+            supabase_client.table('user_ladda(LINE,FACE)') \
+                .update(update_data) \
+                .eq('line_user_id', user_id) \
+                .execute()
+            logger.debug(f"✓ Updated user_ladda for {user_id}")
+        else:
+            # New user → insert
+            insert_data = {
+                "line_user_id": user_id,
+                "display_name": display_name or f"User_{user_id[:8]}",
+                "registration_completed": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+            supabase_client.table('user_ladda(LINE,FACE)') \
+                .insert(insert_data) \
+                .execute()
+            logger.info(f"🆕 Registered new user_ladda: {user_id} ({display_name or 'no name'})")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error in register_user_ladda for {user_id}: {e}", exc_info=True)
+        return False
+
+
 async def ensure_user_exists(user_id: str) -> bool:
     """
     Ensure user exists in database
