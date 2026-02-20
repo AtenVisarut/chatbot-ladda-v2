@@ -423,6 +423,41 @@ class ResponseGeneratorAgent:
                     crop_note = f"\nหมายเหตุ: {pname} เป็นสินค้าที่เน้นสำหรับ{plant_type}โดยเฉพาะ ให้แนะนำเป็นตัวแรก\n"
                     break
 
+        # Detect multi-variant: hint LLM to use Mode ก when user asks a product family name
+        # that matches multiple variants (e.g. "นาแดน" → นาแดน-จี + นาแดน 6 จี)
+        multi_variant_note = ""
+        product_name_query = query_analysis.entities.get('product_name', '')
+        if product_name_query and len(docs_to_use) >= 2:
+            original_q = query_analysis.original_query
+            # Check if user typed a SPECIFIC variant name that matches exactly one product
+            exact_variant_in_query = None
+            for doc in docs_to_use:
+                pname = doc.metadata.get('product_name', '')
+                # Check product_name in query
+                if pname and len(pname) > len(product_name_query) and pname in original_q:
+                    exact_variant_in_query = pname
+                    break
+                # Also check aliases (e.g. user types "นาแดน-จี" → alias of "นาแดน 4 จี")
+                aliases_str = doc.metadata.get('aliases', '') or ''
+                if aliases_str:
+                    for alias in [a.strip() for a in aliases_str.split(',') if a.strip()]:
+                        if len(alias) > len(product_name_query) and alias in original_q:
+                            exact_variant_in_query = pname
+                            break
+                if exact_variant_in_query:
+                    break
+            if not exact_variant_in_query:
+                # User asked family name only → filter to matching products and hint Mode ก
+                matching = [d for d in docs_to_use
+                            if product_name_query in d.metadata.get('product_name', '')]
+                if len(matching) >= 2:
+                    names = [d.metadata.get('product_name', d.title) for d in matching]
+                    multi_variant_note = f"\n[หมายเหตุ: มีสินค้าหลายตัว] ผู้ใช้ถาม \"{product_name_query}\" ซึ่งมี {len(names)} รุ่น: {', '.join(names)} — ให้แสดงรายการสั้นๆ เฉพาะสินค้าตระกูล \"{product_name_query}\" ให้เกษตรกรเลือก (ใช้ Mode ก) ห้ามแสดงสินค้าอื่นที่ไม่ใช่ตระกูลนี้\n"
+                    logger.info(f"  - Multi-variant hint: {names} → Mode ก")
+            else:
+                multi_variant_note = f"\n[หมายเหตุ] ผู้ใช้ถามเฉพาะ \"{exact_variant_in_query}\" → ตอบรายละเอียดเต็มของสินค้านี้ตัวเดียว (ใช้ Mode ข) ห้ามแสดงเป็น list ให้เลือก\n"
+                logger.info(f"  - Specific variant in query: '{exact_variant_in_query}' → Mode ข")
+
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
@@ -431,7 +466,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
 ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย
 

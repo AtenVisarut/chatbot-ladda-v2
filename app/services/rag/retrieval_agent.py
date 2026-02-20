@@ -127,6 +127,7 @@ class RetrievalAgent:
                 'strategy_group': item.get('strategy_group'),
                 'package_size': item.get('package_size'),
                 'phytotoxicity': item.get('phytotoxicity'),
+                'aliases': item.get('aliases'),
             }
         )
 
