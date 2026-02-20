@@ -355,7 +355,13 @@ class AgenticRAG:
                             "ใช้ช่วงไหน", "ตัวไหนดี", "ตัวไหนเหมาะ", "ใช้กี่",
                             "พ่นกี่", "ฉีดกี่", "ใช้กับ", "เหมาะกับ"
                         ]
-                        is_followup = any(p in query for p in followup_patterns) and len(query) < 50
+                        recommendation_keywords = ["แนะนำยา", "แนะนำสาร", "ช่วยแนะนำ", "ใช้อะไรดี", "ใช้ตัวไหนดี", "ยาอะไรดี"]
+                        is_recommendation = any(kw in query for kw in recommendation_keywords)
+                        is_followup = (
+                            any(p in query for p in followup_patterns)
+                            and len(query) < 50
+                            and not is_recommendation
+                        )
                         if is_followup:
                             products_list = sorted(context_products)[:4]
                             clarify_msg = f"ขอถามหน่อยค่ะ หมายถึง " + " หรือ ".join(f'"{p}"' for p in products_list) + " คะ?"
