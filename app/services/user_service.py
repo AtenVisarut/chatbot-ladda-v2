@@ -177,7 +177,6 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
             insert_data = {
                 "line_user_id": user_id,
                 "display_name": display_name or f"User_{user_id[:8]}",
-                "registration_completed": False,
                 "created_at": now,
                 "updated_at": now,
             }
