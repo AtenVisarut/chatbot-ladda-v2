@@ -30,9 +30,15 @@ from app.services.memory import (
     add_to_memory,
     save_recommended_products
 )
-from app.services.disease.detection import smart_detect_disease
+try:
+    from app.services.disease.detection import smart_detect_disease
+except ImportError:
+    smart_detect_disease = None
 from app.services.product.recommendation import retrieve_products_with_matching_score, get_search_query_for_disease
-from app.services.disease.response import generate_text_response
+try:
+    from app.services.disease.response import generate_text_response
+except ImportError:
+    generate_text_response = None
 from app.services.chat.handler import handle_natural_conversation
 from app.services.context_handler import (
     handle_context_interrupt,
