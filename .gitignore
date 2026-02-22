@@ -114,6 +114,7 @@ test_*.py
 # Exclude documentation and analysis files
 *.md
 !README.md
+!IDENTITY.md
 !DEPLOYMENT_GUIDE.md
 !FLY_IO_DEPLOYMENT.md
 !docs/GUIDE_ADD_PRODUCT.md
