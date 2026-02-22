@@ -131,6 +131,30 @@ class RetrievalAgent:
             }
         )
 
+    @staticmethod
+    def _infer_expected_categories(query_analysis):
+        """Infer expected categories from entities when intent doesn't specify."""
+        entities = query_analysis.entities
+
+        # Priority: pest > disease > weed > query keywords
+        if entities.get('pest_name'):
+            return ["Insecticide", "insecticide", "กำจัดแมลง"]
+        if entities.get('disease_name'):
+            return ["Fungicide", "fungicide", "ป้องกันโรค"]
+        if entities.get('weed_type'):
+            return ["Herbicide", "herbicide", "กำจัดวัชพืช"]
+
+        # Keyword fallback from original query
+        query = query_analysis.original_query
+        if any(kw in query for kw in ['เพลี้ย','หนอน','ด้วง','แมลง','ไรแดง','ไรขาว','ทริปส์','จักจั่น','บั่ว']):
+            return ["Insecticide", "insecticide", "กำจัดแมลง"]
+        if any(kw in query for kw in ['โรค','เชื้อรา','ราน้ำ','ราแป้ง','ราสนิม','ราสี','แอนแทรคโนส']):
+            return ["Fungicide", "fungicide", "ป้องกันโรค"]
+        if any(kw in query for kw in ['วัชพืช','หญ้า','ยาฆ่าหญ้า','กำจัดหญ้า']):
+            return ["Herbicide", "herbicide", "กำจัดวัชพืช"]
+
+        return None
+
     async def _direct_product_lookup(self, product_name: str) -> List[RetrievedDocument]:
         """Direct database lookup by product name (exact/ilike match)"""
         if not self.supabase:
@@ -255,6 +279,10 @@ class RetrievalAgent:
 
             # Apply category filter if intent requires specific product type
             cat_filter = self.INTENT_CATEGORY_MAP.get(query_analysis.intent)
+            if not cat_filter:
+                inferred = self._infer_expected_categories(query_analysis)
+                if inferred:
+                    cat_filter = inferred[0]
 
             query_builder = self.supabase.table('products') \
                 .select('*') \
@@ -490,6 +518,12 @@ class RetrievalAgent:
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
+
+            # Infer from entities when intent doesn't specify (PRODUCT_RECOMMENDATION, UNKNOWN, etc.)
+            if not expected_categories:
+                expected_categories = self._infer_expected_categories(query_analysis)
+                if expected_categories:
+                    logger.info(f"  - Inferred expected_categories from entities: {expected_categories[0]}")
 
             # Stage 3.55: Category-Intent alignment penalty
             # If user asks about disease, penalize non-fungicide products (e.g. PGR)
@@ -1009,7 +1043,7 @@ class RetrievalAgent:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=100
+                max_completion_tokens=100
             )
 
             ranking_text = response.choices[0].message.content.strip()

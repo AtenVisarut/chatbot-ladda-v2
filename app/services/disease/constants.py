@@ -2,7 +2,7 @@
 Single source of truth for disease patterns + canonical mapping.
 
 All disease detection across the pipeline imports from here.
-Used by: agentic_rag.py (Stage 0), retrieval_agent.py, response_generator_agent.py
+Used by: orchestrator.py (Stage 0), retrieval_agent.py, response_generator_agent.py
 """
 
 # Every disease pattern the pipeline recognises — sorted longest-first for matching

@@ -164,11 +164,14 @@ class ResponseGeneratorAgent:
             # Post-process answer (remove markdown artifacts)
             answer = post_process_answer(answer)
 
-            # Validate numbers against source docs (Phase 1: logging only)
+            # Validate numbers against source docs
             if retrieval_result and retrieval_result.documents:
                 num_check = validate_numbers_against_source(answer, retrieval_result.documents[:5])
                 if not num_check["valid"]:
-                    logger.warning(f"  - Number validation: {len([m for m in num_check['mismatches'] if not m['found_in_source']])} mismatches found")
+                    bad_count = len([m for m in num_check['mismatches'] if not m['found_in_source']])
+                    logger.error(f"  - Number validation FAILED: {bad_count} mismatches found")
+                    # Append safety warning to answer
+                    answer += "\n\n(หมายเหตุ: กรุณาตรวจสอบอัตราการใช้จากฉลากสินค้าอีกครั้งค่ะ)"
 
             return AgenticRAGResponse(
                 answer=answer,
@@ -489,7 +492,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=700
+                max_completion_tokens=700
             )
             answer = response.choices[0].message.content.strip()
 
@@ -558,6 +561,21 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 if not is_known:
                     logger.warning(f"HALLUCINATED product detected: '{product_mention}' - not in database!")
                     answer = answer.replace(full_match, '"(สินค้านี้ไม่อยู่ในฐานข้อมูล)"')
+
+            # Pass 2: Scan for unquoted product names from ICP_PRODUCT_NAMES
+            for icp_name in ICP_PRODUCT_NAMES.keys():
+                if len(icp_name) < 3:  # Skip very short names to avoid false matches
+                    continue
+                if icp_name in answer:
+                    # Check if this product is in allowed docs
+                    is_allowed = any(
+                        icp_name in name or name in icp_name
+                        for name in allowed_names
+                    )
+                    if not is_allowed:
+                        # Product exists in ICP DB but not in retrieved docs → cross-product hallucination
+                        logger.warning(f"CROSS-PRODUCT hallucination: '{icp_name}' not in retrieved docs")
+                        answer = answer.replace(icp_name, f"(กรุณาสอบถามข้อมูล {icp_name} แยกต่างหากค่ะ)")
 
         except Exception as e:
             logger.error(f"Product name validation error: {e}")

@@ -101,7 +101,7 @@ async def rerank_products_with_llm(
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=100
+            max_completion_tokens=100
         )
 
         ranking_text = response.choices[0].message.content.strip()

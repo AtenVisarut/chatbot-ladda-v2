@@ -206,7 +206,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 {"role": "user", "content": prompt}
             ],
             temperature=0,
-            max_tokens=500
+            max_completion_tokens=500
         )
 
         response_text = response.choices[0].message.content.strip()

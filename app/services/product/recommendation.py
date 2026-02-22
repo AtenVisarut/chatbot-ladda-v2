@@ -2035,7 +2035,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=800
+                max_completion_tokens=800
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")
@@ -2648,7 +2648,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=800
+                max_completion_tokens=800
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")

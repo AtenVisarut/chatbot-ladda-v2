@@ -133,7 +133,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                     {"role": "system", "content": KNOWLEDGE_RAG_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=400,
+                max_completion_tokens=400,
                 temperature=0.5
             )
             answer = post_process_answer(response.choices[0].message.content)

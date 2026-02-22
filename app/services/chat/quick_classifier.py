@@ -136,7 +136,7 @@ async def quick_classify(
                         ]
                     }
                 ],
-                max_tokens=300,
+                max_completion_tokens=300,
                 temperature=0.1,
                 extra_headers={
                     "HTTP-Referer": "https://ladda-chatbot.railway.app",
@@ -273,7 +273,7 @@ async def _classify_with_gemini_flash(
                         ]
                     }
                 ],
-                max_tokens=300,
+                max_completion_tokens=300,
                 temperature=0.1
             ),
             timeout=20
