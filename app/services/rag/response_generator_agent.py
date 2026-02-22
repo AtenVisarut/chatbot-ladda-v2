@@ -206,7 +206,7 @@ class ResponseGeneratorAgent:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
         # Keep all products (including Standard) — just sort by strategy_group priority
-        docs_to_use = retrieval_result.documents[:5]
+        docs_to_use = retrieval_result.documents[:7]
 
         # Sort by strategy_group priority: Skyrocket > Expand > Natural > Standard
         # ensures Skyrocket/Expand appear first in product context sent to LLM
@@ -468,7 +468,10 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
 {crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
-ถ้าผู้ใช้ถามปริมาณการใช้สำหรับพื้นที่ (เช่น 10 ไร่, 20 ไร่) ให้คำนวณจากอัตราใช้ต่อไร่ และถ้ามีข้อมูล "ขนาดบรรจุ" ให้คำนวณจำนวนขวด/ถุง/กระสอบที่ต้องซื้อด้วย
+เมื่อแนะนำสินค้า:
+- ถ้าอัตราใช้ระบุ "ต่อน้ำ 200 ลิตร" → แสดงอัตราต่อถังพ่น 20 ลิตร (หาร 10) ด้วยเสมอ
+- ถ้าผู้ใช้ถามปริมาณสำหรับพื้นที่ (เช่น 10 ไร่) → คำนวณ: อัตราต่อไร่ × จำนวนไร่ + จำนวนขวด/ถุง/กระสอบที่ต้องซื้อ (ปัดขึ้น)
+- ถ้าผู้ใช้ถาม "1 ขวดใช้ได้กี่ไร่" → คำนวณ: ขนาดบรรจุ ÷ อัตราต่อไร่
 
 [ห้ามมั่วข้อมูลเด็ดขาด]
 - ตอบเฉพาะข้อมูลที่ปรากฏในข้อมูลสินค้าด้านบน ห้ามแต่งเอง
