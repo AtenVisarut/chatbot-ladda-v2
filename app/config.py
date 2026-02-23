@@ -88,8 +88,10 @@ AGENTIC_RAG_CONFIG = {
     # Minimum number of relevant documents to return
     "MIN_RELEVANT_DOCS": int(os.getenv("AGENTIC_MIN_DOCS", "3")),
 
-    # Enable grounding check (hallucination prevention)
-    "ENABLE_GROUNDING": os.getenv("AGENTIC_ENABLE_GROUNDING", "0") == "1",
+    # Grounding check disabled — causes intermittent "ไม่มีข้อมูล" due to inconsistent LLM confidence.
+    # Anti-hallucination handled by: product name validation, number validation, [CONSTRAINT] tags.
+    # To re-enable: change False → os.getenv("AGENTIC_ENABLE_GROUNDING", "0") == "1"
+    "ENABLE_GROUNDING": False,
 
     # Maximum citations to include in response
     "MAX_CITATIONS": int(os.getenv("AGENTIC_MAX_CITATIONS", "3")),
