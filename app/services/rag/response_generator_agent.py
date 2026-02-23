@@ -129,6 +129,18 @@ class ResponseGeneratorAgent:
                         if has_disease_match:
                             break
 
+                # Check if pest query matched insecticide products via target_pest
+                has_pest_match = False
+                pest_name = query_analysis.entities.get('pest_name', '')
+                if pest_name and has_documents and query_analysis.intent in (IntentType.PEST_CONTROL, IntentType.PRODUCT_RECOMMENDATION):
+                    for doc in retrieval_result.documents[:10]:
+                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                        cat = str(doc.metadata.get('category') or '').lower()
+                        if pest_name.lower() in target_pest and 'insecticide' in cat:
+                            has_pest_match = True
+                            logger.info(f"  - Pest override: '{pest_name}' found in {doc.title} target_pest")
+                            break
+
                 # Check if weed query matched herbicide products
                 has_weed_match = False
                 if has_documents and query_analysis.intent == IntentType.WEED_CONTROL:
@@ -144,6 +156,7 @@ class ResponseGeneratorAgent:
                     and not has_crop_specific_top
                     and not (has_product_in_query and has_documents)
                     and not has_disease_match
+                    and not has_pest_match
                     and not has_weed_match
                 ):
                     return self._generate_no_data_response(query_analysis)
@@ -158,6 +171,10 @@ class ResponseGeneratorAgent:
                     final_confidence = max(final_confidence, 0.65)
                     final_grounded = True
                     logger.info(f"  - Confidence override: disease match → {final_confidence:.2f}")
+                elif has_pest_match:
+                    final_confidence = max(final_confidence, 0.65)
+                    final_grounded = True
+                    logger.info(f"  - Confidence override: pest match → {final_confidence:.2f}")
                 elif has_weed_match:
                     final_confidence = max(final_confidence, 0.65)
                     final_grounded = True
