@@ -461,6 +461,22 @@ class ResponseGeneratorAgent:
                 multi_variant_note = f"\n[หมายเหตุ] ผู้ใช้ถามเฉพาะ \"{exact_variant_in_query}\" → ตอบรายละเอียดเต็มของสินค้านี้ตัวเดียว (ใช้ Mode ข) ห้ามแสดงเป็น list ให้เลือก\n"
                 logger.info(f"  - Specific variant in query: '{exact_variant_in_query}' → Mode ข")
 
+        # Build category match note for alternatives
+        category_match_note = ""
+        product_name_entity = query_analysis.entities.get('product_name', '')
+        if product_name_entity and docs_to_use:
+            for doc in docs_to_use:
+                if product_name_entity.lower() in doc.metadata.get('product_name', '').lower():
+                    queried_cat = doc.metadata.get('category', '')
+                    if queried_cat:
+                        category_match_note = (
+                            f"\n[สำคัญ: ประเภทสินค้าที่ผู้ใช้ถาม] สินค้า \"{product_name_entity}\" "
+                            f"เป็นประเภท \"{queried_cat}\" — ถ้าสินค้านี้ไม่เหมาะกับพืชที่ถาม "
+                            f"ให้แนะนำเฉพาะสินค้าประเภทเดียวกัน (\"{queried_cat}\") เท่านั้น "
+                            f"ห้ามแนะนำสินค้าต่างประเภท\n"
+                        )
+                    break
+
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
@@ -469,7 +485,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}
 สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
 เมื่อแนะนำสินค้า:
 - ถ้าอัตราใช้ระบุ "ต่อน้ำ 200 ลิตร" → แสดงอัตราต่อถังพ่น 20 ลิตร (หาร 10) ด้วยเสมอ

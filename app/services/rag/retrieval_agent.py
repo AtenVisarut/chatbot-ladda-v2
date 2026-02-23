@@ -527,15 +527,31 @@ class RetrievalAgent:
 
             # Stage 3.55: Category-Intent alignment penalty
             # If user asks about disease, penalize non-fungicide products (e.g. PGR)
-            if not direct_lookup_ids:
-                if expected_categories:
-                    for doc in reranked_docs:
-                        cat = str(doc.metadata.get('category') or '').lower()
-                        if cat and not any(ec.lower() in cat for ec in expected_categories):
-                            penalty = -0.30
-                            doc.rerank_score = max(0.0, doc.rerank_score + penalty)
-                            logger.info(f"  - Category mismatch penalty {penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
-                    reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
+            # When direct_lookup found a product, infer expected category from it
+            if direct_lookup_ids and not expected_categories:
+                for doc in reranked_docs:
+                    if doc.id in direct_lookup_ids:
+                        cat = doc.metadata.get('category') or ''
+                        if 'วัชพืช' in cat or 'herbicide' in cat.lower():
+                            expected_categories = ["Herbicide", "herbicide", "กำจัดวัชพืช"]
+                        elif 'แมลง' in cat or 'insecticide' in cat.lower():
+                            expected_categories = ["Insecticide", "insecticide", "กำจัดแมลง"]
+                        elif 'โรค' in cat or 'fungicide' in cat.lower():
+                            expected_categories = ["Fungicide", "fungicide", "ป้องกันโรค"]
+                        if expected_categories:
+                            logger.info(f"  - Inferred category from direct lookup: {expected_categories[0]}")
+                        break
+
+            if expected_categories:
+                for doc in reranked_docs:
+                    if doc.id in direct_lookup_ids:
+                        continue  # Don't penalize the queried product itself
+                    cat = str(doc.metadata.get('category') or '').lower()
+                    if cat and not any(ec.lower() in cat for ec in expected_categories):
+                        penalty = -0.50
+                        doc.rerank_score = max(0.0, doc.rerank_score + penalty)
+                        logger.info(f"  - Category mismatch penalty {penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
+                reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
 
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
             if not direct_lookup_ids:  # Only when not asking about specific product
