@@ -315,6 +315,61 @@ class RetrievalAgent:
             logger.error(f"Supplementary priority search error: {e}")
             return []
 
+    async def _weed_category_fallback_search(
+        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 5
+    ) -> List[RetrievedDocument]:
+        """Search ALL Herbicide products when weed query has insufficient results.
+
+        Unlike _supplementary_priority_search (Skyrocket/Expand only), this catches
+        Natural/Standard herbicides too.
+        """
+        if not self.supabase:
+            return []
+
+        try:
+            keywords = []
+            plant_type = query_analysis.entities.get('plant_type', '')
+            if plant_type:
+                keywords.append(plant_type)
+            keywords.extend(['วัชพืช', 'หญ้า'])
+
+            # Build OR filter on target_pest, applicable_crops, selling_point
+            or_conditions = []
+            for kw in keywords:
+                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.append(f"applicable_crops.ilike.%{kw}%")
+                or_conditions.append(f"selling_point.ilike.%{kw}%")
+            or_filter = ",".join(or_conditions)
+
+            existing_ids = {d.id for d in existing_docs}
+
+            result = self.supabase.table('products') \
+                .select('*') \
+                .ilike('product_category', '%Herbicide%') \
+                .or_(or_filter) \
+                .limit(top_k) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            docs = []
+            for item in result.data:
+                doc_id = str(item.get('id', ''))
+                if doc_id in existing_ids:
+                    continue
+                selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
+                doc = self._build_doc_from_row(item, similarity=0.50, content_extra=selling_extra)
+                docs.append(doc)
+
+            if docs:
+                logger.info(f"    Weed category fallback: {len(docs)} Herbicide docs found")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Weed category fallback search error: {e}")
+            return []
+
     async def _enrich_strategy_group(self, docs: List[RetrievedDocument]):
         """Fetch strategy_group, selling_point, applicable_crops from DB for docs missing them (e.g. from RPC)"""
         if not self.supabase:
@@ -446,12 +501,14 @@ class RetrievalAgent:
                         all_docs.extend(new_docs)
                         logger.info(f"  - Symptom fallback found: {len(new_docs)} new docs via target_pest")
 
-            # Stage 1.5: Fallback keyword search if no results
-            if not all_docs:
+            # Stage 1.5: Fallback keyword search if insufficient results
+            if len(all_docs) < MIN_RELEVANT_DOCS:
                 fallback_docs = await self._fallback_keyword_search(query_analysis.original_query, top_k)
-                all_docs.extend(fallback_docs)
-                if fallback_docs:
-                    logger.info(f"  - Fallback keyword search found: {len(fallback_docs)} docs")
+                existing_ids = {d.id for d in all_docs}
+                new_fallback = [d for d in fallback_docs if d.id not in existing_ids]
+                all_docs.extend(new_fallback)
+                if new_fallback:
+                    logger.info(f"  - Fallback keyword added: {len(new_fallback)} new docs")
 
             # Stage 1.8: Enrich strategy_group for docs missing it (RPC doesn't return it)
             await self._enrich_strategy_group(all_docs)
@@ -464,6 +521,13 @@ class RetrievalAgent:
                 if priority_docs:
                     all_docs.extend(priority_docs)
                     logger.info(f"  - Supplementary priority search added: {len(priority_docs)} docs")
+
+            # Stage 1.95: Weed category fallback — search ALL Herbicides when still insufficient
+            if query_analysis.intent == IntentType.WEED_CONTROL and len(all_docs) < MIN_RELEVANT_DOCS:
+                weed_docs = await self._weed_category_fallback_search(query_analysis, all_docs)
+                if weed_docs:
+                    all_docs.extend(weed_docs)
+                    logger.info(f"  - Weed category fallback added: {len(weed_docs)} docs")
 
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")
@@ -483,7 +547,7 @@ class RetrievalAgent:
             logger.info(f"  - After dedup: {len(unique_docs)}")
 
             # Stage 3: Re-ranking with LLM
-            if self.openai_client and len(unique_docs) > MIN_RELEVANT_DOCS:
+            if self.openai_client and len(unique_docs) >= MIN_RELEVANT_DOCS:
                 reranked_docs = await self._rerank_with_llm(
                     query_analysis.original_query,
                     unique_docs,
@@ -492,6 +556,10 @@ class RetrievalAgent:
             else:
                 # Sort by similarity score if no LLM
                 reranked_docs = sorted(unique_docs, key=lambda x: x.similarity_score, reverse=True)
+                # Assign baseline rerank_score so downstream stages don't break
+                for doc in reranked_docs:
+                    if doc.rerank_score == 0.0:
+                        doc.rerank_score = doc.similarity_score
 
             # Stage 3.5: Boost direct lookup docs to top (user asked about specific product)
             if direct_lookup_ids:

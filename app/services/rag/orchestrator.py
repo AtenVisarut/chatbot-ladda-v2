@@ -308,6 +308,26 @@ class AgenticRAG:
                         logger.info(f"  - Pre-extracted pest: '{pattern}'")
                         break
 
+                # --- Weed Synonym Injection ---
+                # "หญ้า" doesn't match product embeddings that use "วัชพืช"
+                # Inject synonyms so vector search finds herbicide products
+                if hints.get('problem_type') == 'weed':
+                    _WEED_SYNONYM_MAP = {
+                        'หญ้า': ['วัชพืช', 'กำจัดวัชพืช', 'ยาฆ่าหญ้า'],
+                        'กำจัดหญ้า': ['กำจัดวัชพืช', 'วัชพืช'],
+                        'ยาฆ่าหญ้า': ['สารกำจัดวัชพืช', 'วัชพืช'],
+                        'หญ้าขึ้น': ['วัชพืช', 'กำจัดวัชพืช'],
+                        'หญ้างอก': ['วัชพืช', 'หลังวัชพืชงอก'],
+                    }
+                    weed_synonyms = set()
+                    for pattern, synonyms in _WEED_SYNONYM_MAP.items():
+                        if pattern in query:
+                            weed_synonyms.update(synonyms)
+                    if not weed_synonyms:
+                        weed_synonyms = {'วัชพืช', 'กำจัดวัชพืช'}
+                    hints['weed_synonyms'] = list(weed_synonyms)
+                    logger.info(f"  - Weed synonyms injected: {hints['weed_synonyms']}")
+
                 # --- Validate: drop product when query is about a new topic ---
                 # Case 1: Disease/pest entity detected + product not literally in query
                 #   e.g. "โรครากเน่าโคนเน่า" → fuzzy "โค-ราซ" (false positive)

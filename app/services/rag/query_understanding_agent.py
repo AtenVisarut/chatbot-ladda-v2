@@ -303,6 +303,14 @@ required_sources:
                     if search_q not in expanded_queries:
                         expanded_queries.append(search_q)
 
+            # Inject weed synonyms for better herbicide retrieval
+            if hints.get('weed_synonyms'):
+                plant_type = entities.get('plant_type', '')
+                for synonym in hints['weed_synonyms']:
+                    search_q = f"{synonym} {plant_type}".strip() if plant_type else synonym
+                    if search_q not in expanded_queries:
+                        expanded_queries.append(search_q)
+
             # Force products-only source (products table is the sole data source)
             required_sources = ["products"]
 
