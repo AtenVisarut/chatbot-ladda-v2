@@ -55,6 +55,17 @@ from app.config import MAX_CONCURRENT_TASKS
 
 logger = logging.getLogger(__name__)
 
+# Centralized no-data filter — suppress ANY answer containing these phrases
+_NO_DATA_PHRASES_FINAL = [
+    "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+    "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+    "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
+]
+
+def _is_no_data_answer(answer: str) -> bool:
+    """ตรวจว่า answer เป็นคำตอบ 'ไม่มีข้อมูล' ที่ไม่ควรส่งให้ user"""
+    return any(p in answer for p in _NO_DATA_PHRASES_FINAL)
+
 router = APIRouter()
 
 # Semaphore to limit concurrent background tasks (prevents memory exhaustion)
@@ -256,7 +267,7 @@ async def _process_webhook_events(events: list):
                     if not ENABLE_IMAGE_DIAGNOSIS:
                         await delete_pending_context(user_id)
                         answer = await handle_natural_conversation(user_id, text)
-                        if answer is not None:
+                        if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
                             logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")
@@ -491,7 +502,7 @@ async def _process_webhook_events(events: list):
 
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
-                        if answer is not None:
+                        if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
                             logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")
@@ -510,7 +521,7 @@ async def _process_webhook_events(events: list):
                     else:
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
-                        if answer is not None:
+                        if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
                             logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")

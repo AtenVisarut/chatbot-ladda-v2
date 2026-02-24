@@ -1331,6 +1331,15 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             logger.info(f"🔧 Detected usage question: {message[:50]}...")
             usage_answer = await answer_usage_question(user_id, message, context)
             if usage_answer:
+                # Silent no-data: ถ้า LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบ ให้ admin จัดการ
+                _NO_DATA_USAGE = [
+                    "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+                    "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+                    "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
+                ]
+                if any(p in usage_answer for p in _NO_DATA_USAGE):
+                    logger.info(f"⏭️ No data — usage answer contains no-data phrase, skipping reply (admin will handle)")
+                    return None
                 # Add assistant response to memory
                 await add_to_memory(user_id, "assistant", usage_answer)
                 return usage_answer

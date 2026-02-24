@@ -17,6 +17,17 @@ from app.config import MAX_CONCURRENT_TASKS
 
 logger = logging.getLogger(__name__)
 
+# Centralized no-data filter — suppress ANY answer containing these phrases
+_NO_DATA_PHRASES_FINAL = [
+    "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+    "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+    "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
+]
+
+def _is_no_data_answer(answer: str) -> bool:
+    """ตรวจว่า answer เป็นคำตอบ 'ไม่มีข้อมูล' ที่ไม่ควรส่งให้ user"""
+    return any(p in answer for p in _NO_DATA_PHRASES_FINAL)
+
 router = APIRouter(prefix="/facebook", tags=["facebook"])
 
 # Semaphore to limit concurrent background tasks (prevents memory exhaustion)
@@ -134,7 +145,7 @@ async def _process_fb_message(event: dict) -> None:
         # Core conversation (platform-agnostic)
         answer = await handle_natural_conversation(user_id, text)
 
-        if answer is not None:
+        if answer is not None and not _is_no_data_answer(answer):
             # Split long messages for FB 2000-char limit
             chunks = split_message(answer)
             for chunk in chunks:
