@@ -1405,13 +1405,14 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             logger.info(f"⏭️ No data — skipping reply (admin will handle)")
                             return None
 
-                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" + confidence ต่ำ → ไม่ตอบ
+                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบ (ไม่ว่า confidence เท่าไหร่)
                         _NO_DATA_PHRASES = [
                             "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                             "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+                            "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                         ]
-                        if rag_response.confidence < 0.3 and any(p in answer for p in _NO_DATA_PHRASES):
-                            logger.info(f"⏭️ No data — low confidence ({rag_response.confidence:.2f}) + no-data phrase in answer, skipping reply (admin will handle)")
+                        if any(p in answer for p in _NO_DATA_PHRASES):
+                            logger.info(f"⏭️ No data — no-data phrase in answer (confidence={rag_response.confidence:.2f}), skipping reply (admin will handle)")
                             return None
 
                         # Track analytics if product recommendation
@@ -1472,6 +1473,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             _NO_DATA_PHRASES_LEGACY = [
                 "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                 "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+                "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
             ]
             if any(p in answer for p in _NO_DATA_PHRASES_LEGACY):
                 logger.info(f"⏭️ No data — legacy LLM response contains no-data phrase, skipping reply (admin will handle)")
