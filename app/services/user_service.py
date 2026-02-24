@@ -212,19 +212,20 @@ async def ensure_user_exists(user_id: str) -> bool:
             await update_last_seen(user_id)
             return True
         
-        # New user - fetch profile from LINE
+        # New user
         logger.info(f"🆕 New user detected: {user_id}")
-        profile = await get_line_profile(user_id)
-        
+
+        # Skip LINE API for Facebook users (fb: prefix)
+        profile = None
+        if not user_id.startswith("fb:"):
+            profile = await get_line_profile(user_id)
+
         if profile:
-            # Create user with profile data
             success = await upsert_user(user_id, profile)
             if success:
                 logger.info(f"✅ User {user_id} registered successfully")
             return success
         else:
-            # Profile fetch failed, create with minimal data
-            logger.warning(f"Failed to fetch profile for {user_id}, creating with minimal data")
             minimal_profile = {
                 "displayName": f"User_{user_id[:8]}",
                 "pictureUrl": None,
