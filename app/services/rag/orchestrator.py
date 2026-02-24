@@ -353,6 +353,31 @@ class AgenticRAG:
                     elif (not product_from_query and not product_literally_in_query
                             and hints.get('problem_type') in ('disease', 'pest', 'weed', 'nutrient')):
                         drop_reason = f"new {hints['problem_type']} topic, product from context"
+                    # Case 4: Vague/generic query — no specific entity, product from memory
+                    elif not product_from_query and not product_literally_in_query:
+                        # Keep if user references previous product ("ยาตัวนี้", "ตัวนั้น")
+                        _REFERENCING_PATTERNS = [
+                            'ตัวนี้', 'ยาตัวนี้', 'ตัวนั้น', 'ยานี้', 'สินค้านี้',
+                            'ยาตัวแรก', 'ยาตัวที่',
+                        ]
+                        _has_reference = any(p in query for p in _REFERENCING_PATTERNS)
+
+                        # Keep if short follow-up about usage ("ใช้ยังไง", "ผสมกี่")
+                        _FOLLOWUP_USAGE = [
+                            'ใช้ยังไง', 'ใช้เท่าไหร่', 'ผสมกี่', 'ฉีดกี่', 'พ่นกี่',
+                            'ผสมเท่าไหร่', 'อัตราเท่าไหร่', 'ใช้กี่', 'ราดกี่',
+                            'ใช้ช่วงไหน', 'ใช้ตอนไหน', 'ใช้ได้กี่', 'ได้ผลไหม',
+                        ]
+                        _is_usage_followup = len(query.strip()) < 30 and any(p in query for p in _FOLLOWUP_USAGE)
+
+                        if not _has_reference and not _is_usage_followup:
+                            _has_specific_entity = bool(
+                                hints.get('disease_name') or hints.get('pest_name')
+                                or hints.get('plant_type')
+                                or (hints.get('problem_type') and hints['problem_type'] != 'unknown')
+                            )
+                            if not _has_specific_entity:
+                                drop_reason = "vague/generic query, no specific entity, product from memory"
                     if drop_reason and not has_new_different_product:
                         logger.info(f"  - Drop product: '{hints['product_name']}' ({drop_reason})")
                         del hints['product_name']

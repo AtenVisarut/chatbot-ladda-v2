@@ -226,10 +226,19 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
         "สับปะรด", "หอมแดง", "กระเทียม", "ผัก", "ไม้ผล"
     ]
 
+    # Farmer typos/abbreviations → canonical plant name
+    _PLANT_TYPOS = {
+        "ทุเรีย": "ทุเรียน",   # common: ขาด น
+    }
+
     question_lower = question.lower()
     for plant in plants:
         if plant in question_lower:
             return plant
+    # Fallback: common typos
+    for typo, canonical in _PLANT_TYPOS.items():
+        if typo in question_lower:
+            return canonical
     return None
 
 

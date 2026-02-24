@@ -82,7 +82,10 @@ class ResponseGeneratorAgent:
                         logger.info(f"  - Crop-specific override: {top_doc.title} is at position 1")
 
                 # Check if a specific product was asked about AND found in DB
-                has_product_in_query = bool(query_analysis.entities.get('product_name'))
+                has_product_in_query = (
+                    bool(query_analysis.entities.get('product_name'))
+                    and query_analysis.entities.get('_product_from_query', True)
+                )
                 has_documents = bool(retrieval_result.documents)
 
                 # Check if disease query matched via target_pest (fallback products)

@@ -263,6 +263,10 @@ required_sources:
                 else:
                     logger.info(f"  - LLM fallback product: keeping Agent 1 value='{entities.get('product_name')}' (hint was '{hints['product_name']}')")
 
+            # Propagate flag for downstream agents (retrieval, response)
+            if '_product_from_query' in hints:
+                entities['_product_from_query'] = hints['_product_from_query']
+
             # Remove LLM-hallucinated product_name for recommendation/treatment queries
             # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)
             _recommendation_intents = {

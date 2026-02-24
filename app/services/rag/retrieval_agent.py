@@ -596,7 +596,8 @@ class RetrievalAgent:
             # Stage 3.55: Category-Intent alignment penalty
             # If user asks about disease, penalize non-fungicide products (e.g. PGR)
             # When direct_lookup found a product, infer expected category from it
-            if direct_lookup_ids and not expected_categories:
+            _product_from_query = query_analysis.entities.get('_product_from_query', True)
+            if direct_lookup_ids and not expected_categories and _product_from_query:
                 for doc in reranked_docs:
                     if doc.id in direct_lookup_ids:
                         cat = doc.metadata.get('category') or ''
