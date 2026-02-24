@@ -1,9 +1,11 @@
 import logging
 import re
 import asyncio
+import hashlib
 from typing import List, Dict, Optional, Tuple
 from app.dependencies import openai_client, supabase_client
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
+from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product.recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
 try:
@@ -1259,6 +1261,40 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         logger.error(f"Error answering usage question: {e}", exc_info=True)
         return None
 
+# =============================================================================
+# Response Cache — ลด OpenAI calls สำหรับคำถามซ้ำ
+# =============================================================================
+# คำที่บ่งบอกว่าเป็นคำถามต่อเนื่อง (context-dependent) → ห้าม cache
+_FOLLOWUP_MARKERS = [
+    "ตัวนี้", "ตัวไหน", "อันไหน", "อันนี้", "ยานี้", "ยาตัวนี้",
+    "ตัวแรก", "ตัวที่", "ข้อ 1", "ข้อ 2", "ข้อ 3",
+    "เพิ่มเติม", "อธิบาย", "ขยาย", "ต่อ", "แล้ว",
+    "ตัวเดิม", "ที่บอก", "ที่แนะนำ", "สินค้าด้านบน",
+]
+
+RESPONSE_CACHE_TTL = 3600  # 1 hour
+
+
+def _is_cacheable_message(message: str) -> bool:
+    """Check if message is eligible for response caching."""
+    msg = message.strip()
+    # Too short → likely ambiguous or follow-up
+    if len(msg) < 15:
+        return False
+    # Contains follow-up markers → context-dependent
+    msg_lower = msg.lower()
+    for marker in _FOLLOWUP_MARKERS:
+        if marker in msg_lower:
+            return False
+    return True
+
+
+def _make_response_cache_key(message: str) -> str:
+    """Create cache key from normalized message."""
+    normalized = re.sub(r'\s+', ' ', message.strip().lower())
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+
+
 async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
@@ -1322,7 +1358,17 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             await add_to_memory(user_id, "assistant", greeting_answer)
             return greeting_answer
 
-        # 5b. Classify intent
+        # 5b. Response cache — return cached answer for identical questions
+        _cache_eligible = _is_cacheable_message(message) and not _is_usage
+        _response_cache_key = _make_response_cache_key(message) if _cache_eligible else None
+        if _response_cache_key:
+            cached_answer = await get_from_cache("response", _response_cache_key)
+            if cached_answer:
+                logger.info(f"✓ Response cache hit: '{message[:40]}'")
+                await add_to_memory(user_id, "assistant", cached_answer)
+                return cached_answer
+
+        # 5c. Classify intent
         is_agri_q = is_agriculture_question(message) or keywords["pests"] or keywords["crops"]
         is_prod_q = is_product_question(message) or keywords["is_product_query"]
         is_fert_q = keywords.get("is_fertilizer_query", False)
@@ -1391,6 +1437,10 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                     enriched_products.append({"product_name": mp})
                             rag_metadata["products"] = enriched_products
                         await add_to_memory(user_id, "assistant", answer, metadata=rag_metadata)
+                        # Cache response for identical future questions
+                        if _response_cache_key:
+                            await set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL)
+                            logger.info(f"✓ Response cached: '{message[:40]}'")
                         return answer
 
             # Fallback to legacy answer_qa_with_vector_search
@@ -1419,8 +1469,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
 
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
+            # Cache response for identical future questions
+            if _response_cache_key:
+                await set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL)
+                logger.info(f"✓ Response cached: '{message[:40]}'")
             return answer
-            
+
         else:
             # Clearly non-agriculture → safe general chat (neutered, no product/disease expertise)
             logger.info(f"💬 Routing to general chat (non-agri: '{message[:30]}')")
