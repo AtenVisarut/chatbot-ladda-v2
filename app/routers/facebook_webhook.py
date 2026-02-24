@@ -13,10 +13,14 @@ from app.utils.facebook.helpers import (
 from app.services.chat.handler import handle_natural_conversation
 from app.services.memory import clear_memory, add_to_memory
 from app.utils.rate_limiter import check_user_rate_limit
+from app.config import MAX_CONCURRENT_TASKS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/facebook", tags=["facebook"])
+
+# Semaphore to limit concurrent background tasks (prevents memory exhaustion)
+_task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
 
 
 # ──────────────────────────────────────────────
@@ -63,9 +67,24 @@ async def receive(request: Request):
     entries = data.get("entry", [])
     for entry in entries:
         for messaging_event in entry.get("messaging", []):
-            asyncio.create_task(_process_fb_message(messaging_event))
+            asyncio.create_task(_guarded_process_fb_message(messaging_event))
 
     return {"status": "ok"}
+
+
+async def _guarded_process_fb_message(event: dict):
+    """Acquire semaphore before processing — limits concurrent background tasks."""
+    try:
+        async with _task_semaphore:
+            await _process_fb_message(event)
+    except Exception as e:
+        logger.error(f"Guarded FB webhook error: {e}", exc_info=True)
+        psid = event.get("sender", {}).get("id")
+        if psid:
+            try:
+                await send_facebook_message(psid, "ขออภัยค่ะ ระบบกำลังยุ่งอยู่ กรุณารอสักครู่แล้วลองใหม่นะคะ")
+            except Exception:
+                pass
 
 
 async def _process_fb_message(event: dict) -> None:
@@ -115,12 +134,15 @@ async def _process_fb_message(event: dict) -> None:
         # Core conversation (platform-agnostic)
         answer = await handle_natural_conversation(user_id, text)
 
-        # Split long messages for FB 2000-char limit
-        chunks = split_message(answer)
-        for chunk in chunks:
-            await send_facebook_message(psid, chunk)
+        if answer is not None:
+            # Split long messages for FB 2000-char limit
+            chunks = split_message(answer)
+            for chunk in chunks:
+                await send_facebook_message(psid, chunk)
 
-        logger.info(f"FB reply sent to {psid} ({len(chunks)} chunk(s)) in {time.time() - start_time:.2f}s")
+            logger.info(f"FB reply sent to {psid} ({len(chunks)} chunk(s)) in {time.time() - start_time:.2f}s")
+        else:
+            logger.info(f"⏭️ No data for fb:{psid} — skipping reply (admin will handle)")
 
     except Exception as e:
         logger.error(f"Error processing FB message from {psid}: {e}", exc_info=True)

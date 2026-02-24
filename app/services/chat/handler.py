@@ -608,8 +608,8 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         # =================================================================
         unknown_product = detect_unknown_product_in_question(question)
         if unknown_product and not product_in_question:
-            logger.info(f"⚠️ ถามเกี่ยวกับสินค้าที่ไม่รู้จัก: {unknown_product}")
-            return f"ขออภัยค่ะ ไม่พบข้อมูลสินค้า \"{unknown_product}\" ในฐานข้อมูลของ ICP Ladda ค่ะ\n\nกรุณาตรวจสอบชื่อสินค้าอีกครั้ง หรือสอบถามเกี่ยวกับสินค้าอื่นได้เลยค่ะ"
+            logger.info(f"⏭️ No data — unknown product '{unknown_product}', skipping reply (admin will handle)")
+            return None
 
         # =================================================================
         # STEP 3: ถ้าถามเรื่องโรค/แมลง แต่ไม่ระบุพืช → ถามพืชก่อน
@@ -632,9 +632,11 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
                     break
 
             if problem_type == 'insect':
-                return f"น้องลัดดาขอเช็คให้ก่อนนะคะ จากข้อมูลสินค้า ยังไม่พบตัวยาที่ระบุใช้กับ \"{problem_name}\" โดยตรงค่ะ\n\nรบกวนบอกเพิ่มหน่อยว่าเป็นพืชอะไร และอยู่ช่วงไหน (แตกใบอ่อน/ออกดอก/ติดผล) จะได้ค้นหาตัวที่เหมาะให้ตรงที่สุดนะคะ"
+                logger.info(f"⏭️ No data — insect '{problem_name}' no plant specified, skipping reply (admin will handle)")
+                return None
             else:  # disease
-                return f"น้องลัดดาขอเช็คให้ก่อนนะคะ จากข้อมูลสินค้า ยังไม่พบตัวยาที่ระบุใช้กับ \"{problem_name}\" โดยตรงค่ะ\n\nรบกวนบอกเพิ่มหน่อยว่าเป็นพืชอะไร และอยู่ช่วงไหน (แตกใบอ่อน/ออกดอก/ติดผล) จะได้ค้นหาตัวที่เหมาะให้ตรงที่สุดนะคะ"
+                logger.info(f"⏭️ No data — disease '{problem_name}' no plant specified, skipping reply (admin will handle)")
+                return None
 
         # เก็บ context จากแต่ละ source
         all_context_parts = []
@@ -829,9 +831,10 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         if not openai_client:
             return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
 
-        # ถ้าไม่พบข้อมูลในฐานข้อมูล → บอกตรงๆ
+        # ถ้าไม่พบข้อมูลในฐานข้อมูล → silent (admin will handle)
         if not product_docs:
-            return f"น้องลัดดาขอเช็คให้ก่อนนะคะ จากข้อมูลสินค้า ยังไม่พบข้อมูลที่ตรงกับคำถามโดยตรงค่ะ\n\nรบกวนบอกเพิ่มหน่อยว่า:\n- เป็นพืชอะไรคะ (เช่น ข้าว, ทุเรียน, มะม่วง)\n- ปัญหาที่พบ (เช่น โรค, แมลง, วัชพืช)\n\nจะได้ค้นหาตัวที่เหมาะให้ตรงที่สุดนะคะ"
+            logger.info("⏭️ No data — no product_docs found, skipping reply (admin will handle)")
+            return None
 
         # =================================================================
         # สร้างรายชื่อสินค้าที่อนุญาตให้แนะนำ (จาก product_docs เท่านั้น)
@@ -955,9 +958,9 @@ async def answer_agriculture_question(question: str, context: str = "") -> str:
 
 ตอบ:"""
         else:
-            # ไม่พบในฐานข้อมูล → บอกตรงๆ ว่าไม่มีข้อมูล (ห้ามใช้ความรู้ทั่วไป)
-            logger.info("⚠️ No diseases found in database, returning no-data message")
-            return "ขออภัยค่ะ ไม่พบข้อมูลเรื่องนี้ในฐานข้อมูลของลัดดาค่ะ\n\nกรุณาระบุรายละเอียดเพิ่มเติม:\n- ชื่อพืช (เช่น ทุเรียน, ข้าว, มะม่วง)\n- อาการ/ปัญหาที่พบ\n\nเพื่อให้ลัดดาค้นหาข้อมูลที่ตรงกับความต้องการค่ะ"
+            # ไม่พบในฐานข้อมูล → silent (admin will handle)
+            logger.info("⏭️ No data — no diseases found in database, skipping reply (admin will handle)")
+            return None
 
         if not openai_client:
             return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
@@ -1397,6 +1400,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         answer = rag_response.answer
                         logger.info(f"AgenticRAG response: confidence={rag_response.confidence:.2f}, grounded={rag_response.is_grounded}")
 
+                        # Silent no-data: ถ้า not grounded + confidence 0 → ไม่ตอบ ให้ admin จัดการ
+                        if not rag_response.is_grounded and rag_response.confidence == 0.0:
+                            logger.info(f"⏭️ No data — skipping reply (admin will handle)")
+                            return None
+
+                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" + confidence ต่ำ → ไม่ตอบ
+                        _NO_DATA_PHRASES = [
+                            "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+                            "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+                        ]
+                        if rag_response.confidence < 0.3 and any(p in answer for p in _NO_DATA_PHRASES):
+                            logger.info(f"⏭️ No data — low confidence ({rag_response.confidence:.2f}) + no-data phrase in answer, skipping reply (admin will handle)")
+                            return None
+
                         # Track analytics if product recommendation
                         if is_prod_q:
                             from app.dependencies import analytics_tracker
@@ -1446,6 +1463,19 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             # Fallback to legacy answer_qa_with_vector_search
             logger.info("Using legacy answer_qa_with_vector_search")
             answer = await answer_qa_with_vector_search(message, context)
+
+            # Silent no-data: legacy path returned None → ไม่ตอบ ให้ admin จัดการ
+            if answer is None:
+                return None
+
+            # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบ
+            _NO_DATA_PHRASES_LEGACY = [
+                "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+                "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+            ]
+            if any(p in answer for p in _NO_DATA_PHRASES_LEGACY):
+                logger.info(f"⏭️ No data — legacy LLM response contains no-data phrase, skipping reply (admin will handle)")
+                return None
 
             # Track analytics if product recommendation
             if is_prod_q:

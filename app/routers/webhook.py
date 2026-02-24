@@ -51,10 +51,14 @@ from app.utils.line.helpers import (
     push_line
 )
 from app.utils.rate_limiter import check_user_rate_limit
+from app.config import MAX_CONCURRENT_TASKS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Semaphore to limit concurrent background tasks (prevents memory exhaustion)
+_task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
 
 
 @router.post("/webhook")
@@ -97,9 +101,35 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
     # FIX: Return 200 IMMEDIATELY to prevent LINE timeout (499)
     # Process events in background - reply_token valid for ~30 seconds
     if events:
-        asyncio.create_task(_process_webhook_events(events))
+        asyncio.create_task(_guarded_process_webhook(events))
 
     return JSONResponse(content={"status": "success"})
+
+
+async def _guarded_process_webhook(events: list):
+    """Acquire semaphore before processing — limits concurrent background tasks."""
+    try:
+        # Try to acquire without blocking (timeout=0)
+        try:
+            await asyncio.wait_for(_task_semaphore.acquire(), timeout=0.01)
+        except asyncio.TimeoutError:
+            # All slots busy — notify first user and wait for a slot
+            logger.warning(f"Semaphore full ({MAX_CONCURRENT_TASKS} tasks running) — queuing")
+            reply_token = next((e.get("replyToken") for e in events if e.get("replyToken")), None)
+            if reply_token:
+                try:
+                    await reply_line(reply_token, "ขออภัยค่ะ ระบบกำลังยุ่งอยู่ กรุณารอสักครู่แล้วลองใหม่นะคะ ⏳")
+                except Exception:
+                    pass
+            # Still wait for a slot (graceful queuing, not rejection)
+            await _task_semaphore.acquire()
+
+        try:
+            await _process_webhook_events(events)
+        finally:
+            _task_semaphore.release()
+    except Exception as e:
+        logger.error(f"Guarded webhook error: {e}", exc_info=True)
 
 
 async def _process_webhook_events(events: list):
@@ -226,7 +256,10 @@ async def _process_webhook_events(events: list):
                     if not ENABLE_IMAGE_DIAGNOSIS:
                         await delete_pending_context(user_id)
                         answer = await handle_natural_conversation(user_id, text)
-                        await reply_line(reply_token, answer)
+                        if answer is not None:
+                            await reply_line(reply_token, answer)
+                        else:
+                            logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")
                         continue
 
                     # === NEW: ตรวจจับ interrupt ก่อนประมวลผล ===
@@ -458,7 +491,10 @@ async def _process_webhook_events(events: list):
 
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
-                        await reply_line(reply_token, answer)
+                        if answer is not None:
+                            await reply_line(reply_token, answer)
+                        else:
+                            logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")
 
                 else:
                     # Normal text message handling
@@ -474,7 +510,10 @@ async def _process_webhook_events(events: list):
                     else:
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
-                        await reply_line(reply_token, answer)
+                        if answer is not None:
+                            await reply_line(reply_token, answer)
+                        else:
+                            logger.info(f"⏭️ No data for {user_id} — skipping reply (admin will handle)")
 
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":
