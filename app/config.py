@@ -33,6 +33,9 @@ MAX_CACHE_SIZE = 5000  # Maximum cache entries (เพิ่มจาก 1000 �
 USER_RATE_LIMIT = 20  # requests per minute
 USER_RATE_WINDOW = 60  # seconds
 
+# Concurrency control — limit background tasks to prevent memory exhaustion
+MAX_CONCURRENT_TASKS = int(os.getenv("MAX_CONCURRENT_TASKS", "100"))
+
 # Image diagnosis feature toggle
 # Set to "1" to enable image-based disease diagnosis, "0" to disable (default)
 ENABLE_IMAGE_DIAGNOSIS = os.getenv("ENABLE_IMAGE_DIAGNOSIS", "0") == "1"
