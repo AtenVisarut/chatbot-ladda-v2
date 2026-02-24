@@ -463,6 +463,17 @@ class RetrievalAgent:
                 if original_disease:
                     disease_names_to_check.add(original_disease)
 
+                # Split combined disease names like "ใบจุดและใบขีดสีน้ำตาล" → ["ใบจุด", "ใบขีดสีน้ำตาล"]
+                _split_names = set()
+                for dname in list(disease_names_to_check):
+                    for sep in ['และ', 'กับ', ',']:
+                        if sep in dname:
+                            parts = [p.strip() for p in dname.split(sep) if p.strip() and len(p.strip()) >= 3]
+                            _split_names.update(parts)
+                if _split_names:
+                    disease_names_to_check.update(_split_names)
+                    logger.info(f"  - Disease split: added {_split_names} from combined names")
+
                 if disease_names_to_check:
                     # Build combined variants from all disease names
                     all_variants = []
