@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from app.config import CACHE_TTL, PENDING_CONTEXT_TTL, MAX_CACHE_SIZE
 from app.dependencies import supabase_client
+from app.services.redis_cache import is_redis_available, redis_get, redis_set, redis_delete
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,15 @@ async def get_from_cache(cache_type: str, key: str) -> Optional[Any]:
     if value is not None:
         logger.debug(f"✓ L1 Cache hit: {full_key[:50]}")
         return value
-    
+
+    # L0: Redis (if available)
+    if is_redis_available():
+        value = redis_get(full_key)
+        if value is not None:
+            _memory_cache.set(full_key, value, CACHE_TTL)
+            logger.debug(f"✓ L0 Redis hit (backfill L1): {full_key[:50]}")
+            return value
+
     # L2: Fallback to Supabase
     try:
         if not supabase_client:
@@ -205,7 +214,11 @@ async def set_to_cache(cache_type: str, key: str, data: Any, ttl: int = CACHE_TT
     
     # L1: Set to memory cache (fast!)
     _memory_cache.set(full_key, data, ttl)
-    
+
+    # L0: Redis
+    if is_redis_available():
+        redis_set(full_key, data, ttl)
+
     # L2: Persist to Supabase
     try:
         if not supabase_client:
@@ -232,7 +245,11 @@ async def delete_from_cache(cache_type: str, key: str):
     
     # L1: Delete from memory
     _memory_cache.delete(full_key)
-    
+
+    # L0: Redis
+    if is_redis_available():
+        redis_delete(full_key)
+
     # L2: Delete from Supabase
     try:
         if supabase_client:

@@ -9,9 +9,14 @@ logger = logging.getLogger(__name__)
 # Initialize OpenAI
 openai_client = None
 if OPENAI_API_KEY:
+    import httpx
     from openai import AsyncOpenAI
-    openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-    logger.info("OpenAI initialized successfully")
+    openai_client = AsyncOpenAI(
+        api_key=OPENAI_API_KEY,
+        timeout=httpx.Timeout(30.0, connect=10.0),
+        max_retries=3,
+    )
+    logger.info("OpenAI initialized successfully (timeout=30s, max_retries=3)")
 
 # Initialize Supabase (fallback)
 supabase_client: Client = None

@@ -1,8 +1,11 @@
 import os
+import logging as _logging
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+_cfg_logger = _logging.getLogger(__name__)
 
 # ============================================================================#
 # ENVIRONMENT / SERVICES
@@ -24,6 +27,11 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ladda")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ladda123")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
+if ADMIN_PASSWORD == "ladda123":
+    _cfg_logger.warning("ADMIN_PASSWORD is using default value! Set env var in production.")
+if SECRET_KEY == "your-secret-key-change-in-production":
+    _cfg_logger.warning("SECRET_KEY is using default value! Set env var in production.")
+
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
 PENDING_CONTEXT_TTL = 1800  # 30 minutes (เพิ่มจาก 5 นาที เพื่อให้ user มีเวลาตอบ)
@@ -35,6 +43,7 @@ USER_RATE_WINDOW = 60  # seconds
 
 # Concurrency control — limit background tasks to prevent memory exhaustion
 MAX_CONCURRENT_TASKS = int(os.getenv("MAX_CONCURRENT_TASKS", "100"))
+MAX_QUEUE_DEPTH = int(os.getenv("MAX_QUEUE_DEPTH", "50"))
 
 # Image diagnosis feature toggle
 # Set to "1" to enable image-based disease diagnosis, "0" to disable (default)

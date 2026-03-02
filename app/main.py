@@ -19,6 +19,7 @@ from app.config import (
 )
 from app.dependencies import openai_client, supabase_client, analytics_tracker
 from app.services.cache import cleanup_expired_cache, clear_all_caches
+from app.services.redis_cache import is_redis_available
 from app.services.product.registry import ProductRegistry
 from app.utils.rate_limiter import cleanup_rate_limit_data
 
@@ -62,6 +63,7 @@ async def lifespan(app_instance: FastAPI):
     logger.info(f"LINE Bot: {'✓' if LINE_CHANNEL_ACCESS_TOKEN else '✗'}")
     logger.info(f"Facebook: {'✓' if FB_PAGE_ACCESS_TOKEN else '✗'}")
     logger.info(f"Analytics: {'✓' if analytics_tracker else '✗'}")
+    logger.info(f"Redis Cache: {'✓' if is_redis_available() else '✗ (in-memory fallback)'}")
     logger.info("=" * 60)
 
     # Load product registry from DB

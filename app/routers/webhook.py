@@ -51,7 +51,7 @@ from app.utils.line.helpers import (
     push_line
 )
 from app.utils.rate_limiter import check_user_rate_limit
-from app.config import MAX_CONCURRENT_TASKS
+from app.config import MAX_CONCURRENT_TASKS, MAX_QUEUE_DEPTH
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ router = APIRouter()
 
 # Semaphore to limit concurrent background tasks (prevents memory exhaustion)
 _task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
+_queue_depth = 0
 
 
 @router.post("/webhook")
@@ -119,21 +120,33 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
 
 async def _guarded_process_webhook(events: list):
     """Acquire semaphore before processing — limits concurrent background tasks."""
+    global _queue_depth
     try:
-        # Try to acquire without blocking (timeout=0)
+        # Try to acquire without blocking
         try:
             await asyncio.wait_for(_task_semaphore.acquire(), timeout=0.01)
         except asyncio.TimeoutError:
-            # All slots busy — notify first user and wait for a slot
-            logger.warning(f"Semaphore full ({MAX_CONCURRENT_TASKS} tasks running) — queuing")
-            reply_token = next((e.get("replyToken") for e in events if e.get("replyToken")), None)
-            if reply_token:
-                try:
-                    await reply_line(reply_token, "ขออภัยค่ะ ระบบกำลังยุ่งอยู่ กรุณารอสักครู่แล้วลองใหม่นะคะ ⏳")
-                except Exception:
-                    pass
-            # Still wait for a slot (graceful queuing, not rejection)
-            await _task_semaphore.acquire()
+            # All slots busy — check queue depth
+            if _queue_depth >= MAX_QUEUE_DEPTH:
+                # REJECT — queue full
+                reply_token = next((e.get("replyToken") for e in events if e.get("replyToken")), None)
+                if reply_token:
+                    try:
+                        await reply_line(reply_token, "ขออภัยค่ะ ระบบกำลังยุ่งมาก กรุณาลองใหม่อีกครั้งนะคะ ⏳")
+                    except Exception:
+                        pass
+                return
+
+            # QUEUE — wait with 30s timeout (reply_token lifetime)
+            _queue_depth += 1
+            logger.warning(f"Semaphore full — queuing ({_queue_depth}/{MAX_QUEUE_DEPTH})")
+            try:
+                await asyncio.wait_for(_task_semaphore.acquire(), timeout=30)
+            except asyncio.TimeoutError:
+                logger.error("Queue timeout 30s — dropping")
+                return
+            finally:
+                _queue_depth -= 1
 
         try:
             await _process_webhook_events(events)
