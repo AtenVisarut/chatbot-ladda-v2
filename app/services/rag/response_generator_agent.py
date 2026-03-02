@@ -11,6 +11,7 @@ Responsibilities:
 
 import logging
 import json
+import re
 
 from app.services.rag import (
     QueryAnalysis,
@@ -31,6 +32,20 @@ from app.prompts import (
 
 logger = logging.getLogger(__name__)
 
+
+def _disease_in_target_pest(variant: str, target_pest: str) -> bool:
+    """Boundary-aware disease matching.
+    Prevents 'ใบไหม้' from matching inside 'กาบใบไหม้' (different disease).
+    Requires the variant to be preceded by start-of-string, space, comma, paren, or 'โรค'.
+    """
+    escaped = re.escape(variant.lower())
+    pattern = r'(?:^|[\s,;(]|โรค)' + escaped
+    return bool(re.search(pattern, target_pest.lower()))
+
+
+def _any_disease_variant_matches(variants: list, target_pest: str) -> bool:
+    """Check if any disease variant matches target_pest with boundary awareness."""
+    return any(_disease_in_target_pest(v, target_pest) for v in variants)
 
 
 class ResponseGeneratorAgent:
@@ -94,8 +109,8 @@ class ResponseGeneratorAgent:
                 if disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     disease_variants = generate_thai_disease_variants(disease_name)
                     for doc in retrieval_result.documents[:10]:
-                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                        if any(v.lower() in target_pest for v in disease_variants):
+                        target_pest = str(doc.metadata.get('target_pest', ''))
+                        if _any_disease_variant_matches(disease_variants, target_pest):
                             has_disease_match = True
                             logger.info(f"  - Disease override: '{disease_name}' found in {doc.title} target_pest")
                             break
@@ -112,8 +127,8 @@ class ResponseGeneratorAgent:
                     if original_disease and original_disease != disease_name:
                         original_variants = generate_thai_disease_variants(original_disease)
                         for doc in retrieval_result.documents[:5]:
-                            target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                            if any(v.lower() in target_pest for v in original_variants):
+                            target_pest = str(doc.metadata.get('target_pest', ''))
+                            if _any_disease_variant_matches(original_variants, target_pest):
                                 has_disease_match = True
                                 logger.info(f"  - Disease override (original query): '{original_disease}' found in {doc.title} target_pest")
                                 break
@@ -124,8 +139,8 @@ class ResponseGeneratorAgent:
                     for pd in _possible_diseases:
                         pd_variants = generate_thai_disease_variants(pd)
                         for doc in retrieval_result.documents[:10]:
-                            target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                            if any(v.lower() in target_pest for v in pd_variants):
+                            target_pest = str(doc.metadata.get('target_pest', ''))
+                            if _any_disease_variant_matches(pd_variants, target_pest):
                                 has_disease_match = True
                                 logger.info(f"  - Disease override (symptom→pathogen): '{pd}' found in {doc.title} target_pest")
                                 break
@@ -268,15 +283,15 @@ class ResponseGeneratorAgent:
             for _rd in _rescue_diseases_list:
                 _rescue_variants = generate_thai_disease_variants(_rd)
                 _has_in_docs_to_use = any(
-                    any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _rescue_variants)
+                    _any_disease_variant_matches(_rescue_variants, str(d.metadata.get('target_pest', '')))
                     for d in docs_to_use
                 )
                 if not _has_in_docs_to_use:
                     for doc in retrieval_result.documents:
                         if doc in docs_to_use:
                             continue
-                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                        if any(v.lower() in target_pest for v in _rescue_variants):
+                        target_pest = str(doc.metadata.get('target_pest', ''))
+                        if _any_disease_variant_matches(_rescue_variants, target_pest):
                             docs_to_use.insert(0, doc)
                             logger.info(f"  - Rescued disease-matching product into docs_to_use: {doc.title} (for disease: {_rd})")
                             break
@@ -407,8 +422,8 @@ class ResponseGeneratorAgent:
                     continue
                 check_variants = generate_thai_disease_variants(check_disease)
                 for doc in docs_to_use:
-                    target_pest = str(doc.metadata.get('target_pest', '')).lower()
-                    if any(v.lower() in target_pest for v in check_variants):
+                    target_pest = str(doc.metadata.get('target_pest', ''))
+                    if _any_disease_variant_matches(check_variants, target_pest):
                         disease_found_in_products = True
                         matched_disease_label = check_disease
                         matched_product_name = doc.metadata.get('product_name', doc.title)
@@ -421,7 +436,7 @@ class ResponseGeneratorAgent:
                 # (rescue logic above may have injected a matching doc after the initial check)
                 _all_check_variants = generate_thai_disease_variants(disease_name)
                 _really_missing = not any(
-                    any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _all_check_variants)
+                    _any_disease_variant_matches(_all_check_variants, str(d.metadata.get('target_pest', '')))
                     for d in docs_to_use
                 )
                 if _really_missing:
