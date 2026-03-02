@@ -74,10 +74,9 @@ USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
 LLM_MODEL_INTENT = os.getenv("LLM_MODEL_INTENT", "gpt-4o")
 LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o")
-LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o")
+LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
-LLM_MODEL_ENTITY_EXTRACTION = os.getenv("LLM_MODEL_ENTITY_EXTRACTION", "gpt-4o")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 AGENTIC_RAG_CONFIG = {
@@ -104,9 +103,6 @@ LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสิน
 LLM_TOKENS_RERANKING = 100
 LLM_TEMP_RESPONSE_GEN = 0.2          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
 LLM_TOKENS_RESPONSE_GEN = 800
-LLM_TEMP_ENTITY_EXTRACTION = 0.0     # Stage 0: LLM fallback extract entities (orchestrator.py)
-LLM_TOKENS_ENTITY_EXTRACTION = 200
-
 # --- Handler (chat/handler.py) ---
 LLM_TEMP_HANDLER_RAG = 0.1           # ตอบคำถามสินค้าจาก vector search (Q&A)
 LLM_TOKENS_HANDLER_RAG = 600

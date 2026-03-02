@@ -80,29 +80,15 @@ class QueryUnderstandingAgent:
         # Build hint/constraint sections
         # [CONSTRAINT] = dictionary-matched, LLM must NOT override
         # [HINT] = softer suggestion, LLM may adjust
-        # [HINT_LLM] = from LLM fallback extraction, Agent 1 can adjust freely
         hint_section = ""
-        llm_fallback_keys = hints.get('_llm_fallback_keys', [])
         if hints.get('product_name'):
-            if 'product_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.product_name เท่านั้น"
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.product_name เท่านั้น"
         if hints.get('disease_name'):
-            if 'disease_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อโรค: \"{hints['disease_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อโรค: \"{hints['disease_name']}\" — ห้ามเปลี่ยนชื่อโรค ต้องใช้ชื่อนี้ใน entities.disease_name เท่านั้น (ห้ามแปลหรือเปลี่ยนเป็นชื่ออื่น)"
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อโรค: \"{hints['disease_name']}\" — ห้ามเปลี่ยนชื่อโรค ต้องใช้ชื่อนี้ใน entities.disease_name เท่านั้น (ห้ามแปลหรือเปลี่ยนเป็นชื่ออื่น)"
         if hints.get('plant_type'):
-            if 'plant_type' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อพืช: \"{hints['plant_type']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['plant_type']}\" — ใช้ชื่อนี้ใน entities.plant_type"
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['plant_type']}\" — ใช้ชื่อนี้ใน entities.plant_type"
         if hints.get('pest_name'):
-            if 'pest_name' in llm_fallback_keys:
-                hint_section += f"\n[HINT_LLM] ระบบ AI ตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — สามารถปรับได้ตามบริบท"
-            else:
-                hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
         if hints.get('problem_type') and hints['problem_type'] != 'unknown':
             problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
             hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
@@ -160,7 +146,6 @@ required_sources:
 กฎสำคัญ:
 - [CONSTRAINT] คือข้อมูลที่ระบบตรวจจับได้จากพจนานุกรม — ห้ามเปลี่ยนแปลง ห้ามแปล ห้ามเปลี่ยนชื่อ ต้องใส่ค่าตามที่ระบุเท่านั้น
 - [HINT] คือคำแนะนำ — สามารถปรับได้ตามบริบท
-- [HINT_LLM] คือ entity ที่ AI อีกตัวตรวจพบ — ใช้เป็นแนวทางเริ่มต้นแต่สามารถปรับเปลี่ยนได้ตามที่คุณวิเคราะห์
 - ถ้าคำถามมีคำว่า "ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "แก้ยังไง", "ฉีดอะไร", "พ่นอะไร" → ต้องเป็น product-related intent (ห้ามเป็น unknown)
 - ถ้าคำถามพูดถึงอาการพืช/สภาพพืช (เช่น ใบเพสลาด, ใบไหม้, ใบเหลือง, ดอกร่วง, ผลร่วง, รากเน่า) → จัดเป็น disease_treatment หรือ nutrient_supplement
 - ห้ามสร้าง query ภาษาอังกฤษ (ฐานข้อมูลเป็นภาษาไทย)
@@ -224,44 +209,33 @@ required_sources:
 
             # Post-LLM override: pre-extracted entities take priority
             # This prevents LLM from "translating" ราชมพู→ฟอซาเรียม etc.
-            # SKIP override for [HINT_LLM] entities — let Agent 1 adjust freely
-            llm_fallback_keys = hints.get('_llm_fallback_keys', [])
             if hints.get('disease_name') and entities.get('disease_name') != hints['disease_name']:
-                if 'disease_name' not in llm_fallback_keys:
-                    logger.info(f"  - Override disease: LLM='{entities.get('disease_name')}' → pre-extracted='{hints['disease_name']}'")
-                    entities['disease_name'] = hints['disease_name']
-                else:
-                    logger.info(f"  - LLM fallback disease: keeping Agent 1 value='{entities.get('disease_name')}' (hint was '{hints['disease_name']}')")
+                logger.info(f"  - Override disease: LLM='{entities.get('disease_name')}' → pre-extracted='{hints['disease_name']}'")
+                entities['disease_name'] = hints['disease_name']
             if hints.get('plant_type') and not entities.get('plant_type'):
                 entities['plant_type'] = hints['plant_type']
             if hints.get('pest_name') and entities.get('pest_name') != hints['pest_name']:
-                if 'pest_name' not in llm_fallback_keys:
-                    logger.info(f"  - Override pest: LLM='{entities.get('pest_name')}' → pre-extracted='{hints['pest_name']}'")
-                    entities['pest_name'] = hints['pest_name']
-                else:
-                    logger.info(f"  - LLM fallback pest: keeping Agent 1 value='{entities.get('pest_name')}' (hint was '{hints['pest_name']}')")
+                logger.info(f"  - Override pest: LLM='{entities.get('pest_name')}' → pre-extracted='{hints['pest_name']}'")
+                entities['pest_name'] = hints['pest_name']
             if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
-                if 'product_name' not in llm_fallback_keys:
-                    # If LLM says None + intent is recommendation → respect LLM's None
-                    # (user is asking for NEW recommendations, not follow-up about existing product)
-                    _rec_intents_for_override = {
-                        IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
-                        IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
-                        IntentType.GENERAL_AGRICULTURE,
-                    }
-                    llm_said_none = entities.get('product_name') is None
-                    hint_from_query = hints.get('_product_from_query', False)
-                    if llm_said_none and intent in _rec_intents_for_override:
-                        logger.info(f"  - Skip product override: LLM correctly found no product (intent={intent}, hint='{hints['product_name']}')")
-                    elif not llm_said_none and not hint_from_query:
-                        # LLM found a specific product, but hint is from context scan (less reliable)
-                        # Trust LLM — it has full conversation context
-                        logger.info(f"  - Keep LLM product: '{entities.get('product_name')}' (context hint='{hints['product_name']}')")
-                    else:
-                        logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
-                        entities['product_name'] = hints['product_name']
+                # If LLM says None + intent is recommendation → respect LLM's None
+                # (user is asking for NEW recommendations, not follow-up about existing product)
+                _rec_intents_for_override = {
+                    IntentType.PRODUCT_RECOMMENDATION, IntentType.DISEASE_TREATMENT,
+                    IntentType.PEST_CONTROL, IntentType.NUTRIENT_SUPPLEMENT,
+                    IntentType.GENERAL_AGRICULTURE,
+                }
+                llm_said_none = entities.get('product_name') is None
+                hint_from_query = hints.get('_product_from_query', False)
+                if llm_said_none and intent in _rec_intents_for_override:
+                    logger.info(f"  - Skip product override: LLM correctly found no product (intent={intent}, hint='{hints['product_name']}')")
+                elif not llm_said_none and not hint_from_query:
+                    # LLM found a specific product, but hint is from context scan (less reliable)
+                    # Trust LLM — it has full conversation context
+                    logger.info(f"  - Keep LLM product: '{entities.get('product_name')}' (context hint='{hints['product_name']}')")
                 else:
-                    logger.info(f"  - LLM fallback product: keeping Agent 1 value='{entities.get('product_name')}' (hint was '{hints['product_name']}')")
+                    logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
+                    entities['product_name'] = hints['product_name']
 
             # Propagate flag for downstream agents (retrieval, response)
             if '_product_from_query' in hints:

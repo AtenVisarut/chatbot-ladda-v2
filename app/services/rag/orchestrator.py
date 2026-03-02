@@ -29,74 +29,17 @@ from app.services.rag import (
 from app.services.rag.query_understanding_agent import QueryUnderstandingAgent
 from app.services.rag.retrieval_agent import RetrievalAgent
 from app.services.rag.response_generator_agent import ResponseGeneratorAgent
-from app.config import AGENTIC_RAG_CONFIG, LLM_MODEL_ENTITY_EXTRACTION, LLM_TEMP_ENTITY_EXTRACTION, LLM_TOKENS_ENTITY_EXTRACTION
+from app.config import AGENTIC_RAG_CONFIG
 
 logger = logging.getLogger(__name__)
-
-
-async def _llm_entity_extraction(query: str, product_list: list, openai_client_instance) -> dict:
-    """
-    LLM fallback: ใช้ gpt-4o-mini extract entities เมื่อ dictionary ไม่เจออะไร.
-    Returns dict with keys: disease_name, pest_name, product_name, plant_type (all optional).
-    Values tagged as [HINT_LLM] to distinguish from dictionary [CONSTRAINT].
-    """
-    try:
-        products_str = ", ".join(product_list[:50])
-        prompt = f"""จากคำถามเกษตรกรรมต่อไปนี้ ให้ดึง entity ที่เกี่ยวข้อง
-
-คำถาม: "{query}"
-
-รายชื่อสินค้าในระบบ: [{products_str}]
-
-ตอบเป็น JSON เท่านั้น (ไม่มี markdown):
-{{
-    "disease_name": "<ชื่อโรคพืช ถ้ามี หรือ null>",
-    "pest_name": "<ชื่อแมลง/ศัตรูพืช ถ้ามี หรือ null>",
-    "product_name": "<ชื่อสินค้าจากรายชื่อข้างบน ถ้ามี หรือ null>",
-    "plant_type": "<ชื่อพืช ถ้ามี หรือ null>"
-}}
-
-กฎ:
-- ถ้าคำถามบอกอาการพืช (เช่น จุดสีน้ำตาลบนใบ, ใบเหลือง, ลำต้นเน่า) ให้ระบุชื่อโรคที่น่าจะเป็นสาเหตุใน disease_name
-- ถ้าไม่แน่ใจเรื่องโรค ให้ใส่อาการเป็น disease_name (เช่น "ใบจุด", "รากเน่า")
-- product_name ต้องเป็นชื่อจากรายชื่อข้างบนเท่านั้น ถ้าไม่มีให้ใส่ null
-- ตอบ JSON เท่านั้น ห้ามมี text อื่น"""
-
-        response = await openai_client_instance.chat.completions.create(
-            model=LLM_MODEL_ENTITY_EXTRACTION,
-            messages=[
-                {"role": "system", "content": "คุณเป็นผู้เชี่ยวชาญด้านเกษตร ดึง entity จากคำถาม ตอบ JSON เท่านั้น"},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=LLM_TEMP_ENTITY_EXTRACTION,
-            max_completion_tokens=LLM_TOKENS_ENTITY_EXTRACTION
-        )
-
-        import json
-        import re as _re
-        text = response.choices[0].message.content.strip()
-        # Remove markdown code blocks if present
-        if text.startswith("```"):
-            text = _re.sub(r'^```(?:json)?\n?', '', text)
-            text = _re.sub(r'\n?```$', '', text)
-
-        data = json.loads(text)
-        # Filter out null values
-        result = {k: v for k, v in data.items() if v is not None}
-        logger.info(f"  - LLM entity extraction: {result}")
-        return result
-
-    except Exception as e:
-        logger.warning(f"LLM entity extraction failed: {e}")
-        return {}
 
 
 class AgenticRAG:
     """
     Agentic RAG Pipeline Orchestrator
 
-    Coordinates the 4-agent pipeline for Q&A:
-    Query -> Understanding -> Retrieval -> Grounding -> Response
+    Coordinates the 3-agent pipeline for Q&A:
+    Query -> Understanding -> Retrieval -> Response
     """
 
     def __init__(
@@ -416,27 +359,6 @@ class AgenticRAG:
                                 sources_used=[],
                                 processing_time_ms=(time.time() - start_time) * 1000
                             )
-
-                # --- LLM Fallback Entity Extraction ---
-                # When dictionary scan finds nothing and query is long enough
-                _has_any_entity = (
-                    hints.get('disease_name') or hints.get('pest_name')
-                    or hints.get('product_name')
-                )
-                _is_greeting = hints.get('problem_type') == 'greeting'
-                if not _has_any_entity and not _is_greeting and len(query.strip()) >= 10:
-                    llm_entities = await _llm_entity_extraction(
-                        query,
-                        list(ICP_PRODUCT_NAMES.keys()),
-                        self.openai_client
-                    )
-                    if llm_entities:
-                        # Tag as HINT_LLM — Agent 1 can adjust these
-                        for key in ('disease_name', 'pest_name', 'product_name', 'plant_type'):
-                            if llm_entities.get(key) and not hints.get(key):
-                                hints[key] = llm_entities[key]
-                                hints.setdefault('_llm_fallback_keys', []).append(key)
-                        logger.info(f"  - LLM fallback entities applied: {llm_entities}")
 
                 logger.info(f"  - Hints: {hints}")
             except ImportError:
