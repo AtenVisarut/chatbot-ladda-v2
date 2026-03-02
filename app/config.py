@@ -102,8 +102,8 @@ LLM_TEMP_QUERY_UNDERSTANDING = 0.1   # Agent 1: วิเคราะห์ inte
 LLM_TOKENS_QUERY_UNDERSTANDING = 500
 LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสินค้า (retrieval_agent.py, reranker.py)
 LLM_TOKENS_RERANKING = 100
-LLM_TEMP_RESPONSE_GEN = 0.1          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
-LLM_TOKENS_RESPONSE_GEN = 700
+LLM_TEMP_RESPONSE_GEN = 0.2          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
+LLM_TOKENS_RESPONSE_GEN = 800
 LLM_TEMP_ENTITY_EXTRACTION = 0.0     # Stage 0: LLM fallback extract entities (orchestrator.py)
 LLM_TOKENS_ENTITY_EXTRACTION = 200
 
@@ -113,7 +113,7 @@ LLM_TOKENS_HANDLER_RAG = 600
 LLM_TEMP_HANDLER_USAGE = 0.2         # ตอบคำถามวิธีใช้/การเกษตร
 LLM_TOKENS_HANDLER_USAGE = 800
 LLM_TEMP_GENERAL_CHAT = 0.3          # General chat คุยทั่วไป (ไม่เกี่ยวเกษตร)
-LLM_TOKENS_GENERAL_CHAT = 150
+LLM_TOKENS_GENERAL_CHAT = 250
 
 # --- Knowledge Base (knowledge_base.py) ---
 LLM_TEMP_KNOWLEDGE = 0.5             # ตอบจาก knowledge table (RAG)
