@@ -14,7 +14,7 @@ import re
 from typing import List, Dict
 
 from app.services.rag import IntentType, QueryAnalysis
-from app.config import LLM_MODEL_QUERY_UNDERSTANDING
+from app.config import LLM_MODEL_QUERY_UNDERSTANDING, LLM_TEMP_QUERY_UNDERSTANDING, LLM_TOKENS_QUERY_UNDERSTANDING
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +188,8 @@ required_sources:
                 },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,
-            max_completion_tokens=500
+            temperature=LLM_TEMP_QUERY_UNDERSTANDING,
+            max_completion_tokens=LLM_TOKENS_QUERY_UNDERSTANDING
         )
 
         response_text = response.choices[0].message.content.strip()

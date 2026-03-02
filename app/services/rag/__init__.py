@@ -1,11 +1,10 @@
 """
 Agentic RAG Pipeline for ICP Ladda Chatbot
 
-4-Agent Architecture:
+3-Agent Architecture:
 1. QueryUnderstandingAgent - Semantic intent detection, entity extraction, query expansion
 2. RetrievalAgent - Multi-query retrieval, re-ranking, relevance filtering
-3. GroundingAgent - Citation extraction, hallucination detection, answer verification
-4. ResponseGeneratorAgent - Answer synthesis, citation formatting, confidence scoring
+3. ResponseGeneratorAgent - Answer synthesis, citation formatting, confidence scoring
 """
 
 from dataclasses import dataclass, field

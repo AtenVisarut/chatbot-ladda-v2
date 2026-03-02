@@ -75,7 +75,6 @@ LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
 LLM_MODEL_INTENT = os.getenv("LLM_MODEL_INTENT", "gpt-4o")
 LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o")
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o")
-LLM_MODEL_GROUNDING = os.getenv("LLM_MODEL_GROUNDING", "gpt-4o")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
 LLM_MODEL_ENTITY_EXTRACTION = os.getenv("LLM_MODEL_ENTITY_EXTRACTION", "gpt-4o")
@@ -91,11 +90,35 @@ AGENTIC_RAG_CONFIG = {
     # Minimum number of relevant documents to return
     "MIN_RELEVANT_DOCS": int(os.getenv("AGENTIC_MIN_DOCS", "3")),
 
-    # Grounding check disabled — causes intermittent "ไม่มีข้อมูล" due to inconsistent LLM confidence.
-    # Anti-hallucination handled by: product name validation, number validation, [CONSTRAINT] tags.
-    # To re-enable: change False → os.getenv("AGENTIC_ENABLE_GROUNDING", "0") == "1"
-    "ENABLE_GROUNDING": False,
-
     # Maximum citations to include in response
     "MAX_CITATIONS": int(os.getenv("AGENTIC_MAX_CITATIONS", "3")),
 }
+
+# ============================================================================#
+# LLM PARAMETERS (temperature / max_tokens per component)
+# ============================================================================#
+# --- RAG Pipeline (Agentic RAG) ---
+LLM_TEMP_QUERY_UNDERSTANDING = 0.1   # Agent 1: วิเคราะห์ intent + extract entities (query_understanding_agent.py)
+LLM_TOKENS_QUERY_UNDERSTANDING = 500
+LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสินค้า (retrieval_agent.py, reranker.py)
+LLM_TOKENS_RERANKING = 100
+LLM_TEMP_RESPONSE_GEN = 0.1          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
+LLM_TOKENS_RESPONSE_GEN = 700
+LLM_TEMP_ENTITY_EXTRACTION = 0.0     # Stage 0: LLM fallback extract entities (orchestrator.py)
+LLM_TOKENS_ENTITY_EXTRACTION = 200
+
+# --- Handler (chat/handler.py) ---
+LLM_TEMP_HANDLER_RAG = 0.1           # ตอบคำถามสินค้าจาก vector search (Q&A)
+LLM_TOKENS_HANDLER_RAG = 600
+LLM_TEMP_HANDLER_USAGE = 0.2         # ตอบคำถามวิธีใช้/การเกษตร
+LLM_TOKENS_HANDLER_USAGE = 800
+LLM_TEMP_GENERAL_CHAT = 0.3          # General chat คุยทั่วไป (ไม่เกี่ยวเกษตร)
+LLM_TOKENS_GENERAL_CHAT = 150
+
+# --- Knowledge Base (knowledge_base.py) ---
+LLM_TEMP_KNOWLEDGE = 0.5             # ตอบจาก knowledge table (RAG)
+LLM_TOKENS_KNOWLEDGE = 400
+
+# --- Product Recommendation (product/recommendation.py) ---
+LLM_TEMP_PRODUCT_FORMAT = 0.1        # Format คำตอบแนะนำสินค้า
+LLM_TOKENS_PRODUCT_FORMAT = 800

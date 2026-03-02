@@ -1,11 +1,10 @@
 """
 Agentic RAG Orchestrator
 
-Main entry point for the 4-agent RAG pipeline:
+Main entry point for the 3-agent RAG pipeline:
 1. QueryUnderstandingAgent - Semantic intent detection, entity extraction
 2. RetrievalAgent - Multi-query retrieval with re-ranking
-3. GroundingAgent - Citation extraction, hallucination detection
-4. ResponseGeneratorAgent - Answer synthesis with confidence scoring
+3. ResponseGeneratorAgent - Answer synthesis with confidence scoring
 
 Usage:
     from app.services.rag.orchestrator import AgenticRAG
@@ -29,9 +28,8 @@ from app.services.rag import (
 )
 from app.services.rag.query_understanding_agent import QueryUnderstandingAgent
 from app.services.rag.retrieval_agent import RetrievalAgent
-from app.services.rag.grounding_agent import GroundingAgent
 from app.services.rag.response_generator_agent import ResponseGeneratorAgent
-from app.config import AGENTIC_RAG_CONFIG, LLM_MODEL_ENTITY_EXTRACTION
+from app.config import AGENTIC_RAG_CONFIG, LLM_MODEL_ENTITY_EXTRACTION, LLM_TEMP_ENTITY_EXTRACTION, LLM_TOKENS_ENTITY_EXTRACTION
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +68,8 @@ async def _llm_entity_extraction(query: str, product_list: list, openai_client_i
                 {"role": "system", "content": "คุณเป็นผู้เชี่ยวชาญด้านเกษตร ดึง entity จากคำถาม ตอบ JSON เท่านั้น"},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.0,
-            max_completion_tokens=200
+            temperature=LLM_TEMP_ENTITY_EXTRACTION,
+            max_completion_tokens=LLM_TOKENS_ENTITY_EXTRACTION
         )
 
         import json
@@ -128,9 +126,6 @@ class AgenticRAG:
             openai_client=self.openai_client,
             vector_threshold=self.config.get('VECTOR_THRESHOLD', 0.35),
             rerank_threshold=self.config.get('RERANK_THRESHOLD', 0.50)
-        )
-        self.grounding_agent = GroundingAgent(
-            openai_client=self.openai_client
         )
         self.response_agent = ResponseGeneratorAgent(
             openai_client=self.openai_client
@@ -495,23 +490,16 @@ class AgenticRAG:
             )
 
             # =================================================================
-            # Stage 3: Grounding
+            # Stage 3: Create grounding result from retrieval
             # =================================================================
-            if self.config.get('ENABLE_GROUNDING', True):
-                grounding_result = await self.grounding_agent.ground(
-                    query_analysis=query_analysis,
-                    retrieval_result=retrieval_result
-                )
-            else:
-                # Skip grounding, use retrieval directly
-                from app.services.rag import GroundingResult
-                grounding_result = GroundingResult(
-                    is_grounded=bool(retrieval_result.documents),
-                    confidence=retrieval_result.avg_similarity,
-                    citations=[],
-                    ungrounded_claims=[],
-                    suggested_answer=""
-                )
+            from app.services.rag import GroundingResult
+            grounding_result = GroundingResult(
+                is_grounded=bool(retrieval_result.documents),
+                confidence=retrieval_result.avg_similarity,
+                citations=[],
+                ungrounded_claims=[],
+                suggested_answer=""
+            )
 
             # =================================================================
             # Stage 4: Response Generation

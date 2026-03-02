@@ -20,7 +20,7 @@ from app.services.rag import (
     IntentType
 )
 from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
-from app.config import LLM_MODEL_RESPONSE_GEN
+from app.config import LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
     GREETINGS,
@@ -243,13 +243,13 @@ class ResponseGeneratorAgent:
         if not self.openai_client:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
-        # Keep all products (including Standard) — just sort by strategy_group priority
+        # Keep all products (including Standard) — just sort by strategy priority
         docs_to_use = retrieval_result.documents[:7]
 
-        # Sort by strategy_group priority: Skyrocket > Expand > Natural > Standard
+        # Sort by strategy priority: Skyrocket > Expand > Natural > Standard
         # ensures Skyrocket/Expand appear first in product context sent to LLM
         _STRATEGY_ORDER = {'Skyrocket': 0, 'Expand': 1, 'Natural': 2, 'Standard': 3}
-        docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy_group', ''), 3))
+        docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy', ''), 3))
 
         # Rescue: ensure disease-matching product is in docs_to_use
         # If query is about disease but no doc in docs_to_use has the disease in target_pest,
@@ -345,8 +345,7 @@ class ResponseGeneratorAgent:
                 part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
             if meta.get('phytotoxicity'):
                 part += f"  ความเป็นพิษต่อพืช: {meta['phytotoxicity']}\n"
-            if meta.get('strategy_group'):
-                part += f"  Strategy Group: {meta['strategy_group']}\n"
+            # strategy is internal-only — NOT sent to LLM to prevent leaking to users
             product_context_parts.append(part)
 
         product_context = "\n".join(product_context_parts)
@@ -544,8 +543,8 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_completion_tokens=700
+                temperature=LLM_TEMP_RESPONSE_GEN,
+                max_completion_tokens=LLM_TOKENS_RESPONSE_GEN
             )
             answer = response.choices[0].message.content.strip()
 

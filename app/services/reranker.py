@@ -4,6 +4,7 @@ Uses GPT-4o-mini for Thai language support (better than sentence-transformers fo
 """
 import logging
 from typing import List, Dict
+from app.config import LLM_MODEL_RERANKING, LLM_TEMP_RERANKING, LLM_TOKENS_RERANKING
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +96,13 @@ async def rerank_products_with_llm(
 ตอบ:"""
 
         response = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL_RERANKING,
             messages=[
                 {"role": "system", "content": "ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เท่านั้น"},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0,
-            max_completion_tokens=100
+            temperature=LLM_TEMP_RERANKING,
+            max_completion_tokens=LLM_TOKENS_RERANKING
         )
 
         ranking_text = response.choices[0].message.content.strip()

@@ -6,6 +6,7 @@ from app.dependencies import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question
 from app.services.reranker import rerank_products_with_llm, simple_relevance_boost
+from app.config import LLM_MODEL_RESPONSE_GEN, EMBEDDING_MODEL, LLM_TEMP_PRODUCT_FORMAT, LLM_TOKENS_PRODUCT_FORMAT
 
 logger = logging.getLogger(__name__)
 
@@ -1179,7 +1180,7 @@ async def hybrid_search_products(query: str, match_count: int = 15,
 
         # Generate embedding for vector search
         response = await openai_client.embeddings.create(
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             input=query,
             encoding_format="float"
         )
@@ -2029,13 +2030,13 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=LLM_MODEL_RESPONSE_GEN,
                 messages=[
                     {"role": "system", "content": "You are a strict product assistant. ONLY recommend products from the provided list. Never create or suggest products not in the list."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_completion_tokens=800
+                temperature=LLM_TEMP_PRODUCT_FORMAT,
+                max_completion_tokens=LLM_TOKENS_PRODUCT_FORMAT
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")
@@ -2642,13 +2643,13 @@ async def answer_product_question(question: str, keywords: dict) -> str:
 
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=LLM_MODEL_RESPONSE_GEN,
                 messages=[
                     {"role": "system", "content": "You are an agricultural product expert."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_completion_tokens=800
+                temperature=LLM_TEMP_PRODUCT_FORMAT,
+                max_completion_tokens=LLM_TOKENS_PRODUCT_FORMAT
             )
             answer = response.choices[0].message.content.strip()
             answer = answer.replace("```", "").replace("**", "").replace("##", "")

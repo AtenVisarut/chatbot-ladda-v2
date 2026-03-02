@@ -13,7 +13,17 @@ try:
 except ImportError:
     search_diseases_by_text = None
     build_context_from_diseases = None
-from app.config import USE_AGENTIC_RAG
+from app.config import (
+    USE_AGENTIC_RAG,
+    LLM_MODEL_GENERAL_CHAT,
+    EMBEDDING_MODEL,
+    LLM_TEMP_HANDLER_RAG,
+    LLM_TOKENS_HANDLER_RAG,
+    LLM_TEMP_HANDLER_USAGE,
+    LLM_TOKENS_HANDLER_USAGE,
+    LLM_TEMP_GENERAL_CHAT,
+    LLM_TOKENS_GENERAL_CHAT,
+)
 from app.prompts import GENERAL_CHAT_PROMPT, ERROR_GENERIC, ERROR_AI_UNAVAILABLE, GREETINGS, GREETING_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -410,7 +420,7 @@ async def generate_embedding(text: str) -> List[float]:
 
     try:
         response = await openai_client.embeddings.create(
-            model="text-embedding-3-small",
+            model=EMBEDDING_MODEL,
             input=text,
             encoding_format="float"
         )
@@ -885,8 +895,8 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
 7. ตอบกระชับ ตรงประเด็น เฉพาะข้อมูลที่มีในฐานข้อมูลเท่านั้น"""},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=600,
-            temperature=0.1  # ลด temperature มากที่สุดเพื่อป้องกันการแต่งข้อมูล
+            max_completion_tokens=LLM_TOKENS_HANDLER_RAG,
+            temperature=LLM_TEMP_HANDLER_RAG
         )
 
         answer = post_process_answer(response.choices[0].message.content)
@@ -985,8 +995,8 @@ async def answer_agriculture_question(question: str, context: str = "") -> str:
 - ถ้าคำถามไม่ชัดเจน ให้ถามกลับสั้นๆ"""},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=800,
-            temperature=0.2  # ลด temperature เพื่อป้องกันการแต่งข้อมูล
+            max_completion_tokens=LLM_TOKENS_HANDLER_USAGE,
+            temperature=LLM_TEMP_HANDLER_USAGE
         )
 
         answer = post_process_answer(response.choices[0].message.content)
@@ -1230,7 +1240,7 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
             return response
 
         response = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model=LLM_MODEL_GENERAL_CHAT,
             messages=[
                 {"role": "system", "content": """คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืชจาก ICP Ladda
 
@@ -1246,8 +1256,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
 - ห้ามแต่งตัวเลขขนาดบรรจุ น้ำหนัก ราคา กลไกการออกฤทธิ์เอง"""},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=600,
-            temperature=0.3
+            max_completion_tokens=LLM_TOKENS_HANDLER_RAG,
+            temperature=LLM_TEMP_GENERAL_CHAT
         )
 
         answer = response.choices[0].message.content.strip()
@@ -1526,13 +1536,13 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
 
             try:
                 response = await openai_client.chat.completions.create(
-                    model="gpt-4o",
+                    model=LLM_MODEL_GENERAL_CHAT,
                     messages=[
                         {"role": "system", "content": GENERAL_CHAT_PROMPT},
                         {"role": "user", "content": message}
                     ],
-                    max_completion_tokens=150,
-                    temperature=0.3
+                    max_completion_tokens=LLM_TOKENS_GENERAL_CHAT,
+                    temperature=LLM_TEMP_GENERAL_CHAT
                 )
                 answer = post_process_answer(response.choices[0].message.content)
             except Exception as llm_err:

@@ -21,7 +21,7 @@ from app.services.rag import (
     RetrievalResult,
     IntentType
 )
-from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL
+from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL, LLM_TEMP_RERANKING, LLM_TOKENS_RERANKING
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class RetrievalAgent:
                 'selling_point': item.get('selling_point'),
                 'action_characteristics': item.get('action_characteristics'),
                 'absorption_method': item.get('absorption_method'),
-                'strategy_group': item.get('strategy_group'),
+                'strategy': item.get('strategy'),
                 'package_size': item.get('package_size'),
                 'phytotoxicity': item.get('phytotoxicity'),
                 'aliases': item.get('aliases'),
@@ -286,7 +286,7 @@ class RetrievalAgent:
 
             query_builder = self.supabase.table('products') \
                 .select('*') \
-                .in_('strategy_group', ['Skyrocket', 'Expand']) \
+                .in_('strategy', ['Skyrocket', 'Expand']) \
                 .or_(or_filter) \
                 .limit(top_k)
             if cat_filter:
@@ -370,22 +370,22 @@ class RetrievalAgent:
             logger.error(f"Weed category fallback search error: {e}")
             return []
 
-    async def _enrich_strategy_group(self, docs: List[RetrievedDocument]):
-        """Fetch strategy_group, selling_point, applicable_crops from DB for docs missing them (e.g. from RPC)"""
+    async def _enrich_strategy(self, docs: List[RetrievedDocument]):
+        """Fetch strategy, selling_point, applicable_crops from DB for docs missing them (e.g. from RPC)"""
         if not self.supabase:
             return
 
-        # Find docs missing strategy_group or selling_point (RPC doesn't return these)
+        # Find docs missing strategy or selling_point (RPC doesn't return these)
         missing_ids = [
             doc.id for doc in docs
-            if doc.id and (not doc.metadata.get('strategy_group') or not doc.metadata.get('selling_point'))
+            if doc.id and (not doc.metadata.get('strategy') or not doc.metadata.get('selling_point'))
         ]
         if not missing_ids:
             return
 
         try:
             result = self.supabase.table('products') \
-                .select('id, strategy_group, selling_point, applicable_crops, package_size') \
+                .select('id, strategy, selling_point, applicable_crops, package_size') \
                 .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
                 .execute()
 
@@ -395,8 +395,8 @@ class RetrievalAgent:
                 for doc in docs:
                     if doc.id in enrich_map:
                         r = enrich_map[doc.id]
-                        if r.get('strategy_group') and not doc.metadata.get('strategy_group'):
-                            doc.metadata['strategy_group'] = r['strategy_group']
+                        if r.get('strategy') and not doc.metadata.get('strategy'):
+                            doc.metadata['strategy'] = r['strategy']
                         if r.get('selling_point') and not doc.metadata.get('selling_point'):
                             doc.metadata['selling_point'] = r['selling_point']
                         if r.get('applicable_crops') and not doc.metadata.get('applicable_crops'):
@@ -521,8 +521,8 @@ class RetrievalAgent:
                 if new_fallback:
                     logger.info(f"  - Fallback keyword added: {len(new_fallback)} new docs")
 
-            # Stage 1.8: Enrich strategy_group for docs missing it (RPC doesn't return it)
-            await self._enrich_strategy_group(all_docs)
+            # Stage 1.8: Enrich strategy for docs missing it (RPC doesn't return it)
+            await self._enrich_strategy(all_docs)
 
             # Stage 1.9: Supplementary search for Skyrocket/Expand if none found
             if not direct_lookup_ids:
@@ -637,7 +637,7 @@ class RetrievalAgent:
             if not direct_lookup_ids:  # Only when not asking about specific product
                 strategy_bonus = {'Skyrocket': 0.15, 'Expand': 0.10, 'Natural': 0.0, 'Standard': -0.05}
                 for doc in reranked_docs:
-                    sg = doc.metadata.get('strategy_group', '')
+                    sg = doc.metadata.get('strategy', '')
                     bonus = strategy_bonus.get(sg, 0.0)
                     if bonus != 0:
                         doc.rerank_score = min(1.0, max(0.0, doc.rerank_score + bonus))
@@ -671,7 +671,7 @@ class RetrievalAgent:
             # Prefer product whose applicable_crops specifically matches user's plant_type
             # BUT only promote category-matched products when intent is specific
             if not direct_lookup_ids:
-                all_priority = [d for d in reranked_docs if d.metadata.get('strategy_group') in ('Skyrocket', 'Expand')]
+                all_priority = [d for d in reranked_docs if d.metadata.get('strategy') in ('Skyrocket', 'Expand')]
                 # Filter by category alignment if intent requires specific category
                 if expected_categories and all_priority:
                     category_matched = [
@@ -700,7 +700,7 @@ class RetrievalAgent:
                     if current_pos > 0:
                         reranked_docs.remove(best_priority)
                         reranked_docs.insert(0, best_priority)
-                        logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy_group')}) from pos {current_pos + 1} to 1")
+                        logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy')}) from pos {current_pos + 1} to 1")
 
             # Stage 3.8: Ensure disease-matching product is in top 3
             # If query is about disease but no top-3 doc has the disease in target_pest,
@@ -1100,8 +1100,8 @@ class RetrievalAgent:
                     text += f" | จุดเด่น: {str(doc.metadata['selling_point'])[:80]}"
                 if doc.metadata.get('category'):
                     text += f" | ประเภท: {doc.metadata['category']}"
-                if doc.metadata.get('strategy_group'):
-                    text += f" | Strategy: {doc.metadata['strategy_group']}"
+                if doc.metadata.get('strategy'):
+                    text += f" | Strategy: {doc.metadata['strategy']}"
                 doc_texts.append(text)
 
             docs_str = "\n".join(doc_texts)
@@ -1138,8 +1138,8 @@ class RetrievalAgent:
                     {"role": "system", "content": "ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma"},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0,
-                max_completion_tokens=100
+                temperature=LLM_TEMP_RERANKING,
+                max_completion_tokens=LLM_TOKENS_RERANKING
             )
 
             ranking_text = response.choices[0].message.content.strip()

@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from app.dependencies import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import clean_knowledge_text, post_process_answer
+from app.config import LLM_MODEL_KNOWLEDGE, EMBEDDING_MODEL, LLM_TEMP_KNOWLEDGE, LLM_TOKENS_KNOWLEDGE
 from app.prompts import (
     KNOWLEDGE_RAG_SYSTEM_PROMPT,
     KNOWLEDGE_RAG_USER_TEMPLATE,
@@ -39,7 +40,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
             try:
                 # Generate embedding using OpenAI
                 response = await openai_client.embeddings.create(
-                    model="text-embedding-3-small",
+                    model=EMBEDDING_MODEL,
                     input=question,
                     encoding_format="float"
                 )
@@ -99,7 +100,7 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 
             if openai_client:
                 response = await openai_client.chat.completions.create(
-                    model="gpt-4o",
+                    model=LLM_MODEL_KNOWLEDGE,
                     messages=[
                         {"role": "system", "content": GENERAL_KNOWLEDGE_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}
@@ -128,13 +129,13 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
 
         if openai_client:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=LLM_MODEL_KNOWLEDGE,
                 messages=[
                     {"role": "system", "content": KNOWLEDGE_RAG_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                max_completion_tokens=400,
-                temperature=0.5
+                max_completion_tokens=LLM_TOKENS_KNOWLEDGE,
+                temperature=LLM_TEMP_KNOWLEDGE
             )
             answer = post_process_answer(response.choices[0].message.content)
         else:
