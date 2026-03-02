@@ -1418,21 +1418,46 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     else:
                         answer = rag_response.answer
                         logger.info(f"AgenticRAG response: confidence={rag_response.confidence:.2f}, grounded={rag_response.is_grounded}")
+                        logger.info(f"AgenticRAG answer preview: {answer[:200]}...")
 
                         # Silent no-data: ถ้า not grounded + confidence 0 → ไม่ตอบ ให้ admin จัดการ
                         if not rag_response.is_grounded and rag_response.confidence == 0.0:
                             logger.info(f"⏭️ No data — skipping reply (admin will handle)")
                             return None
 
-                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบ (ไม่ว่า confidence เท่าไหร่)
+                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล"
+                        # ถ้าคำตอบยาว (มีเนื้อหาจริง) → strip วลีออกแทนที่จะ suppress ทั้งหมด
+                        # ถ้าคำตอบสั้น (เป็น no-data ล้วนๆ) → suppress
                         _NO_DATA_PHRASES = [
                             "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                             "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                             "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                         ]
+                        # Sentences that are ENTIRELY no-data (to strip from long answers)
+                        _NO_DATA_SENTENCES = [
+                            "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ",
+                            "ขออภัยค่ะ ไม่พบข้อมูลในระบบ",
+                            "ไม่มีข้อมูลส่วนนี้ในระบบ",
+                            "ไม่พบข้อมูลในระบบ",
+                        ]
                         if any(p in answer for p in _NO_DATA_PHRASES):
-                            logger.info(f"⏭️ No data — no-data phrase in answer (confidence={rag_response.confidence:.2f}), skipping reply (admin will handle)")
-                            return None
+                            if len(answer) > 120:
+                                # คำตอบยาว — strip วลี no-data ออก แล้วส่งส่วนที่มีเนื้อหา
+                                cleaned = answer
+                                for sent in _NO_DATA_SENTENCES:
+                                    cleaned = cleaned.replace(sent, "")
+                                # ลบบรรทัดว่างที่เหลือ
+                                cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned).strip()
+                                if len(cleaned) > 60:
+                                    logger.info(f"⚠️ No-data phrase stripped from long answer ({len(answer)}→{len(cleaned)} chars)")
+                                    answer = cleaned
+                                else:
+                                    logger.info(f"⏭️ No data — answer too short after stripping ({len(cleaned)} chars), skipping reply")
+                                    return None
+                            else:
+                                # คำตอบสั้น — เป็น no-data ล้วนๆ → suppress
+                                logger.info(f"⏭️ No data — short no-data answer ({len(answer)} chars, confidence={rag_response.confidence:.2f}), skipping reply")
+                                return None
 
                         # Track analytics if product recommendation
                         if is_prod_q:

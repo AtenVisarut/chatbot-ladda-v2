@@ -612,7 +612,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
                 if not is_known:
                     logger.warning(f"HALLUCINATED product detected: '{product_mention}' - not in database!")
-                    answer = answer.replace(full_match, '"(สินค้านี้ไม่อยู่ในฐานข้อมูล)"')
+                    answer = answer.replace(full_match, '')
 
             # Pass 2: Scan for unquoted product names from ICP_PRODUCT_NAMES
             for icp_name in ICP_PRODUCT_NAMES.keys():
