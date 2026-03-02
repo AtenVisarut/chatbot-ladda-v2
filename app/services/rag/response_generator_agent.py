@@ -564,7 +564,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             answer = response.choices[0].message.content.strip()
 
             # Post-processing: validate product names in response
-            answer = self._validate_product_names(answer, docs_to_use)
+            answer = self._validate_product_names(answer, docs_to_use, query_analysis)
 
             return answer
         except Exception as e:
@@ -586,7 +586,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         'ดื้อยา', 'ดื้อสาร', 'ใบ', 'ดอก', 'ผล', 'ราก', 'กิ่ง', 'ลำต้น',
     }
 
-    def _validate_product_names(self, answer: str, docs: list) -> str:
+    def _validate_product_names(self, answer: str, docs: list, query_analysis: QueryAnalysis = None) -> str:
         """
         Post-processing: ตรวจสอบว่าสินค้าที่แนะนำอยู่ใน retrieved documents จริง
         ถ้าเจอสินค้าที่ไม่มีใน database → ลบออกจากคำตอบ
@@ -601,6 +601,18 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 pname = doc.metadata.get('product_name', '')
                 if pname:
                     allowed_names.add(pname)
+
+            # Exempt: product that user asked about directly (+ its aliases)
+            _queried_product = ''
+            _queried_aliases = set()
+            if query_analysis:
+                _queried_product = query_analysis.entities.get('product_name', '')
+                if _queried_product:
+                    # Add the product name itself + all aliases
+                    _queried_aliases.add(_queried_product)
+                    aliases_list = ICP_PRODUCT_NAMES.get(_queried_product, [])
+                    for a in aliases_list:
+                        _queried_aliases.add(a)
 
             # Match text between straight quotes " or curly quotes ""
             for match in re.finditer(r'["\u201c\u201d]([^"\u201c\u201d]+?)["\u201c\u201d]', answer):
@@ -634,6 +646,9 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 if len(icp_name) < 3:  # Skip very short names to avoid false matches
                     continue
                 if icp_name in answer:
+                    # Skip if this is the product the user asked about
+                    if any(icp_name in qa or qa in icp_name for qa in _queried_aliases):
+                        continue
                     # Check if this product is in allowed docs
                     is_allowed = any(
                         icp_name in name or name in icp_name
