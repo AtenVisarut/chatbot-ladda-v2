@@ -635,7 +635,7 @@ class RetrievalAgent:
 
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
             if not direct_lookup_ids:  # Only when not asking about specific product
-                strategy_bonus = {'Skyrocket': 0.15, 'Expand': 0.10, 'Natural': 0.0, 'Standard': -0.05}
+                strategy_bonus = {'Skyrocket': 0.12, 'Expand': 0.12, 'Natural': 0.0, 'Standard': 0.0}
                 for doc in reranked_docs:
                     sg = doc.metadata.get('strategy', '')
                     bonus = strategy_bonus.get(sg, 0.0)
@@ -1127,7 +1127,7 @@ class RetrievalAgent:
 1. เนื้อหาตรงกับคำถามหรือไม่
 2. ประเภทสินค้าตรงกับปัญหาหรือไม่
 3. พืช/ศัตรูพืชที่ระบุตรงกันหรือไม่
-4. สินค้า Strategy Skyrocket/Expand ให้ลำดับสูงกว่า Standard
+4. สินค้า Strategy Skyrocket/Expand ให้ลำดับสูงกว่า Natural/Standard
 5. ถ้าสินค้าหลายตัวคล้ายกัน ให้เลือกตัวที่ "พืช" ระบุเน้นพืชตรงกับคำถาม (เช่น "เน้นสำหรับ(ทุเรียน)" ตรงกว่า "มะม่วง, ทุเรียน")
 
 ตอบเฉพาะตัวเลขเรียงลำดับ คั่นด้วย comma เช่น: 3,1,5,2,4"""
