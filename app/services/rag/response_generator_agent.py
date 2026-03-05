@@ -438,15 +438,15 @@ class ResponseGeneratorAgent:
                 break
 
         # Extract disease from conversation context (follow-up like "มีตัวอื่นไหม")
-        context_disease = ''
-        if context and not disease_name and not original_disease_gen:
+        # NOTE: context_disease already initialized earlier (before doc filter block)
+        if not context_disease and context and not disease_name and not original_disease_gen:
             for _pat in _DP_GEN:
                 if _dm_gen(context, _pat):
                     context_disease = _gc_gen(_pat)
                     break
-            if context_disease:
-                disease_name = context_disease
-                logger.info(f"  - Disease extracted from context (follow-up): '{context_disease}'")
+        if context_disease and not disease_name:
+            disease_name = context_disease
+            logger.info(f"  - Disease extracted from context (follow-up): '{context_disease}'")
 
         # Include more intents for follow-up queries that carry disease from context
         _disease_check_intents = ('disease_treatment', 'product_recommendation', 'product_inquiry', 'unknown', 'general_agriculture')
@@ -553,6 +553,18 @@ class ResponseGeneratorAgent:
                 multi_variant_note = f"\n[หมายเหตุ] ผู้ใช้ถามเฉพาะ \"{exact_variant_in_query}\" → ตอบรายละเอียดเต็มของสินค้านี้ตัวเดียว (ใช้ Mode ข) ห้ามแสดงเป็น list ให้เลือก\n"
                 logger.info(f"  - Specific variant in query: '{exact_variant_in_query}' → Mode ข")
 
+        # Broad query with multiple products → hint LLM to show all (Mode ก)
+        if not multi_variant_note and not product_name_query and len(docs_to_use) >= 3:
+            unique_names = list(dict.fromkeys(
+                d.metadata.get('product_name', '') for d in docs_to_use if d.metadata.get('product_name')
+            ))
+            if len(unique_names) >= 3:
+                multi_variant_note = (
+                    f"\n[หมายเหตุ: มีสินค้าหลายตัว] มีสินค้าที่ตรงกับคำถาม {len(unique_names)} ตัว: "
+                    f"{', '.join(unique_names)} — แสดงรายการสั้นๆ ทุกตัวให้เกษตรกรเลือก (ใช้ Mode ก)\n"
+                )
+                logger.info(f"  - Broad query multi-product hint: {len(unique_names)} products → Mode ก")
+
         # Build category match note for alternatives
         category_match_note = ""
         product_name_entity = query_analysis.entities.get('product_name', '')
@@ -607,6 +619,9 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 temperature=LLM_TEMP_RESPONSE_GEN,
                 max_completion_tokens=LLM_TOKENS_RESPONSE_GEN
             )
+            if not response.choices:
+                logger.error("OpenAI returned empty choices list")
+                return self._build_fallback_answer(retrieval_result, grounding_result)
             answer = response.choices[0].message.content.strip()
 
             # Post-processing: validate product names in response

@@ -102,6 +102,9 @@ class AgenticRAG:
             # Stage 0: Pre-detect hints using keyword functions
             # =================================================================
             hints = {}
+            detected_product = None
+            product_from_query = False
+            product_literally_in_query = False
             try:
                 from app.services.chat.handler import (
                     extract_product_name_from_question, detect_problem_type,

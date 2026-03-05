@@ -1054,6 +1054,9 @@ class RetrievalAgent:
                 input=text,
                 encoding_format="float"
             )
+            if not response.data:
+                logger.error("OpenAI embedding returned empty data")
+                return []
             embedding = response.data[0].embedding
             _set_cached_embedding(text, embedding)
             return embedding
@@ -1142,21 +1145,32 @@ class RetrievalAgent:
                 max_completion_tokens=LLM_TOKENS_RERANKING
             )
 
+            if not response.choices:
+                logger.warning("LLM rerank returned empty choices, using similarity scores")
+                return sorted(docs, key=lambda x: x.similarity_score, reverse=True)
             ranking_text = response.choices[0].message.content.strip()
             logger.info(f"    Rerank response: {ranking_text}")
 
-            # Parse ranking
+            # Parse ranking (safe int conversion)
             numbers = re.findall(r'\d+', ranking_text)
-            ranking_indices = [int(n) - 1 for n in numbers if 0 < int(n) <= len(docs)]
+            ranking_indices = []
+            for n in numbers:
+                try:
+                    num = int(n)
+                    if 0 < num <= len(docs):
+                        ranking_indices.append(num - 1)
+                except ValueError:
+                    pass
 
             # Build reranked list with scores
             reranked = []
             seen_indices = set()
+            total_ranked = max(len(ranking_indices), 1)  # prevent division by zero
             for rank, idx in enumerate(ranking_indices):
                 if idx not in seen_indices and idx < len(docs):
                     doc = docs[idx]
                     # Assign rerank score based on position (higher = better)
-                    doc.rerank_score = 1.0 - (rank / len(ranking_indices))
+                    doc.rerank_score = 1.0 - (rank / total_ranked)
                     reranked.append(doc)
                     seen_indices.add(idx)
 
