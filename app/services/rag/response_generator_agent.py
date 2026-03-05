@@ -328,6 +328,20 @@ class ResponseGeneratorAgent:
                 if filtered:
                     docs_to_use = filtered
 
+        # Early extract: disease from conversation context for follow-up queries
+        # (full extraction + assignment to disease_name happens later at line ~427)
+        context_disease = ''
+        if context and not query_analysis.entities.get('disease_name', ''):
+            from app.utils.text_processing import diacritics_match as _dm_early
+            from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_EARLY, get_canonical as _gc_early
+            _orig_q = query_analysis.original_query
+            _has_disease_in_query = any(_dm_early(_orig_q, _p) for _p in _DP_EARLY)
+            if not _has_disease_in_query:
+                for _pat in _DP_EARLY:
+                    if _dm_early(context, _pat):
+                        context_disease = _gc_early(_pat)
+                        break
+
         # Filter out products that don't match disease from context (follow-up queries)
         # e.g. "มีตัวอื่นไหม" after ฟิวซาเรียม → remove fungicides that don't target ฟิวซาเรียม
         if context_disease and docs_to_use:
