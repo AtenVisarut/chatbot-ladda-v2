@@ -252,28 +252,27 @@ async def get_recommended_products(user_id: str, limit: int = 5) -> list:
         if not result.data:
             return []
 
-        # หา product recommendations จาก metadata
-        all_products = []
+        # หา product recommendations จาก metadata — เฉพาะรอบล่าสุดเท่านั้น
+        # ป้องกันสินค้าจากหัวข้อเก่าปนมา
+        latest_products = []
         for msg in result.data:
             metadata = msg.get("metadata", {})
             if isinstance(metadata, dict) and metadata.get("type") == "product_recommendation":
                 products = metadata.get("products", [])
                 if products:
-                    all_products.extend(products)
-                    # ได้สินค้าพอแล้ว
-                    if len(all_products) >= limit:
-                        break
+                    latest_products = products  # ใช้เฉพาะรอบล่าสุด
+                    break  # หยุดทันที ไม่สะสมจากรอบเก่า
 
         # ลบ duplicate
         seen = set()
         unique_products = []
-        for p in all_products:
+        for p in latest_products:
             name = p.get("product_name", "")
             if name and name not in seen:
                 seen.add(name)
                 unique_products.append(p)
 
-        logger.info(f"✓ Retrieved {len(unique_products)} products from memory for user {user_id[:8]}...")
+        logger.info(f"✓ Retrieved {len(unique_products)} products from memory (latest round only) for user {user_id[:8]}...")
         return unique_products[:limit]
 
     except Exception as e:
@@ -451,6 +450,27 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
     # --- Extract entities from current query ---
     current_product = extract_product_name_from_question(current_query)
 
+    # Extract disease/pest from current query for boundary detection
+    from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_MEM, get_canonical as _gc_mem
+    from app.utils.text_processing import diacritics_match as _dm_mem
+
+    # Common pest keywords not in DISEASE_PATTERNS (insects/mites)
+    _PEST_KEYWORDS = ['เพลี้ย', 'หนอน', 'ด้วง', 'ไรแดง', 'ไรขาว', 'แมลง', 'หอยทาก', 'หอยเชอรี่', 'ปลวก', 'มด']
+
+    def _extract_disease_or_pest(text: str) -> str:
+        """Extract disease/pest name from text for topic boundary detection."""
+        # Check disease patterns first (canonical names)
+        for _pat in _DP_MEM:
+            if _dm_mem(text, _pat):
+                return _gc_mem(_pat)
+        # Check pest keywords (return as-is for comparison)
+        for kw in _PEST_KEYWORDS:
+            if kw in text:
+                return kw
+        return ''
+
+    current_disease = _extract_disease_or_pest(current_query)
+
     # Topic-change keywords (user is done with previous topic)
     _TOPIC_BOUNDARY_WORDS = [
         "ขอบคุณ", "โอเค", "oke", "ok", "อีกเรื่อง", "เปลี่ยนเรื่อง",
@@ -491,14 +511,33 @@ def compute_active_topic(formatted_messages: list, current_query: str) -> tuple:
         # Check for topic-change keywords
         content_lower = raw_content.lower()
         if any(word in content_lower for word in _TOPIC_BOUNDARY_WORDS):
-            boundary_idx = i
+            # Include the assistant reply (if any) in past too
+            if i + 1 < len(formatted) and formatted[i + 1]["role"] == "assistant":
+                boundary_idx = i + 1
+            else:
+                boundary_idx = i
             break
 
         # Check if user mentioned a DIFFERENT product than current query
         msg_product = extract_product_name_from_question(raw_content)
         if msg_product and current_product and msg_product != current_product:
-            boundary_idx = i
+            # Include the assistant reply to this boundary user msg in past too
+            if i + 1 < len(formatted) and formatted[i + 1]["role"] == "assistant":
+                boundary_idx = i + 1
+            else:
+                boundary_idx = i
             break
+
+        # Check if user mentioned a DIFFERENT disease/pest than current query
+        if current_disease:
+            msg_disease = _extract_disease_or_pest(raw_content)
+            if msg_disease and msg_disease != current_disease:
+                # Include the assistant reply to this boundary user msg in past too
+                if i + 1 < len(formatted) and formatted[i + 1]["role"] == "assistant":
+                    boundary_idx = i + 1
+                else:
+                    boundary_idx = i
+                break
 
         # Check if current query has a product but this old user message asks about
         # a different topic (disease/pest) without the current product
@@ -645,7 +684,7 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
         if summary:
             if summary.get("products_mentioned"):
                 parts.append("")
-                parts.append(f"[สินค้าที่แนะนำไปแล้ว] {', '.join(summary['products_mentioned'][:5])}")
+                parts.append(f"[สินค้าที่เคยแนะนำในอดีต — อ้างอิงเท่านั้น ไม่ใช่สินค้าที่กำลังคุย] {', '.join(summary['products_mentioned'][:5])}")
 
             topic_parts = []
             if summary.get("topics"):

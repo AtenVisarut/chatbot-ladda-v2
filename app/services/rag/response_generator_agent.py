@@ -328,6 +328,22 @@ class ResponseGeneratorAgent:
                 if filtered:
                     docs_to_use = filtered
 
+        # Filter out products that don't match disease from context (follow-up queries)
+        # e.g. "มีตัวอื่นไหม" after ฟิวซาเรียม → remove fungicides that don't target ฟิวซาเรียม
+        if context_disease and docs_to_use:
+            _ctx_variants = generate_thai_disease_variants(context_disease)
+            _disease_matched = [
+                d for d in docs_to_use
+                if _any_disease_variant_matches(_ctx_variants, str(d.metadata.get('target_pest', '')))
+            ]
+            _disease_unmatched = [d for d in docs_to_use if d not in _disease_matched]
+            if _disease_matched:
+                # Keep only disease-matched products; unmatched are hidden from LLM
+                docs_to_use = _disease_matched
+                logger.info(f"  - Context disease filter: kept {len(_disease_matched)} docs matching '{context_disease}', removed {len(_disease_unmatched)}")
+            else:
+                logger.info(f"  - Context disease filter: no docs match '{context_disease}' — keeping all (mismatch_note will block)")
+
         # Build product data context from retrieval results
         product_context_parts = []
         for i, doc in enumerate(docs_to_use, 1):
@@ -407,7 +423,20 @@ class ResponseGeneratorAgent:
                 original_disease_gen = _gc_gen(_pat)
                 break
 
-        if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
+        # Extract disease from conversation context (follow-up like "มีตัวอื่นไหม")
+        context_disease = ''
+        if context and not disease_name and not original_disease_gen:
+            for _pat in _DP_GEN:
+                if _dm_gen(context, _pat):
+                    context_disease = _gc_gen(_pat)
+                    break
+            if context_disease:
+                disease_name = context_disease
+                logger.info(f"  - Disease extracted from context (follow-up): '{context_disease}'")
+
+        # Include more intents for follow-up queries that carry disease from context
+        _disease_check_intents = ('disease_treatment', 'product_recommendation', 'product_inquiry', 'unknown', 'general_agriculture')
+        if query_analysis.intent.value in _disease_check_intents and (disease_name or original_disease_gen):
             # Check with entity disease_name first, then original query disease
             disease_found_in_products = False
             matched_disease_label = ''
@@ -535,7 +564,10 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
 {crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}
-สร้างคำตอบจากข้อมูลด้านบน (ถ้าเป็นคำถามต่อเนื่อง ให้ใช้ข้อมูลของสินค้าตัวเดิมจากบริบทเท่านั้น ห้ามเปลี่ยนเป็นสินค้าอื่น)
+สร้างคำตอบจากข้อมูลด้านบน
+- ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
+- ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท
+- ห้ามแนะนำสินค้าที่ไม่มีชื่อโรค/แมลง/วัชพืชนั้นใน "ใช้กำจัด" ของสินค้า ถึงแม้จะเป็นสินค้าประเภทเดียวกัน (เช่น fungicide ด้วยกัน) ก็ห้ามแนะนำถ้า target_pest ไม่ match
 เมื่อแนะนำสินค้า:
 - ถ้าอัตราใช้ระบุ "ต่อน้ำ 200 ลิตร" → แสดงอัตราต่อถังพ่น 20 ลิตร (หาร 10) ด้วยเสมอ
 - ถ้าผู้ใช้ถามปริมาณสำหรับพื้นที่ (เช่น 10 ไร่) → คำนวณ: อัตราต่อไร่ × จำนวนไร่ + จำนวนขวด/ถุง/กระสอบที่ต้องซื้อ (ปัดขึ้น)
