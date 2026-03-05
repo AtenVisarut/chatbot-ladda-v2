@@ -131,12 +131,9 @@ async def _process_fb_message(event: dict) -> None:
             await send_facebook_message(psid, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ")
             return
 
-        # Ensure user exists
-        from app.services.user_service import ensure_user_exists, register_user_ladda
+        # Ensure user exists in user_ladda(LINE,FACE)
+        from app.services.user_service import ensure_user_exists
         await ensure_user_exists(user_id)
-
-        # Register/update user in user_ladda(LINE,FACE) table
-        await register_user_ladda(user_id, None)
 
         # Quick commands
         if text.lower() in ["ล้างความจำ", "reset", "clear"]:

@@ -178,20 +178,13 @@ async def _process_webhook_events(events: list):
                 await reply_line(reply_token, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ ⏳")
                 continue
 
-            # Ensure user exists (auto-register new users)
+            # Ensure user exists in user_ladda(LINE,FACE)
             from app.services.user_service import ensure_user_exists
             await ensure_user_exists(user_id)
 
             # 1. Handle Follow Event (Welcome Message)
             if event_type == "follow":
                 logger.info(f"User {user_id} followed the bot")
-
-                # Register user in user_ladda(LINE,FACE) table
-                from app.services.user_service import get_line_profile, register_user_ladda
-                profile = await get_line_profile(user_id)
-                display_name = profile.get("displayName") if profile else None
-                await register_user_ladda(user_id, display_name)
-
                 welcome_text = get_welcome_message()
                 await reply_line(reply_token, welcome_text)
                 continue
