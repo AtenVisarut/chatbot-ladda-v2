@@ -55,11 +55,14 @@ def generate_embeddings_for_products():
             text_parts = [
                 f"ชื่อสินค้า: {product['product_name']}",
                 f"สารสำคัญ: {product.get('active_ingredient', '')}",
+                f"ประเภท: {product.get('product_category', '')}",
                 f"สารกำจัดเชื้อรา: {product.get('fungicides', '')}",
                 f"สารกำจัดแมลง: {product.get('insecticides', '')}",
                 f"สารกำจัดวัชพืช: {product.get('herbicides', '')}",
+                f"สารบำรุงพืช: {product.get('biostimulant', '')}",
+                f"ฮอร์โมนพืช: {product.get('pgr_hormones', '')}",
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
-                f"กลุ่มสาร: {product.get('product_group', '')}",
+                f"จุดเด่น: {product.get('selling_point', '')}",
             ]
             text = " | ".join([p for p in text_parts if p])
             

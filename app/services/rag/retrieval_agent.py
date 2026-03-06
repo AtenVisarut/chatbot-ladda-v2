@@ -211,6 +211,8 @@ class RetrievalAgent:
                 or_conditions.extend(build_pest_or_conditions(kw))
                 or_conditions.append(f"active_ingredient.ilike.%{kw}%")
                 or_conditions.append(f"common_name_th.ilike.%{kw}%")
+                or_conditions.append(f"selling_point.ilike.%{kw}%")
+                or_conditions.append(f"product_category.ilike.%{kw}%")
 
             or_filter = ",".join(or_conditions)
 
