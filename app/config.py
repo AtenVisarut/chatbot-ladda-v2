@@ -111,7 +111,7 @@ LLM_TOKENS_QUERY_UNDERSTANDING = 500
 LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสินค้า (retrieval_agent.py, reranker.py)
 LLM_TOKENS_RERANKING = 100
 LLM_TEMP_RESPONSE_GEN = 0.2          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
-LLM_TOKENS_RESPONSE_GEN = 800
+LLM_TOKENS_RESPONSE_GEN = 600
 # --- Handler (chat/handler.py) ---
 LLM_TEMP_HANDLER_RAG = 0.1           # ตอบคำถามสินค้าจาก vector search (Q&A)
 LLM_TOKENS_HANDLER_RAG = 600

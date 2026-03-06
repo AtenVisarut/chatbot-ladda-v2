@@ -573,7 +573,12 @@ class RetrievalAgent:
             logger.info(f"  - After dedup: {len(unique_docs)}")
 
             # Stage 3: Re-ranking with LLM
-            if self.openai_client and len(unique_docs) >= MIN_RELEVANT_DOCS:
+            # Skip rerank when direct lookup already found the product (saves ~0.5-1s)
+            skip_rerank = bool(direct_lookup_ids)
+            if skip_rerank:
+                logger.info("  - Skipping LLM rerank (direct lookup found product)")
+
+            if self.openai_client and len(unique_docs) >= MIN_RELEVANT_DOCS and not skip_rerank:
                 reranked_docs = await self._rerank_with_llm(
                     query_analysis.original_query,
                     unique_docs,
