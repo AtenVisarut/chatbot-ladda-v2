@@ -26,11 +26,9 @@ _NO_DATA_PHRASES_FINAL = [
 
 def _is_no_data_answer(answer: str) -> bool:
     """ตรวจว่า answer เป็นคำตอบ 'ไม่มีข้อมูล' ที่ไม่ควรส่งให้ user
-    คำตอบสั้น (<120 chars) ที่มีวลี no-data → suppress
-    คำตอบยาว (≥120 chars) → มีเนื้อหาจริง handler จัดการ strip แล้ว → ปล่อยผ่าน
+    ถ้ามี no-data phrase → suppress เลย ไม่ว่าจะยาวแค่ไหน
+    ให้ admin มาตอบแทน
     """
-    if len(answer) >= 120:
-        return False
     return any(p in answer for p in _NO_DATA_PHRASES_FINAL)
 
 router = APIRouter(prefix="/facebook", tags=["facebook"])

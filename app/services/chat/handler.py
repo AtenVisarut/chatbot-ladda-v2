@@ -1401,7 +1401,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                     "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                 ]
-                if any(p in cached_answer for p in _CACHE_NO_DATA) and len(cached_answer) < 200:
+                if any(p in cached_answer for p in _CACHE_NO_DATA):
                     logger.info(f"⏭️ Cache hit contains no-data phrase, skipping reply (admin will handle): '{message[:40]}'")
                     return None
                 logger.info(f"✓ Response cache hit: '{message[:40]}'")
@@ -1443,39 +1443,15 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             logger.info(f"⏭️ No data — skipping reply (admin will handle)")
                             return None
 
-                        # Silent no-data: LLM ตอบ "ไม่มีข้อมูล"
-                        # ถ้าคำตอบยาว (มีเนื้อหาจริง) → strip วลีออกแทนที่จะ suppress ทั้งหมด
-                        # ถ้าคำตอบสั้น (เป็น no-data ล้วนๆ) → suppress
+                        # Silent no-data: ถ้า LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบเลย ให้ admin จัดการ
                         _NO_DATA_PHRASES = [
                             "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                             "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                             "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                         ]
-                        # Sentences that are ENTIRELY no-data (to strip from long answers)
-                        _NO_DATA_SENTENCES = [
-                            "ขออภัยค่ะ ไม่มีข้อมูลส่วนนี้ในระบบ",
-                            "ขออภัยค่ะ ไม่พบข้อมูลในระบบ",
-                            "ไม่มีข้อมูลส่วนนี้ในระบบ",
-                            "ไม่พบข้อมูลในระบบ",
-                        ]
                         if any(p in answer for p in _NO_DATA_PHRASES):
-                            if len(answer) > 120:
-                                # คำตอบยาว — strip วลี no-data ออก แล้วส่งส่วนที่มีเนื้อหา
-                                cleaned = answer
-                                for sent in _NO_DATA_SENTENCES:
-                                    cleaned = cleaned.replace(sent, "")
-                                # ลบบรรทัดว่างที่เหลือ
-                                cleaned = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned).strip()
-                                if len(cleaned) > 60:
-                                    logger.info(f"⚠️ No-data phrase stripped from long answer ({len(answer)}→{len(cleaned)} chars)")
-                                    answer = cleaned
-                                else:
-                                    logger.info(f"⏭️ No data — answer too short after stripping ({len(cleaned)} chars), skipping reply")
-                                    return None
-                            else:
-                                # คำตอบสั้น — เป็น no-data ล้วนๆ → suppress
-                                logger.info(f"⏭️ No data — short no-data answer ({len(answer)} chars, confidence={rag_response.confidence:.2f}), skipping reply")
-                                return None
+                            logger.info(f"⏭️ No data — answer contains no-data phrase ({len(answer)} chars), skipping reply (admin will handle)")
+                            return None
 
                         # Track analytics if product recommendation
                         if is_prod_q:
