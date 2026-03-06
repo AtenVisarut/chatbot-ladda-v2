@@ -36,10 +36,11 @@ logger = logging.getLogger(__name__)
 def _disease_in_pest_text(variant: str, pest_text: str) -> bool:
     """Boundary-aware disease matching against pest text.
     Prevents 'ใบไหม้' from matching inside 'กาบใบไหม้' (different disease).
-    Requires the variant to be preceded by start-of-string, space, comma, paren, or 'โรค'.
+    Requires the variant to be preceded by start-of-string, space, comma, paren,
+    or common Thai prefixes: 'โรค', 'เชื้อรา', 'เชื้อ', 'รา'.
     """
     escaped = re.escape(variant.lower())
-    pattern = r'(?:^|[\s,;(]|โรค)' + escaped
+    pattern = r'(?:^|[\s,;(]|โรคเชื้อรา|เชื้อรา|โรครา|โรค|เชื้อ|รา)' + escaped
     return bool(re.search(pattern, pest_text.lower()))
 
 

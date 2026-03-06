@@ -1395,6 +1395,15 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         if _response_cache_key:
             cached_answer = await get_from_cache("response", _response_cache_key)
             if cached_answer:
+                # Silent no-data check on cached answers too
+                _CACHE_NO_DATA = [
+                    "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
+                    "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
+                    "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
+                ]
+                if any(p in cached_answer for p in _CACHE_NO_DATA) and len(cached_answer) < 200:
+                    logger.info(f"⏭️ Cache hit contains no-data phrase, skipping reply (admin will handle): '{message[:40]}'")
+                    return None
                 logger.info(f"✓ Response cache hit: '{message[:40]}'")
                 await add_to_memory(user_id, "assistant", cached_answer)
                 return cached_answer
