@@ -33,19 +33,25 @@ from app.prompts import (
 logger = logging.getLogger(__name__)
 
 
-def _disease_in_target_pest(variant: str, target_pest: str) -> bool:
-    """Boundary-aware disease matching.
+def _disease_in_pest_text(variant: str, pest_text: str) -> bool:
+    """Boundary-aware disease matching against pest text.
     Prevents 'ใบไหม้' from matching inside 'กาบใบไหม้' (different disease).
     Requires the variant to be preceded by start-of-string, space, comma, paren, or 'โรค'.
     """
     escaped = re.escape(variant.lower())
     pattern = r'(?:^|[\s,;(]|โรค)' + escaped
-    return bool(re.search(pattern, target_pest.lower()))
+    return bool(re.search(pattern, pest_text.lower()))
 
 
-def _any_disease_variant_matches(variants: list, target_pest: str) -> bool:
-    """Check if any disease variant matches target_pest with boundary awareness."""
-    return any(_disease_in_target_pest(v, target_pest) for v in variants)
+def _any_disease_variant_matches(variants: list, pest_text: str) -> bool:
+    """Check if any disease variant matches pest text with boundary awareness."""
+    return any(_disease_in_pest_text(v, pest_text) for v in variants)
+
+
+def _get_pest_text_from_meta(metadata: dict) -> str:
+    """Get combined pest text from metadata dict (5 pest columns)."""
+    from app.utils.pest_columns import get_pest_text
+    return get_pest_text(metadata)
 
 
 class ResponseGeneratorAgent:
@@ -103,16 +109,16 @@ class ResponseGeneratorAgent:
                 )
                 has_documents = bool(retrieval_result.documents)
 
-                # Check if disease query matched via target_pest (fallback products)
+                # Check if disease query matched via pest columns (fallback products)
                 has_disease_match = False
                 disease_name = query_analysis.entities.get('disease_name', '')
                 if disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     disease_variants = generate_thai_disease_variants(disease_name)
                     for doc in retrieval_result.documents[:10]:
-                        target_pest = str(doc.metadata.get('target_pest', ''))
-                        if _any_disease_variant_matches(disease_variants, target_pest):
+                        _pest_text = _get_pest_text_from_meta(doc.metadata)
+                        if _any_disease_variant_matches(disease_variants, _pest_text):
                             has_disease_match = True
-                            logger.info(f"  - Disease override: '{disease_name}' found in {doc.title} target_pest")
+                            logger.info(f"  - Disease override: '{disease_name}' found in {doc.title} pest columns")
                             break
 
                 # Also try extracting disease from original query (LLM may have changed disease name)
@@ -127,10 +133,10 @@ class ResponseGeneratorAgent:
                     if original_disease and original_disease != disease_name:
                         original_variants = generate_thai_disease_variants(original_disease)
                         for doc in retrieval_result.documents[:5]:
-                            target_pest = str(doc.metadata.get('target_pest', ''))
-                            if _any_disease_variant_matches(original_variants, target_pest):
+                            _pest_text = _get_pest_text_from_meta(doc.metadata)
+                            if _any_disease_variant_matches(original_variants, _pest_text):
                                 has_disease_match = True
-                                logger.info(f"  - Disease override (original query): '{original_disease}' found in {doc.title} target_pest")
+                                logger.info(f"  - Disease override (original query): '{original_disease}' found in {doc.title} pest columns")
                                 break
 
                 # Also check possible_diseases from symptom→pathogen mapping
@@ -139,24 +145,24 @@ class ResponseGeneratorAgent:
                     for pd in _possible_diseases:
                         pd_variants = generate_thai_disease_variants(pd)
                         for doc in retrieval_result.documents[:10]:
-                            target_pest = str(doc.metadata.get('target_pest', ''))
-                            if _any_disease_variant_matches(pd_variants, target_pest):
+                            _pest_text = _get_pest_text_from_meta(doc.metadata)
+                            if _any_disease_variant_matches(pd_variants, _pest_text):
                                 has_disease_match = True
-                                logger.info(f"  - Disease override (symptom→pathogen): '{pd}' found in {doc.title} target_pest")
+                                logger.info(f"  - Disease override (symptom→pathogen): '{pd}' found in {doc.title} pest columns")
                                 break
                         if has_disease_match:
                             break
 
-                # Check if pest query matched insecticide products via target_pest
+                # Check if pest query matched insecticide products via pest columns
                 has_pest_match = False
                 pest_name = query_analysis.entities.get('pest_name', '')
                 if pest_name and has_documents and query_analysis.intent in (IntentType.PEST_CONTROL, IntentType.PRODUCT_RECOMMENDATION):
                     for doc in retrieval_result.documents[:10]:
-                        target_pest = str(doc.metadata.get('target_pest', '')).lower()
+                        _pest_text = _get_pest_text_from_meta(doc.metadata).lower()
                         cat = str(doc.metadata.get('category') or '').lower()
-                        if pest_name.lower() in target_pest and 'insecticide' in cat:
+                        if pest_name.lower() in _pest_text and 'insecticide' in cat:
                             has_pest_match = True
-                            logger.info(f"  - Pest override: '{pest_name}' found in {doc.title} target_pest")
+                            logger.info(f"  - Pest override: '{pest_name}' found in {doc.title} pest columns")
                             break
 
                 # Check if weed query matched herbicide products
@@ -267,7 +273,7 @@ class ResponseGeneratorAgent:
         docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy', ''), 3))
 
         # Rescue: ensure disease-matching product is in docs_to_use
-        # If query is about disease but no doc in docs_to_use has the disease in target_pest,
+        # If query is about disease but no doc in docs_to_use has the disease in pest columns,
         # search full retrieval results and add the matching doc
         if query_analysis.intent.value in ('disease_treatment', 'product_recommendation'):
             _rescue_disease = query_analysis.entities.get('disease_name', '')
@@ -283,15 +289,15 @@ class ResponseGeneratorAgent:
             for _rd in _rescue_diseases_list:
                 _rescue_variants = generate_thai_disease_variants(_rd)
                 _has_in_docs_to_use = any(
-                    _any_disease_variant_matches(_rescue_variants, str(d.metadata.get('target_pest', '')))
+                    _any_disease_variant_matches(_rescue_variants, _get_pest_text_from_meta(d.metadata))
                     for d in docs_to_use
                 )
                 if not _has_in_docs_to_use:
                     for doc in retrieval_result.documents:
                         if doc in docs_to_use:
                             continue
-                        target_pest = str(doc.metadata.get('target_pest', ''))
-                        if _any_disease_variant_matches(_rescue_variants, target_pest):
+                        _pest_text = _get_pest_text_from_meta(doc.metadata)
+                        if _any_disease_variant_matches(_rescue_variants, _pest_text):
                             docs_to_use.insert(0, doc)
                             logger.info(f"  - Rescued disease-matching product into docs_to_use: {doc.title} (for disease: {_rd})")
                             break
@@ -348,7 +354,7 @@ class ResponseGeneratorAgent:
             _ctx_variants = generate_thai_disease_variants(context_disease)
             _disease_matched = [
                 d for d in docs_to_use
-                if _any_disease_variant_matches(_ctx_variants, str(d.metadata.get('target_pest', '')))
+                if _any_disease_variant_matches(_ctx_variants, _get_pest_text_from_meta(d.metadata))
             ]
             _disease_unmatched = [d for d in docs_to_use if d not in _disease_matched]
             if _disease_matched:
@@ -370,8 +376,9 @@ class ResponseGeneratorAgent:
                 part += f"  ชื่อสารไทย: {meta['common_name_th']}\n"
             if meta.get('category'):
                 part += f"  ประเภท: {meta['category']}\n"
-            if meta.get('target_pest'):
-                part += f"  ใช้กำจัด: {str(meta['target_pest'])}\n"
+            _pest_disp = _get_pest_text_from_meta(meta)
+            if _pest_disp:
+                part += f"  ใช้กำจัด: {_pest_disp}\n"
             if meta.get('applicable_crops'):
                 part += f"  พืชที่ใช้ได้: {str(meta['applicable_crops'])}\n"
             if meta.get('usage_rate'):
@@ -465,8 +472,8 @@ class ResponseGeneratorAgent:
                     continue
                 check_variants = generate_thai_disease_variants(check_disease)
                 for doc in docs_to_use:
-                    target_pest = str(doc.metadata.get('target_pest', ''))
-                    if _any_disease_variant_matches(check_variants, target_pest):
+                    _pest_text = _get_pest_text_from_meta(doc.metadata)
+                    if _any_disease_variant_matches(check_variants, _pest_text):
                         disease_found_in_products = True
                         matched_disease_label = check_disease
                         matched_product_name = doc.metadata.get('product_name', doc.title)
@@ -479,16 +486,16 @@ class ResponseGeneratorAgent:
                 # (rescue logic above may have injected a matching doc after the initial check)
                 _all_check_variants = generate_thai_disease_variants(disease_name)
                 _really_missing = not any(
-                    _any_disease_variant_matches(_all_check_variants, str(d.metadata.get('target_pest', '')))
+                    _any_disease_variant_matches(_all_check_variants, _get_pest_text_from_meta(d.metadata))
                     for d in docs_to_use
                 )
                 if _really_missing:
                     disease_mismatch_note = f"""
-[คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" (target_pest) ของสินค้าใดเลย
+[คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" ของสินค้าใดเลย
 → ห้ามแนะนำสินค้าใดๆ สำหรับโรคนี้ เพราะไม่มีข้อมูลว่าสินค้าเหล่านี้รักษาโรคนี้ได้
 → ให้ตอบว่า: "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าในระบบที่ระบุว่ารักษาโรค{disease_name}ได้โดยตรง แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
 """
-                    logger.warning(f"Disease '{disease_name}' NOT found in any product's target_pest — will block recommendation")
+                    logger.warning(f"Disease '{disease_name}' NOT found in any product's pest columns — will block recommendation")
                 else:
                     logger.info(f"  - Disease '{disease_name}' found in docs_to_use after rescue — skipping mismatch block")
 
@@ -502,7 +509,7 @@ class ResponseGeneratorAgent:
                         canonical_form = v
                         break
                 disease_match_note = f"""
-[หมายเหตุโรค] "{original_disease_gen}" ในคำถาม ตรงกับ "{canonical_form}" ใน target_pest ของ "{matched_product_name}"
+[หมายเหตุโรค] "{original_disease_gen}" ในคำถาม ตรงกับ "{canonical_form}" ในข้อมูลสินค้า "{matched_product_name}"
 → ให้แนะนำสินค้า "{matched_product_name}" สำหรับโรคนี้
 """
                 logger.info(f"  - Disease match note: '{original_disease_gen}' → '{canonical_form}' in {matched_product_name}")
@@ -593,7 +600,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท
-- ห้ามแนะนำสินค้าที่ไม่มีชื่อโรค/แมลง/วัชพืชนั้นใน "ใช้กำจัด" ของสินค้า ถึงแม้จะเป็นสินค้าประเภทเดียวกัน (เช่น fungicide ด้วยกัน) ก็ห้ามแนะนำถ้า target_pest ไม่ match
+- ห้ามแนะนำสินค้าที่ไม่มีชื่อโรค/แมลง/วัชพืชนั้นใน "ใช้กำจัด" ของสินค้า ถึงแม้จะเป็นสินค้าประเภทเดียวกัน (เช่น fungicide ด้วยกัน) ก็ห้ามแนะนำถ้าข้อมูลกลุ่มสารไม่ match
 เมื่อแนะนำสินค้า:
 - ถ้าอัตราใช้ระบุ "ต่อน้ำ 200 ลิตร" → แสดงอัตราต่อถังพ่น 20 ลิตร (หาร 10) ด้วยเสมอ
 - ถ้าผู้ใช้ถามปริมาณสำหรับพื้นที่ (เช่น 10 ไร่) → คำนวณ: อัตราต่อไร่ × จำนวนไร่ + จำนวนขวด/ถุง/กระสอบที่ต้องซื้อ (ปัดขึ้น)
@@ -742,8 +749,9 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             if ingredient:
                 name = f"{name} ({ingredient})"
             parts.append(f"{i}. {name}")
-            if meta.get('target_pest'):
-                parts.append(f"   - ใช้กำจัด: {str(meta['target_pest'])[:100]}")
+            _pest_disp = _get_pest_text_from_meta(meta)
+            if _pest_disp:
+                parts.append(f"   - ใช้กำจัด: {_pest_disp[:100]}")
             if meta.get('usage_rate'):
                 parts.append(f"   - อัตราใช้: {meta['usage_rate']}")
             if meta.get('package_size'):

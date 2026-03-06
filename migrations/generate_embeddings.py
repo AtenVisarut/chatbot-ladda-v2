@@ -40,7 +40,7 @@ def generate_embeddings_for_products():
     
     # Fetch all products
     print("\n1. Fetching products from Supabase...")
-    response = supabase.table('products').select('*').execute()
+    response = supabase.table('products2').select('*').execute()
     products = response.data
     print(f"✓ Found {len(products)} products")
     
@@ -55,7 +55,9 @@ def generate_embeddings_for_products():
             text_parts = [
                 f"ชื่อสินค้า: {product['product_name']}",
                 f"สารสำคัญ: {product.get('active_ingredient', '')}",
-                f"ศัตรูพืชที่กำจัดได้: {product.get('target_pest', '')}",
+                f"สารกำจัดเชื้อรา: {product.get('fungicides', '')}",
+                f"สารกำจัดแมลง: {product.get('insecticides', '')}",
+                f"สารกำจัดวัชพืช: {product.get('herbicides', '')}",
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
                 f"กลุ่มสาร: {product.get('product_group', '')}",
             ]
@@ -72,7 +74,7 @@ def generate_embeddings_for_products():
                 continue
             
             # Update product with embedding
-            supabase.table('products').update({
+            supabase.table('products2').update({
                 'embedding': embedding
             }).eq('id', product['id']).execute()
             

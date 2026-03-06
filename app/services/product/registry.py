@@ -193,7 +193,7 @@ class ProductRegistry:
             if supabase_client is None:
                 raise RuntimeError("supabase_client is None")
 
-            result = supabase_client.table('products').select('product_name, aliases').execute()
+            result = supabase_client.table('products2').select('product_name, aliases').execute()
             if not result.data:
                 raise RuntimeError("No products returned from DB")
 

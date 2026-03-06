@@ -55,7 +55,7 @@ class RetrievedDocument:
     similarity_score: float
     rerank_score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    # Metadata: product_name, chemical_name, usage_rate, target_pest, category, etc.
+    # Metadata: product_name, chemical_name, usage_rate, fungicides/insecticides/herbicides, category, etc.
 
 
 @dataclass

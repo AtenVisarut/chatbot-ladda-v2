@@ -249,9 +249,10 @@ def format_product_list_text(products: List[Dict]) -> str:
     ]
 
     for idx, p in enumerate(products[:5], 1):
+        from app.utils.pest_columns import get_pest_display
         name = p.get("product_name", "ไม่ระบุ")
         active = p.get("active_ingredient", "-")
-        target = p.get("target_pest", "-")
+        _pest_disp = get_pest_display(p, max_len=100) or "-"
         crops = p.get("applicable_crops", "-")
         period = p.get("usage_period", "-")
         how = p.get("how_to_use", "-")
@@ -262,7 +263,8 @@ def format_product_list_text(products: List[Dict]) -> str:
         lines.append(f"{'─'*20}")
         lines.append(f"{idx}. {name}")
         lines.append(f"   สารสำคัญ: {active}")
-        lines.append(f"   ศัตรูพืช: {target}")
+        for _line in _pest_disp.split('\n'):
+            lines.append(f"   {_line}")
         lines.append(f"   พืชที่ใช้ได้: {crops}")
         lines.append(f"   ช่วงการใช้: {period}")
         lines.append(f"   วิธีใช้: {how}")

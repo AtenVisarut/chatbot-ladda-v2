@@ -100,7 +100,9 @@ class RetrievalAgent:
             f"สินค้า: {item.get('product_name', '')}\n"
             f"ชื่อสารไทย: {common_th}\n"
             f"สารสำคัญ: {item.get('active_ingredient', '')}\n"
-            f"ใช้กำจัด: {(item.get('target_pest') or '')[:200]}\n"
+            f"สารกำจัดเชื้อรา: {(item.get('fungicides') or '')[:100]}\n"
+            f"สารกำจัดแมลง: {(item.get('insecticides') or '')[:100]}\n"
+            f"สารกำจัดวัชพืช: {(item.get('herbicides') or '')[:100]}\n"
             f"พืชที่ใช้ได้: {(item.get('applicable_crops') or '')[:200]}"
         )
         if content_extra:
@@ -115,7 +117,11 @@ class RetrievalAgent:
                 'product_name': item.get('product_name'),
                 'common_name_th': common_th,
                 'active_ingredient': item.get('active_ingredient'),
-                'target_pest': item.get('target_pest'),
+                'fungicides': item.get('fungicides'),
+                'insecticides': item.get('insecticides'),
+                'herbicides': item.get('herbicides'),
+                'biostimulant': item.get('biostimulant'),
+                'pgr_hormones': item.get('pgr_hormones'),
                 'applicable_crops': item.get('applicable_crops'),
                 'category': item.get('product_category') or item.get('category'),
                 'how_to_use': item.get('how_to_use'),
@@ -162,7 +168,7 @@ class RetrievalAgent:
 
         try:
             # Try ilike search on product_name
-            result = self.supabase.table('products') \
+            result = self.supabase.table('products2') \
                 .select('*') \
                 .ilike('product_name', f'%{product_name}%') \
                 .limit(5) \
@@ -199,15 +205,16 @@ class RetrievalAgent:
 
             # Build OR filter for ilike search
             or_conditions = []
+            from app.utils.pest_columns import build_pest_or_conditions
             for kw in keywords[:3]:  # Limit to 3 keywords
                 or_conditions.append(f"product_name.ilike.%{kw}%")
-                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.extend(build_pest_or_conditions(kw))
                 or_conditions.append(f"active_ingredient.ilike.%{kw}%")
                 or_conditions.append(f"common_name_th.ilike.%{kw}%")
 
             or_filter = ",".join(or_conditions)
 
-            result = self.supabase.table('products') \
+            result = self.supabase.table('products2') \
                 .select('*') \
                 .or_(or_filter) \
                 .limit(top_k) \
@@ -266,10 +273,11 @@ class RetrievalAgent:
 
             logger.info(f"    Supplementary priority search keywords: {keywords}")
 
-            # Search Skyrocket/Expand products matching keywords in target_pest or selling_point
+            # Search Skyrocket/Expand products matching keywords in pest columns or selling_point
+            from app.utils.pest_columns import build_pest_or_conditions
             or_conditions = []
             for kw in keywords:
-                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.extend(build_pest_or_conditions(kw))
                 or_conditions.append(f"selling_point.ilike.%{kw}%")
                 or_conditions.append(f"common_name_th.ilike.%{kw}%")
                 or_conditions.append(f"active_ingredient.ilike.%{kw}%")
@@ -284,7 +292,7 @@ class RetrievalAgent:
                 if inferred:
                     cat_filter = inferred[0]
 
-            query_builder = self.supabase.table('products') \
+            query_builder = self.supabase.table('products2') \
                 .select('*') \
                 .in_('strategy', ['Skyrocket', 'Expand']) \
                 .or_(or_filter) \
@@ -333,17 +341,18 @@ class RetrievalAgent:
                 keywords.append(plant_type)
             keywords.extend(['วัชพืช', 'หญ้า'])
 
-            # Build OR filter on target_pest, applicable_crops, selling_point
+            # Build OR filter on pest columns, applicable_crops, selling_point
+            from app.utils.pest_columns import build_pest_or_conditions
             or_conditions = []
             for kw in keywords:
-                or_conditions.append(f"target_pest.ilike.%{kw}%")
+                or_conditions.extend(build_pest_or_conditions(kw))
                 or_conditions.append(f"applicable_crops.ilike.%{kw}%")
                 or_conditions.append(f"selling_point.ilike.%{kw}%")
             or_filter = ",".join(or_conditions)
 
             existing_ids = {d.id for d in existing_docs}
 
-            result = self.supabase.table('products') \
+            result = self.supabase.table('products2') \
                 .select('*') \
                 .ilike('product_category', '%Herbicide%') \
                 .or_(or_filter) \
@@ -384,7 +393,7 @@ class RetrievalAgent:
             return
 
         try:
-            result = self.supabase.table('products') \
+            result = self.supabase.table('products2') \
                 .select('id, strategy, selling_point, applicable_crops, package_size') \
                 .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
                 .execute()
@@ -482,21 +491,22 @@ class RetrievalAgent:
                     all_variants = list(set(all_variants))
 
                     # Check if any existing doc already matches
+                    from app.utils.pest_columns import get_pest_text_lower
                     has_disease_in_docs = any(
-                        any(v.lower() in str(doc.metadata.get('target_pest', '')).lower() for v in all_variants)
+                        any(v.lower() in get_pest_text_lower(doc.metadata) for v in all_variants)
                         for doc in all_docs
                     ) if all_docs else False
 
                     if not has_disease_in_docs:
-                        logger.info(f"  - Disease fallback: {disease_names_to_check} not in retrieved docs, searching target_pest")
+                        logger.info(f"  - Disease fallback: {disease_names_to_check} not in retrieved docs, searching pest columns")
                         fallback_docs = await self._search_by_target_pest(all_variants, query_analysis)
                         if fallback_docs:
                             disease_fallback_ids = {doc.id for doc in fallback_docs}
                             all_docs.extend(fallback_docs)
-                            logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via target_pest")
+                            logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via pest columns")
 
-            # Stage 1.3: Symptom-based target_pest fallback
-            # Matches symptom phrases (ไม่โต, ไม่กินปุ๋ย, เหลือง, etc.) against DB target_pest
+            # Stage 1.3: Symptom-based pest columns fallback
+            # Matches symptom phrases (ไม่โต, ไม่กินปุ๋ย, เหลือง, etc.) against DB pest columns
             if query_analysis.intent in (
                 IntentType.NUTRIENT_SUPPLEMENT, IntentType.PRODUCT_RECOMMENDATION,
                 IntentType.GENERAL_AGRICULTURE, IntentType.UNKNOWN,
@@ -510,7 +520,7 @@ class RetrievalAgent:
                     if new_docs:
                         symptom_fallback_ids = {d.id for d in new_docs}
                         all_docs.extend(new_docs)
-                        logger.info(f"  - Symptom fallback found: {len(new_docs)} new docs via target_pest")
+                        logger.info(f"  - Symptom fallback found: {len(new_docs)} new docs via pest columns")
 
             # Stage 1.5: Fallback keyword search if insufficient results
             if len(all_docs) < MIN_RELEVANT_DOCS:
@@ -579,7 +589,7 @@ class RetrievalAgent:
                 reranked_docs = boosted + others
                 logger.info(f"  - Boosted {len(boosted)} direct lookup docs to top")
 
-            # Stage 3.52: Boost disease fallback docs to top (matched via target_pest directly)
+            # Stage 3.52: Boost disease fallback docs to top (matched via pest columns directly)
             if disease_fallback_ids:
                 boosted = [doc for doc in reranked_docs if doc.id in disease_fallback_ids]
                 others = [doc for doc in reranked_docs if doc.id not in disease_fallback_ids]
@@ -587,7 +597,7 @@ class RetrievalAgent:
                 if boosted:
                     logger.info(f"  - Boosted {len(boosted)} disease fallback docs to top")
 
-            # Stage 3.53: Boost symptom fallback docs to top (matched via target_pest symptom keywords)
+            # Stage 3.53: Boost symptom fallback docs to top (matched via pest column symptom keywords)
             if symptom_fallback_ids:
                 boosted = [doc for doc in reranked_docs if doc.id in symptom_fallback_ids]
                 others = [doc for doc in reranked_docs if doc.id not in symptom_fallback_ids]
@@ -703,10 +713,11 @@ class RetrievalAgent:
                         logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy')}) from pos {current_pos + 1} to 1")
 
             # Stage 3.8: Ensure disease-matching product is in top 3
-            # If query is about disease but no top-3 doc has the disease in target_pest,
+            # If query is about disease but no top-3 doc has the disease in pest columns,
             # find and promote the matching doc (e.g. อาร์เทมิส for ราชมพู)
             if not direct_lookup_ids and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                 from app.utils.text_processing import generate_thai_disease_variants
+                from app.utils.pest_columns import get_pest_text_lower as _gptl
                 _entity_disease = query_analysis.entities.get('disease_name', '')
                 _original_disease = self._extract_disease_from_query(query_analysis.original_query)
                 _diseases_to_check = [d for d in [_entity_disease, _original_disease] if d]
@@ -716,13 +727,13 @@ class RetrievalAgent:
                         _all_variants.extend(generate_thai_disease_variants(d))
                     _all_variants = list(set(_all_variants))
                     top_has_match = any(
-                        any(v.lower() in str(d.metadata.get('target_pest', '')).lower() for v in _all_variants)
+                        any(v.lower() in _gptl(d.metadata) for v in _all_variants)
                         for d in reranked_docs[:3]
                     )
                     if not top_has_match:
                         for d in reranked_docs[3:]:
-                            target_pest = str(d.metadata.get('target_pest', '')).lower()
-                            if any(v.lower() in target_pest for v in _all_variants):
+                            _pest_text = _gptl(d.metadata)
+                            if any(v.lower() in _pest_text for v in _all_variants):
                                 reranked_docs.remove(d)
                                 reranked_docs.insert(0, d)
                                 logger.info(f"  - Rescued disease-matched product: {d.title} to position 1")
@@ -844,7 +855,7 @@ class RetrievalAgent:
                 'match_count': top_k * 2
             }
 
-            result = self.supabase.rpc('hybrid_search_products', rpc_params).execute()
+            result = self.supabase.rpc('hybrid_search_products2', rpc_params).execute()
 
             if not result.data:
                 return []
@@ -907,13 +918,15 @@ class RetrievalAgent:
         disease_variants: list,
         query_analysis: QueryAnalysis
     ) -> List[RetrievedDocument]:
-        """Fallback: ค้นหาสินค้าจาก target_pest โดยตรง (ไม่ใช้ vector search)"""
+        """Fallback: ค้นหาสินค้าจาก pest columns โดยตรง (ไม่ใช้ vector search)"""
+        from app.utils.pest_columns import build_pest_or_filter
         try:
             for variant in disease_variants:
                 if len(variant) < 3:
                     continue
-                result = self.supabase.table('products').select('*').ilike(
-                    'target_pest', f'%{variant}%'
+                or_filter = build_pest_or_filter(variant)
+                result = self.supabase.table('products2').select('*').or_(
+                    or_filter
                 ).limit(5).execute()
 
                 if result.data:
@@ -921,13 +934,13 @@ class RetrievalAgent:
                     return docs
             return []
         except Exception as e:
-            logger.error(f"Target pest fallback search error: {e}")
+            logger.error(f"Pest columns fallback search error: {e}")
             return []
 
     async def _search_by_symptom_keywords(
         self, query: str, query_analysis: QueryAnalysis
     ) -> List[RetrievedDocument]:
-        """Fallback: search products by symptom keywords matched against target_pest column.
+        """Fallback: search products by symptom keywords matched against pest columns.
 
         Unlike _search_by_target_pest (disease-specific), this matches general symptom
         phrases like ไม่โต, ไม่กินปุ๋ย, เหลือง etc. against the DB — no hardcoded product names.
@@ -956,11 +969,14 @@ class RetrievalAgent:
 
             logger.info(f"    Symptom keyword fallback: matched {matched_symptoms}")
 
-            # Build OR filter: target_pest.ilike.%keyword%
-            or_conditions = [f"target_pest.ilike.%{s}%" for s in matched_symptoms]
+            # Build OR filter across pest columns
+            from app.utils.pest_columns import build_pest_or_conditions
+            or_conditions = []
+            for s in matched_symptoms:
+                or_conditions.extend(build_pest_or_conditions(s))
             or_filter = ",".join(or_conditions)
 
-            query_builder = self.supabase.table('products').select('*').or_(or_filter).limit(10)
+            query_builder = self.supabase.table('products2').select('*').or_(or_filter).limit(10)
 
             # Narrow by plant type if available
             plant_type = query_analysis.entities.get('plant_type', '')
@@ -1095,8 +1111,10 @@ class RetrievalAgent:
                 text = f"[{i}] {doc.title}"
                 if doc.metadata.get('product_name'):
                     text += f" | สินค้า: {doc.metadata['product_name']}"
-                if doc.metadata.get('target_pest'):
-                    text += f" | ใช้กำจัด: {str(doc.metadata['target_pest'])[:80]}"
+                from app.utils.pest_columns import get_pest_text
+                _pest = get_pest_text(doc.metadata)
+                if _pest:
+                    text += f" | ใช้กำจัด: {_pest[:80]}"
                 if doc.metadata.get('applicable_crops'):
                     text += f" | พืช: {str(doc.metadata['applicable_crops'])[:80]}"
                 if doc.metadata.get('selling_point'):

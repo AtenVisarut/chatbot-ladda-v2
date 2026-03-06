@@ -70,9 +70,9 @@ async def regenerate_embeddings_endpoint(request: Request):
 
     # Fetch products to regenerate
     if product_name:
-        result = supabase_client.table('products').select('*').ilike('product_name', f'%{product_name}%').execute()
+        result = supabase_client.table('products2').select('*').ilike('product_name', f'%{product_name}%').execute()
     else:
-        result = supabase_client.table('products').select('*').execute()
+        result = supabase_client.table('products2').select('*').execute()
 
     if not result.data:
         return {"status": "error", "message": f"ไม่พบสินค้า: {product_name}" if product_name else "ไม่พบสินค้าในระบบ"}
@@ -86,7 +86,9 @@ async def regenerate_embeddings_endpoint(request: Request):
             text_parts = [
                 f"ชื่อสินค้า: {product['product_name']}",
                 f"สารสำคัญ: {product.get('active_ingredient', '')}",
-                f"ศัตรูพืชที่กำจัดได้: {product.get('target_pest', '')}",
+                f"สารกำจัดเชื้อรา: {product.get('fungicides', '')}",
+                f"สารกำจัดแมลง: {product.get('insecticides', '')}",
+                f"สารกำจัดวัชพืช: {product.get('herbicides', '')}",
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
                 f"กลุ่มสาร: {product.get('product_group', '')}",
                 f"ความเป็นพิษต่อพืช: {product.get('phytotoxicity', '')}",
@@ -99,7 +101,7 @@ async def regenerate_embeddings_endpoint(request: Request):
             )
             embedding = resp.data[0].embedding
 
-            supabase_client.table('products').update({
+            supabase_client.table('products2').update({
                 'embedding': embedding
             }).eq('id', product['id']).execute()
 

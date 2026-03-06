@@ -452,10 +452,16 @@ async def _process_webhook_events(events: list):
                                 if recommendations:
                                     product_list = []
                                     for p in recommendations[:5]:
+                                        from app.utils.pest_columns import get_pest_text
+                                        _pest_text = get_pest_text({
+                                            'fungicides': p.fungicides, 'insecticides': p.insecticides,
+                                            'herbicides': p.herbicides, 'biostimulant': p.biostimulant,
+                                            'pgr_hormones': p.pgr_hormones,
+                                        }) or "-"
                                         product_list.append({
                                             "product_name": (p.product_name or "ไม่ระบุ")[:100],
                                             "active_ingredient": (p.active_ingredient or "-")[:100],
-                                            "target_pest": (p.target_pest or "-")[:200],
+                                            "target_pest": _pest_text[:200],
                                             "applicable_crops": (p.applicable_crops or "-")[:150],
                                             "usage_period": (p.usage_period or "-")[:100],
                                             "how_to_use": (p.how_to_use or "-")[:200],

@@ -146,7 +146,7 @@ WEED_KEYWORDS = [
 ]
 
 # =============================================================================
-# Dynamic Product Matching - Query จาก column "target_pest" ใน DB โดยตรง
+# Dynamic Product Matching - Query จาก pest columns (fungicides/insecticides/herbicides/biostimulant/pgr_hormones) ใน DB
 # ไม่ต้อง maintain hard-code mapping - sync กับ DB อัตโนมัติ
 # =============================================================================
 
@@ -175,7 +175,7 @@ DISEASE_SEARCH_PATTERNS = {
 
 def extract_search_keywords(disease_name: str) -> List[str]:
     """
-    แยก keywords จากชื่อโรคเพื่อใช้ค้นหาใน target_pest column
+    แยก keywords จากชื่อโรคเพื่อใช้ค้นหาใน pest columns
 
     Args:
         disease_name: ชื่อโรค เช่น "โรคดอกกระถิน (False Smut)"
@@ -271,7 +271,7 @@ async def get_recommended_products_from_diseases(disease_name: str) -> List[Dict
         products = []
         for product_name in recommended_names:
             try:
-                prod_result = supabase_client.table('products').select('*').ilike(
+                prod_result = supabase_client.table('products2').select('*').ilike(
                     'product_name', f"%{product_name}%"
                 ).limit(1).execute()
 
@@ -291,34 +291,32 @@ async def get_recommended_products_from_diseases(disease_name: str) -> List[Dict
 
 async def query_products_by_target_pest(disease_name: str, required_category: str = None) -> List[Dict]:
     """
-    ค้นหาสินค้าจาก DB โดยตรง โดย match กับ column "target_pest" (ศัตรูพืชที่กำจัดได้)
+    ค้นหาสินค้าจาก DB โดยตรง โดย match กับ 5 pest columns (fungicides/insecticides/herbicides/biostimulant/pgr_hormones)
 
     Args:
         disease_name: ชื่อโรค/ศัตรูพืช
         required_category: ประเภทสินค้าที่ต้องการ (optional)
 
     Returns:
-        รายการสินค้าที่ match กับ target_pest
+        รายการสินค้าที่ match กับ pest columns
     """
     if not supabase_client:
         return []
 
     try:
+        from app.utils.pest_columns import build_pest_or_filter
         keywords = extract_search_keywords(disease_name)
-        logger.info(f"🔍 Searching target_pest with keywords: {keywords[:5]}")  # Log first 5
+        logger.info(f"🔍 Searching pest columns with keywords: {keywords[:5]}")
 
         products_found = []
         seen_ids = set()
 
-        for keyword in keywords[:5]:  # จำกัด 5 keywords แรก
+        for keyword in keywords[:5]:
             try:
-                # Query with ILIKE on target_pest column
-                query = supabase_client.table('products').select('*')
-                query = query.ilike('target_pest', f'%{keyword}%')
+                or_filter = build_pest_or_filter(keyword)
+                query = supabase_client.table('products2').select('*').or_(or_filter)
 
-                # Filter by category if specified (รองรับ synonyms)
                 if required_category:
-                    # ดึง synonyms ของ category นี้
                     category_synonyms = CATEGORY_SYNONYMS.get(required_category, [required_category])
                     query = query.in_('product_category', category_synonyms)
 
@@ -328,7 +326,6 @@ async def query_products_by_target_pest(disease_name: str, required_category: st
                     for p in result.data:
                         if p['id'] not in seen_ids:
                             seen_ids.add(p['id'])
-                            # Add match info for debugging
                             p['matched_keyword'] = keyword
                             products_found.append(p)
 
@@ -337,7 +334,7 @@ async def query_products_by_target_pest(disease_name: str, required_category: st
                 continue
 
         if products_found:
-            logger.info(f"✅ Found {len(products_found)} products from target_pest matching")
+            logger.info(f"✅ Found {len(products_found)} products from pest column matching")
             for p in products_found[:3]:
                 logger.debug(f"   → {p.get('product_name')} (matched: {p.get('matched_keyword')})")
         else:
@@ -425,8 +422,9 @@ async def fetch_products_by_pathogen_type(pathogen_type: str, plant_type: str = 
 
         logger.info(f"📦 Direct query: pathogen_type='{pathogen_type}'")
 
-        query = supabase_client.table("products").select(
-            "id, product_name, active_ingredient, target_pest, applicable_crops, "
+        query = supabase_client.table("products2").select(
+            "id, product_name, active_ingredient, fungicides, insecticides, herbicides, "
+            "biostimulant, pgr_hormones, applicable_crops, "
             "how_to_use, usage_period, usage_rate, link_product, pathogen_type, image_url"
         ).eq("pathogen_type", pathogen_type)
 
@@ -850,7 +848,7 @@ def filter_products_strict(
     disease_name: str
 ) -> List[Dict]:
     """
-    กรองสินค้าแบบ strict - ต้องตรงทั้ง applicable_crops และ target_pest
+    กรองสินค้าแบบ strict - ต้องตรงทั้ง applicable_crops และ pest columns
 
     Args:
         products: รายการสินค้าทั้งหมด
@@ -944,7 +942,8 @@ def filter_products_strict(
 
     for product in products:
         applicable_crops = (product.get("applicable_crops") or "").lower()
-        target_pest = (product.get("target_pest") or "").lower()
+        from app.utils.pest_columns import get_pest_text_lower
+        _pest_text = get_pest_text_lower(product)
         product_name = product.get("product_name", "")
 
         # Check plant match - use STRICT matching if available
@@ -991,10 +990,10 @@ def filter_products_strict(
             if not plant_match and ("พืชทุกชนิด" in applicable_crops or "ทุกชนิด" in applicable_crops):
                 plant_match = True
 
-        # Check disease match in target_pest
+        # Check disease match in pest columns
         disease_match = False
         for kw in disease_keywords:
-            if kw in target_pest:
+            if kw in _pest_text:
                 disease_match = True
                 break
 
@@ -1186,10 +1185,10 @@ async def hybrid_search_products(query: str, match_count: int = 15,
         )
         query_embedding = response.data[0].embedding
 
-        # Try hybrid_search_products RPC first (if SQL function exists)
+        # Try hybrid_search_products2 RPC first (if SQL function exists)
         try:
             result = supabase_client.rpc(
-                'hybrid_search_products',
+                'hybrid_search_products2',
                 {
                     'query_embedding': query_embedding,
                     'search_query': query,
@@ -1212,7 +1211,7 @@ async def hybrid_search_products(query: str, match_count: int = 15,
                     product_ids = [p.get('id') for p in products if p.get('id')]
                     if product_ids:
                         try:
-                            img_result = supabase_client.table('products')\
+                            img_result = supabase_client.table('products2')\
                                 .select('id, image_url')\
                                 .in_('id', product_ids)\
                                 .execute()
@@ -1281,10 +1280,14 @@ async def manual_hybrid_search(query: str, query_embedding: List[float],
             logger.warning(f"keyword_search_products RPC failed: {e}, trying ILIKE")
             # Fallback: ILIKE search
             try:
-                result = supabase_client.table('products')\
+                result = supabase_client.table('products2')\
                     .select('*')\
                     .or_(f"product_name.ilike.%{query}%,"
-                         f"target_pest.ilike.%{query}%,"
+                         f"fungicides.ilike.%{query}%,"
+                         f"insecticides.ilike.%{query}%,"
+                         f"herbicides.ilike.%{query}%,"
+                         f"biostimulant.ilike.%{query}%,"
+                         f"pgr_hormones.ilike.%{query}%,"
                          f"applicable_crops.ilike.%{query}%,"
                          f"active_ingredient.ilike.%{query}%")\
                     .limit(match_count * 2)\
@@ -1312,7 +1315,7 @@ async def manual_hybrid_search(query: str, query_embedding: List[float],
             product_ids = [p.get('id') for p in final_results if p.get('id')]
             if product_ids:
                 try:
-                    img_result = supabase_client.table('products')\
+                    img_result = supabase_client.table('products2')\
                         .select('id, image_url')\
                         .in_('id', product_ids)\
                         .execute()
@@ -1411,7 +1414,7 @@ async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
         for name in product_names:
             # ค้นหาแบบ exact match ก่อน
             try:
-                result = supabase_client.table('products')\
+                result = supabase_client.table('products2')\
                     .select('*')\
                     .eq('product_name', name)\
                     .execute()
@@ -1427,7 +1430,7 @@ async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
 
             # ถ้าไม่เจอ exact match ลอง ILIKE
             try:
-                result = supabase_client.table('products')\
+                result = supabase_client.table('products2')\
                     .select('*')\
                     .ilike('product_name', f'%{name}%')\
                     .limit(2)\
@@ -1486,7 +1489,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         # ต้องระบุก่อนเพื่อใช้ใน target_pest query
         required_category, required_category_th = get_required_category(disease_name)
 
-        # ✅ Dynamic Query - ค้นหาสินค้าจาก target_pest column ใน DB โดยตรง
+        # ✅ Dynamic Query - ค้นหาสินค้าจาก pest columns ใน DB โดยตรง
         # แม่นยำกว่า vector search เพราะ match กับข้อมูลจริงใน DB
         logger.info(f"🔍 Step 1: Query products by target_pest for: {disease_name}")
         target_pest_products = await query_products_by_target_pest(disease_name, required_category)
@@ -1644,19 +1647,20 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         # Strategy 2: Keyword search fallback
         matches_data = []
 
-        # Search in target_pest field
+        # Search in pest columns
+        from app.utils.pest_columns import build_pest_or_filter
         try:
-            result = supabase_client.table('products')\
+            result = supabase_client.table('products2')\
                 .select('*')\
-                .ilike('target_pest', f'%{disease_name}%')\
+                .or_(build_pest_or_filter(disease_name))\
                 .limit(10)\
                 .execute()
 
             if result.data:
                 matches_data.extend(result.data)
-                logger.info(f"Found {len(result.data)} products in target_pest")
+                logger.info(f"Found {len(result.data)} products in pest columns")
         except Exception as e:
-            logger.warning(f"target_pest search failed: {e}")
+            logger.warning(f"pest columns search failed: {e}")
 
         # If no results, search by pest type
         if not matches_data:
@@ -1672,9 +1676,9 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                     pest_keywords = ["วัชพืช", "หญ้า"]
 
                 for keyword in pest_keywords:
-                    result = supabase_client.table('products')\
+                    result = supabase_client.table('products2')\
                         .select('*')\
-                        .ilike('target_pest', f'%{keyword}%')\
+                        .or_(build_pest_or_filter(keyword))\
                         .limit(5)\
                         .execute()
 
@@ -1729,16 +1733,18 @@ def build_recommendations_from_data(products_data: List[Dict], pest_name: str = 
             continue
         seen_products.add(pname)
 
-        pest = product.get("target_pest", "")
-        if not pest or pest.strip() == "":
+        from app.utils.pest_columns import has_pest_data
+        if not has_pest_data(product):
             continue
-
-        # ไม่ต้องเพิ่ม prefix เพราะข้อมูล product มีอยู่แล้ว
 
         rec = ProductRecommendation(
             product_name=pname,
             active_ingredient=product.get("active_ingredient", ""),
-            target_pest=pest,
+            fungicides=product.get("fungicides", ""),
+            insecticides=product.get("insecticides", ""),
+            herbicides=product.get("herbicides", ""),
+            biostimulant=product.get("biostimulant", ""),
+            pgr_hormones=product.get("pgr_hormones", ""),
             applicable_crops=product.get("applicable_crops", ""),
             how_to_use=product.get("how_to_use", ""),
             usage_period=product.get("usage_period", ""),
@@ -1884,7 +1890,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
             if crops:
                 for crop in crops[:2]:
                     try:
-                        result = supabase_client.table('products')\
+                        result = supabase_client.table('products2')\
                             .select('*')\
                             .ilike('applicable_crops', f'%{crop}%')\
                             .limit(10)\
@@ -1896,13 +1902,14 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                     except Exception as e:
                         logger.warning(f"applicable_crops search failed: {e}")
 
-            # Fallback 2: Search by target_pest for common issues
+            # Fallback 2: Search by pest columns for common issues
             if not unique_products and pests:
+                from app.utils.pest_columns import build_pest_or_filter
                 for pest in pests[:2]:
                     try:
-                        result = supabase_client.table('products')\
+                        result = supabase_client.table('products2')\
                             .select('*')\
-                            .ilike('target_pest', f'%{pest}%')\
+                            .or_(build_pest_or_filter(pest))\
                             .limit(10)\
                             .execute()
 
@@ -1910,7 +1917,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                             unique_products.extend(result.data)
                             logger.info(f"✓ Found {len(result.data)} products for pest: {pest}")
                     except Exception as e:
-                        logger.warning(f"target_pest search failed: {e}")
+                        logger.warning(f"pest columns search failed: {e}")
 
             # If still no products, fallback to keyword search
             if not unique_products:
@@ -1926,7 +1933,8 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
         for idx, p in enumerate(unique_products[:15], 1):  # Top 15 for Gemini
             products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
             products_text += f"\n    • สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
-            products_text += f"\n    • ศัตรูพืชที่กำจัดได้: {p.get('target_pest', 'N/A')[:150]}"
+            from app.utils.pest_columns import get_pest_text
+            products_text += f"\n    • ศัตรูพืช: {(get_pest_text(p) or 'N/A')[:150]}"
             products_text += f"\n    • วิธีใช้: {p.get('how_to_use', 'N/A')[:200]}"
             products_text += f"\n    • อัตราการใช้: {p.get('usage_rate', 'N/A')}"
             if p.get('usage_period'):
@@ -2077,9 +2085,11 @@ async def format_product_list_simple(products: list, question: str, intent: str)
             response += f"\n   - สารสำคัญ: {p.get('active_ingredient')}"
         
         # ศัตรูพืชที่กำจัดได้
-        if p.get('target_pest'):
-            pest = p.get('target_pest')[:150] + "..." if len(p.get('target_pest', '')) > 150 else p.get('target_pest', '')
-            response += f"\n   - ศัตรูพืชที่กำจัดได้: {pest}"
+        from app.utils.pest_columns import get_pest_text
+        _pest = get_pest_text(p)
+        if _pest:
+            _pest_trunc = _pest[:150] + "..." if len(_pest) > 150 else _pest
+            response += f"\n   - ศัตรูพืชที่กำจัดได้: {_pest_trunc}"
         
         # วิธีใช้
         if p.get('how_to_use'):
@@ -2113,16 +2123,17 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
     คำนวณ Matching Score ระหว่าง product กับข้อมูล user
 
     Weights (Updated for 2-step flow):
-    - 50% - โรค/แมลง ตรงกับ target_pest
+    - 50% - โรค/แมลง ตรงกับ pest columns
     - 50% - ระยะปลูก ตรงกับ usage_period
 
     Note: plant_type ใช้เป็น filter ก่อนหน้านี้แล้ว ไม่นับ score ซ้ำ
 
     Returns: score 0.0 - 1.0
     """
+    from app.utils.pest_columns import get_pest_text_lower
     score = 0.0
 
-    target_pest = (product.get("target_pest") or "").lower()
+    _pest_text = get_pest_text_lower(product)
     applicable_crops = (product.get("applicable_crops") or "").lower()
     usage_period = (product.get("usage_period") or "").lower()
 
@@ -2134,30 +2145,29 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
     disease_score = 0.0
 
     # Direct disease name match
-    if disease_lower and disease_lower in target_pest:
+    if disease_lower and disease_lower in _pest_text:
         disease_score = 1.0
     else:
         # Check partial matches
         disease_keywords = disease_lower.replace("โรค", "").strip().split()
         for kw in disease_keywords:
-            if len(kw) > 2 and kw in target_pest:
+            if len(kw) > 2 and kw in _pest_text:
                 disease_score = max(disease_score, 0.7)
                 break
 
         # Check if product targets related issues
         pest_check_query, pest_name, _ = get_search_query_for_disease(disease_name)
         if pest_name:
-            # Disease has vector - check if product targets the vector
             pest_keywords = pest_name.lower().split()
             for kw in pest_keywords:
-                if len(kw) > 2 and kw in target_pest:
+                if len(kw) > 2 and kw in _pest_text:
                     disease_score = max(disease_score, 0.9)
                     break
 
         # Generic disease type match (เชื้อรา, ไวรัส, etc.)
         disease_types = ["เชื้อรา", "ไวรัส", "แบคทีเรีย", "แมลง", "เพลี้ย", "หนอน"]
         for dt in disease_types:
-            if dt in disease_lower and dt in target_pest:
+            if dt in disease_lower and dt in _pest_text:
                 disease_score = max(disease_score, 0.5)
                 break
 
@@ -2292,9 +2302,9 @@ async def retrieve_products_with_matching_score(
         if pest_name:
             logger.info(f"🐛 โรคมีพาหะ: {pest_name}")
 
-        # STEP 1: Direct Query จาก target_pest
+        # STEP 1: Direct Query จาก pest columns
         all_results = []
-        logger.info(f"📦 Step 1: Direct Query by target_pest for: {disease_name}")
+        logger.info(f"📦 Step 1: Direct Query by pest columns for: {disease_name}")
         direct_results = await query_products_by_target_pest(disease_name)
 
         if direct_results:
@@ -2378,7 +2388,7 @@ async def retrieve_products_with_matching_score(
             all_results = filter_products_by_category(all_results, required_category)
             logger.info(f"   → After category filter: {len(all_results)} products")
 
-        # 🆕 STRICT FILTER: กรองตาม applicable_crops + target_pest
+        # 🆕 STRICT FILTER: กรองตาม applicable_crops + pest columns
         if plant_type and all_results:
             logger.info(f"🎯 Strict filter: plant={plant_type}, disease={disease_name}")
             all_results = filter_products_strict(all_results, plant_type, disease_name)
@@ -2414,8 +2424,9 @@ async def retrieve_products_with_matching_score(
                 continue
             seen_products.add(pname)
 
-            # Skip products without target_pest
-            if not product.get("target_pest"):
+            # Skip products without pest data
+            from app.utils.pest_columns import has_pest_data
+            if not has_pest_data(product):
                 continue
 
             # Calculate matching score
@@ -2436,10 +2447,11 @@ async def retrieve_products_with_matching_score(
                 if product.get('_disease_match'):
                     direct_match_bonus = 0.25  # +25% ถ้า match โรคโดยตรง
 
-            # Verify disease/pest ตรงกับ target_pest จริงหรือไม่
-            target_pest = (product.get("target_pest") or "").lower()
+            # Verify disease/pest ตรงกับ pest columns จริงหรือไม่
+            from app.utils.pest_columns import get_pest_text_lower
+            _pest_text = get_pest_text_lower(product)
             disease_lower = disease_name.lower()
-            disease_in_target = any(kw in target_pest for kw in disease_lower.split() if len(kw) > 2)
+            disease_in_target = any(kw in _pest_text for kw in disease_lower.split() if len(kw) > 2)
 
             # ถ้าไม่ตรงเลย → ลด score
             relevance_penalty = 0.0
@@ -2514,7 +2526,11 @@ async def retrieve_products_with_matching_score(
             rec = ProductRecommendation(
                 product_name=product.get("product_name", "ไม่ระบุชื่อ"),
                 active_ingredient=product.get("active_ingredient", ""),
-                target_pest=product.get("target_pest", ""),
+                fungicides=product.get("fungicides", ""),
+                insecticides=product.get("insecticides", ""),
+                herbicides=product.get("herbicides", ""),
+                biostimulant=product.get("biostimulant", ""),
+                pgr_hormones=product.get("pgr_hormones", ""),
                 applicable_crops=product.get("applicable_crops", ""),
                 how_to_use=product.get("how_to_use", ""),
                 usage_period=product.get("usage_period", ""),
@@ -2545,10 +2561,11 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         
         # Search by pest/disease
         if keywords["pests"]:
+            from app.utils.pest_columns import build_pest_or_filter
             for pest in keywords["pests"][:2]:
-                result = supabase_client.table('products')\
+                result = supabase_client.table('products2')\
                     .select('*')\
-                    .ilike('target_pest', f'%{pest}%')\
+                    .or_(build_pest_or_filter(pest))\
                     .limit(5)\
                     .execute()
                 if result.data:
@@ -2557,7 +2574,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         # Search by crop
         if keywords["crops"]:
             for crop in keywords["crops"][:2]:
-                result = supabase_client.table('products')\
+                result = supabase_client.table('products2')\
                     .select('*')\
                     .ilike('applicable_crops', f'%{crop}%')\
                     .limit(5)\
@@ -2569,7 +2586,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         if keywords["products"]:
             for prod in keywords["products"]:
                 if len(prod) > 3:
-                    result = supabase_client.table('products')\
+                    result = supabase_client.table('products2')\
                         .select('*')\
                         .ilike('product_name', f'%{prod}%')\
                         .limit(5)\
@@ -2579,7 +2596,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         
         # If no specific keywords, get general products
         if not products_data:
-            result = supabase_client.table('products')\
+            result = supabase_client.table('products2')\
                 .select('*')\
                 .limit(10)\
                 .execute()
@@ -2603,7 +2620,8 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         for idx, p in enumerate(unique_products[:10], 1):
             products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
             products_text += f"\n    สารสำคัญ: {p.get('active_ingredient', 'N/A')}"
-            products_text += f"\n    ศัตรูพืช: {p.get('target_pest', 'N/A')[:100]}"
+            from app.utils.pest_columns import get_pest_text
+            products_text += f"\n    ศัตรูพืช: {(get_pest_text(p) or 'N/A')[:100]}"
             products_text += f"\n    ใช้กับพืช: {p.get('applicable_crops', 'N/A')[:80]}"
             products_text += f"\n    ช่วงการใช้: {p.get('usage_period', 'N/A')}"
             products_text += f"\n    อัตราใช้: {p.get('usage_rate', 'N/A')}"
@@ -2671,9 +2689,11 @@ async def answer_product_question(question: str, keywords: dict) -> str:
                 response += f"\n{idx}. {p.get('product_name')}"
                 if p.get('active_ingredient'):
                     response += f"\n   สารสำคัญ: {p.get('active_ingredient')}"
-                if p.get('target_pest'):
-                    pest = p.get('target_pest')[:80] + "..." if len(p.get('target_pest', '')) > 80 else p.get('target_pest', '')
-                    response += f"\n   ศัตรูพืช: {pest}"
+                from app.utils.pest_columns import get_pest_text
+                _pest = get_pest_text(p)
+                if _pest:
+                    _pest_trunc = _pest[:80] + "..." if len(_pest) > 80 else _pest
+                    response += f"\n   ศัตรูพืช: {_pest_trunc}"
                 if p.get('applicable_crops'):
                     crops = p.get('applicable_crops')[:60] + "..." if len(p.get('applicable_crops', '')) > 60 else p.get('applicable_crops', '')
                     response += f"\n   ใช้กับพืช: {crops}"

@@ -116,12 +116,13 @@ def build_detailed_response(
                 if product.active_ingredient:
                     response += f"\n   • สารสำคัญ: {product.active_ingredient}"
                 
-                # ศัตรูพืชที่กำจัดได้ 
-                if product.target_pest:
-                    target = product.target_pest[:150]
-                    if len(product.target_pest) > 150:
-                        target += "..."
-                    response += f"\n   • ศัตรูพืชที่กำจัดได้: {target}"
+                # ศัตรูพืชที่กำจัดได้ (แยกตามประเภท)
+                from app.utils.pest_columns import get_pest_display, PEST_COLUMNS
+                _pest_dict = {col: getattr(product, col, '') or '' for col in PEST_COLUMNS}
+                _pest_disp = get_pest_display(_pest_dict, max_len=150)
+                if _pest_disp:
+                    for _line in _pest_disp.split('\n'):
+                        response += f"\n   • {_line}"
                 
                 # วิธีใช้
                 if product.how_to_use:

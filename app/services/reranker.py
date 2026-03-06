@@ -48,8 +48,10 @@ async def rerank_products_with_llm(
         product_texts = []
         for i, p in enumerate(candidates, 1):
             text = f"[{i}] {p.get('product_name', 'N/A')}"
-            if p.get('target_pest'):
-                text += f" | ศัตรูพืช: {p.get('target_pest', '')[:100]}"
+            from app.utils.pest_columns import get_pest_text
+            _pest = get_pest_text(p)
+            if _pest:
+                text += f" | ศัตรูพืช: {_pest[:100]}"
             if p.get('applicable_crops'):
                 text += f" | พืช: {p.get('applicable_crops', '')[:80]}"
             if p.get('active_ingredient'):
@@ -157,11 +159,12 @@ def simple_relevance_boost(query: str, product: Dict) -> float:
         elif any(term in product_name for term in query_lower.split()):
             bonus += 0.05
 
-        # Check target pest match
-        target_pest = (product.get('target_pest') or '').lower()
-        if query_lower in target_pest:
+        # Check pest columns match
+        from app.utils.pest_columns import get_pest_text_lower
+        _pest_text = get_pest_text_lower(product)
+        if query_lower in _pest_text:
             bonus += 0.1
-        elif any(term in target_pest for term in query_lower.split() if len(term) > 2):
+        elif any(term in _pest_text for term in query_lower.split() if len(term) > 2):
             bonus += 0.03
 
         # Check applicable crops match

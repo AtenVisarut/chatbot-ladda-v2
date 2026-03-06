@@ -957,7 +957,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
     products: List of dict with keys:
         - product_name
         - active_ingredient
-        - target_pest
+        - fungicides, insecticides, herbicides, biostimulant, pgr_hormones
         - how_to_use
         - usage_rate
         - similarity (optional)
@@ -977,6 +977,10 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
         logger = logging.getLogger(__name__)
         logger.info(f"🖼️ Product: {product.get('product_name', 'N/A')} | image_url: [{image_url[:50] if image_url else 'EMPTY'}]")
         logger.info(f"   📋 Product keys: {list(product.keys())}")
+
+        # Build pest display text from 5 columns
+        from app.utils.pest_columns import get_pest_text
+        _pest_display = get_pest_text(product) or '-'
 
         bubble = {
             "type": "bubble",
@@ -1027,7 +1031,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             }
                         ]
                     },
-                    # Target Pest
+                    # Pest target
                     {
                         "type": "box",
                         "layout": "vertical",
@@ -1041,7 +1045,7 @@ def create_product_carousel_flex(products: List[Dict]) -> Dict:
                             },
                             {
                                 "type": "text",
-                                "text": product.get('target_pest', '-')[:200],
+                                "text": _pest_display[:200],
                                 "size": "xs",
                                 "color": "#333333",
                                 "wrap": True

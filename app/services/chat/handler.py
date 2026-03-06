@@ -518,9 +518,10 @@ async def vector_search_products_for_qa(
             matched = []
             for p in filtered_results:
                 pname = (p.get('product_name') or '').lower()
-                target = (p.get('target_pest') or '').lower()
+                from app.utils.pest_columns import get_pest_text_lower
+                _pest_text = get_pest_text_lower(p)
                 for alias in aliases:
-                    if alias.lower() in pname or alias.lower() in target:
+                    if alias.lower() in pname or alias.lower() in _pest_text:
                         matched.append(p)
                         break
 
@@ -542,8 +543,9 @@ async def vector_search_products_for_qa(
             for p in filtered_results:
                 applicable = (p.get('applicable_crops') or '').lower()
                 pname = (p.get('product_name') or '').lower()
-                target = (p.get('target_pest') or '').lower()
-                if plant_lower in applicable or plant_lower in pname or plant_lower in target:
+                from app.utils.pest_columns import get_pest_text_lower as _gptl2
+                _pest_text = _gptl2(p)
+                if plant_lower in applicable or plant_lower in pname or plant_lower in _pest_text:
                     plant_filtered.append(p)
 
             if plant_filtered:
@@ -665,7 +667,6 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
                 product_name = doc.get('product_name', '')
                 active_ingredient = doc.get('active_ingredient', '')
                 usage_rate = doc.get('usage_rate', '')
-                target_pest = doc.get('target_pest', '')
                 product_category = doc.get('product_category', '')
                 applicable_crops = doc.get('applicable_crops', '')
                 how_to_use = doc.get('how_to_use', '')
@@ -678,8 +679,11 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
                     products_context += f"\n[{idx}] {product_name}"
                 if product_category:
                     products_context += f"\n   ประเภท: {product_category}"
-                if target_pest:
-                    products_context += f"\n   ใช้กำจัด: {target_pest[:150]}"
+                from app.utils.pest_columns import get_pest_display
+                _pest_disp = get_pest_display(doc, max_len=150)
+                if _pest_disp:
+                    for _line in _pest_disp.split('\n'):
+                        products_context += f"\n   {_line}"
                 if applicable_crops:
                     products_context += f"\n   พืชที่ใช้ได้: {applicable_crops[:150]}"
                 if usage_rate:
@@ -1080,8 +1084,9 @@ async def _fetch_product_from_db(product_name: str) -> list:
         from app.dependencies import supabase_client as _sb
         if not _sb:
             return []
-        result = _sb.table('products').select(
-            'product_name, active_ingredient, target_pest, applicable_crops, '
+        result = _sb.table('products2').select(
+            'product_name, active_ingredient, fungicides, insecticides, herbicides, '
+            'biostimulant, pgr_hormones, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, '
             'absorption_method, mechanism_of_action, phytotoxicity'
         ).ilike('product_name', f'%{product_name}%').limit(5).execute()
@@ -1125,7 +1130,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
 
         # Enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields เช่น package_size)
         _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
-                        'how_to_use', 'usage_rate', 'usage_period', 'target_pest',
+                        'how_to_use', 'usage_rate', 'usage_period',
+                        'fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones',
                         'active_ingredient', 'applicable_crops', 'phytotoxicity']
         if product_in_question:
             db_product = await _fetch_product_from_db(product_in_question)
@@ -1175,8 +1181,11 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 products_text += f"\n   • อัตราใช้: {p.get('usage_rate')}"
             if p.get('usage_period'):
                 products_text += f"\n   • ช่วงการใช้: {p.get('usage_period')}"
-            if p.get('target_pest'):
-                products_text += f"\n   • ศัตรูพืชที่กำจัด: {p.get('target_pest')[:100]}"
+            from app.utils.pest_columns import get_pest_display as _gpd
+            _pest_disp = _gpd(p, max_len=100)
+            if _pest_disp:
+                for _line in _pest_disp.split('\n'):
+                    products_text += f"\n   • {_line}"
             if p.get('applicable_crops'):
                 products_text += f"\n   • ใช้กับพืช: {p.get('applicable_crops')[:100]}"
             if p.get('package_size'):
