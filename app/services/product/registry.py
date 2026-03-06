@@ -301,6 +301,42 @@ class ProductRegistry:
         # Step 3: Fuzzy match (fallback)
         return self.fuzzy_match(question)
 
+    def extract_all_product_names(self, question: str) -> list:
+        """
+        Extract ALL product names from user question (for multi-product comparison queries).
+        Returns list of unique canonical product names found.
+        """
+        self._ensure_loaded()
+        question_lower = question.lower()
+        found = []
+        seen = set()
+        remaining = question_lower
+
+        # Scan aliases longest-first; remove matched span to find remaining products
+        sorted_aliases = sorted(self._alias_index.keys(), key=len, reverse=True)
+        for alias in sorted_aliases:
+            if alias in remaining:
+                canonical = self._alias_index[alias]
+                if canonical not in seen:
+                    found.append(canonical)
+                    seen.add(canonical)
+                # Remove matched span so it doesn't interfere with next match
+                remaining = remaining.replace(alias, ' ', 1)
+
+        # Also try diacritics-stripped matching on remaining text
+        if remaining.strip():
+            remaining_stripped = _strip_diacritics(remaining)
+            sorted_stripped = sorted(self._stripped_index.keys(), key=len, reverse=True)
+            for stripped_alias in sorted_stripped:
+                if stripped_alias in remaining_stripped:
+                    canonical = self._stripped_index[stripped_alias]
+                    if canonical not in seen:
+                        found.append(canonical)
+                        seen.add(canonical)
+                    remaining_stripped = remaining_stripped.replace(stripped_alias, ' ', 1)
+
+        return found
+
     def fuzzy_match(self, text: str, threshold: float = 0.75) -> Optional[str]:
         """
         Fuzzy matching for misspelled product names.

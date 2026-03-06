@@ -81,7 +81,10 @@ class QueryUnderstandingAgent:
         # [CONSTRAINT] = dictionary-matched, LLM must NOT override
         # [HINT] = softer suggestion, LLM may adjust
         hint_section = ""
-        if hints.get('product_name'):
+        if hints.get('product_names') and len(hints['product_names']) > 1:
+            names_str = ", ".join(f'"{n}"' for n in hints['product_names'])
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบสินค้าหลายตัว: {names_str} — ใส่ตัวแรกใน entities.product_name"
+        elif hints.get('product_name'):
             hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อสินค้า: \"{hints['product_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.product_name เท่านั้น"
         if hints.get('disease_name'):
             hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อโรค: \"{hints['disease_name']}\" — ห้ามเปลี่ยนชื่อโรค ต้องใช้ชื่อนี้ใน entities.disease_name เท่านั้น (ห้ามแปลหรือเปลี่ยนเป็นชื่ออื่น)"
@@ -237,9 +240,11 @@ required_sources:
                     logger.info(f"  - Override product: LLM='{entities.get('product_name')}' → pre-extracted='{hints['product_name']}'")
                     entities['product_name'] = hints['product_name']
 
-            # Propagate flag for downstream agents (retrieval, response)
+            # Propagate flags for downstream agents (retrieval, response)
             if '_product_from_query' in hints:
                 entities['_product_from_query'] = hints['_product_from_query']
+            if hints.get('product_names'):
+                entities['product_names'] = hints['product_names']
 
             # Remove LLM-hallucinated product_name for recommendation/treatment queries
             # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)

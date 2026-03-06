@@ -440,17 +440,22 @@ class RetrievalAgent:
             logger.info(f"  - Sources: {query_analysis.required_sources}")
             logger.info(f"  - Expanded queries: {len(query_analysis.expanded_queries)}")
 
-            # Stage 0: Direct product lookup if entity has product_name
+            # Stage 0: Direct product lookup if entity has product_name(s)
             all_docs = []
             direct_lookup_ids = set()
             symptom_fallback_ids = set()
             product_name = query_analysis.entities.get('product_name')
-            if product_name:
-                direct_docs = await self._direct_product_lookup(product_name)
+            # Support multi-product queries (e.g. "แกนเตอร์กับแมสฟอดใช้ต่างกันยังไง")
+            product_names_list = query_analysis.entities.get('product_names', [])
+            if not product_names_list and product_name:
+                product_names_list = [product_name]
+            for _pname in product_names_list:
+                direct_docs = await self._direct_product_lookup(_pname)
                 if direct_docs:
                     all_docs.extend(direct_docs)
-                    direct_lookup_ids = {doc.id for doc in direct_docs}
-                    logger.info(f"  - Direct lookup found: {len(direct_docs)} docs")
+                    direct_lookup_ids.update(doc.id for doc in direct_docs)
+            if direct_lookup_ids:
+                logger.info(f"  - Direct lookup found: {len(direct_lookup_ids)} docs for {product_names_list}")
 
             # Stage 1: Parallel retrieval from multiple sources
             multi_docs = await self._multi_source_retrieval(query_analysis, top_k)

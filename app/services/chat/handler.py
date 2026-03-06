@@ -181,6 +181,11 @@ def extract_product_name_from_question(question: str) -> Optional[str]:
     return ProductRegistry.get_instance().extract_product_name(question)
 
 
+def extract_all_product_names_from_question(question: str) -> list:
+    """ดึงชื่อสินค้าทั้งหมดจากคำถาม (สำหรับเปรียบเทียบหลายตัว)"""
+    return ProductRegistry.get_instance().extract_all_product_names(question)
+
+
 def fuzzy_match_product_name(text: str, threshold: float = 0.65) -> Optional[str]:
     """Fuzzy matching สำหรับชื่อสินค้าที่พิมพ์ผิด — delegate ไปยัง ProductRegistry"""
     return ProductRegistry.get_instance().fuzzy_match(text, threshold)

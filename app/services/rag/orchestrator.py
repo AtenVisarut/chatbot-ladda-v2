@@ -107,7 +107,8 @@ class AgenticRAG:
             product_literally_in_query = False
             try:
                 from app.services.chat.handler import (
-                    extract_product_name_from_question, detect_problem_type,
+                    extract_product_name_from_question, extract_all_product_names_from_question,
+                    detect_problem_type,
                     ICP_PRODUCT_NAMES, extract_plant_type_from_question,
                     DISEASE_KEYWORDS, INSECT_KEYWORDS,
                     resolve_farmer_slang
@@ -130,8 +131,13 @@ class AgenticRAG:
                     hints['possible_diseases'] = possible_diseases
                     logger.info(f"  - Symptom→Pathogen: {possible_diseases}")
 
-                detected_product = extract_product_name_from_question(query)
+                # Extract all product names (supports multi-product comparison)
+                all_detected_products = extract_all_product_names_from_question(query)
+                detected_product = all_detected_products[0] if all_detected_products else None
                 product_from_query = bool(detected_product)
+                if len(all_detected_products) > 1:
+                    hints['product_names'] = all_detected_products
+                    logger.info(f"  - Multi-product query: {all_detected_products}")
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
                     # Split context into active topic vs past sections
