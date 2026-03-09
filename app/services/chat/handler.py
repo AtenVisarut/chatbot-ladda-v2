@@ -58,6 +58,8 @@ AGRICULTURE_KEYWORDS = [
     "โรค", "โรคพืช", "ใบไหม้", "ใบเหลือง", "ใบจุด", "รากเน่า", "โคนเน่า", "ผลเน่า",
     "เชื้อรา", "แบคทีเรีย", "ไวรัส", "แมลง", "เพลี้ย", "หนอน", "ด้วง", "ศัตรูพืช",
     "ราน้ำค้าง", "ราแป้ง", "ราสนิม", "แอนแทรคโนส", "กิ่งแห้ง", "ลำต้นเน่า",
+    # วัชพืช
+    "หญ้า", "วัชพืช", "ยาฆ่าหญ้า", "กำจัดหญ้า", "สารกำจัดวัชพืช",
     # การเกษตรทั่วไป
     "ระยะ", "ช่วง", "ปลูก", "เก็บเกี่ยว", "ดูแล", "บำรุง", "เสี่ยง", "ป้องกัน",
     "อาการ", "สาเหตุ", "การรักษา", "วิธีแก้", "วิธีป้องกัน"
@@ -1376,11 +1378,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         # 5. Route based on intent
 
         # 5a. Greeting fast path — no LLM needed
-        # Guard: short keywords (ดี, hi ≤2 chars) require very short message (≤8 chars)
-        # to avoid false-positive on messages like "ใช้ตัวไหนดี"
+        # Guard: skip greeting if message contains agriculture keywords
+        # e.g. "ปลูกข้าว20วันใช้ยาอะไรดีคับ" contains "ดีคับ" but is an agri question
         msg_stripped = message.strip().lower()
         _is_greeting = False
-        if len(msg_stripped) < 30:
+        _has_agri_keyword = is_agriculture_question(message)
+        if not _has_agri_keyword and len(msg_stripped) < 30:
             for _gkw in GREETING_KEYWORDS:
                 if _gkw in msg_stripped:
                     if len(_gkw) <= 2 and len(msg_stripped) > 8:

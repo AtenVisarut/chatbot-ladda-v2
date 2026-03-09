@@ -66,11 +66,12 @@ class RetrievalAgent:
     """
 
     # Category-Intent mapping (single source, used in _search_products + retrieve stages)
+    # NOTE: NUTRIENT_SUPPLEMENT has no single category — covers Biostimulants, PGR, Fertilizer
+    # Use None so supplementary search doesn't filter by category (catches all relevant products)
     INTENT_CATEGORY_MAP = {
         IntentType.DISEASE_TREATMENT: "Fungicide",
         IntentType.PEST_CONTROL: "Insecticide",
         IntentType.WEED_CONTROL: "Herbicide",
-        IntentType.NUTRIENT_SUPPLEMENT: "Fertilizer",
     }
 
     # Category variants for reranking stages (includes Thai labels)
@@ -665,26 +666,52 @@ class RetrievalAgent:
                 reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
                 logger.info(f"  - Applied strategy group score boost")
 
-            # Stage 3.65: Crop-specific boost — if user asks about specific plant,
-            # prioritize products whose applicable_crops is specific to that plant
-            # BUT only if category matches intent (no boost for PGR when asking about disease)
+            # Stage 3.65: Crop-specific boost & mismatch penalty
+            # If user asks about specific plant:
+            #   - Boost products whose applicable_crops matches plant_type
+            #   - Penalize products that don't mention plant_type
+            #   - Heavy penalty for products that explicitly say "ห้ามใช้ใน..." for plant_type
             if not direct_lookup_ids:
                 plant_type = query_analysis.entities.get('plant_type', '')
                 if plant_type:
                     for doc in reranked_docs:
-                        # Skip crop-specific boost for category-mismatched products
+                        # Skip crop adjustments for category-mismatched products
                         if expected_categories:
                             cat = str(doc.metadata.get('category') or '').lower()
                             if cat and not any(ec.lower() in cat for ec in expected_categories):
                                 continue
                         crops = str(doc.metadata.get('applicable_crops') or '')
                         selling = str(doc.metadata.get('selling_point') or '')
-                        # "เน้นสำหรับ(ทุเรียน)" or "เฉพาะทุเรียน" → strong match
-                        if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                        how_to = str(doc.metadata.get('how_to_use') or '')
+                        all_text = f"{crops} {how_to} {selling}"
+
+                        # Check for explicit prohibition: "ห้ามใช้ในนาข้าว", "ห้ามใช้ในสวนทุเรียน" etc.
+                        _prohibit_patterns = [
+                            f"ห้ามใช้ใน{plant_type}",
+                            f"ห้ามใช้กับ{plant_type}",
+                            f"ไม่ควรใช้ใน{plant_type}",
+                            f"ห้ามใช้ในนา{plant_type}" if plant_type == "ข้าว" else "",
+                            f"ห้ามใช้ในนาข้าว" if plant_type == "ข้าว" else "",
+                            f"ห้ามใช้ในสวน{plant_type}" if plant_type not in ("ข้าว",) else "",
+                        ]
+                        _prohibit_patterns = [p for p in _prohibit_patterns if p]
+                        _is_prohibited = any(p in all_text for p in _prohibit_patterns)
+
+                        if _is_prohibited:
+                            # Heavy penalty — explicitly prohibited for this crop
+                            doc.rerank_score = max(0.0, doc.rerank_score - 0.30)
+                            logger.info(f"  - Crop-prohibited penalty -0.30 for {doc.title} (prohibited for {plant_type})")
+                        elif plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                            # "เน้นสำหรับ(ทุเรียน)" or "เฉพาะทุเรียน" → strong match
                             doc.rerank_score = min(1.0, doc.rerank_score + 0.20)
                             logger.info(f"  - Crop-specific boost +0.20 for {doc.title} (crops: {crops[:50]})")
                         elif plant_type in crops:
+                            # Crop mentioned but not emphasized
                             doc.rerank_score = min(1.0, doc.rerank_score + 0.05)
+                        elif crops.strip():
+                            # Has applicable_crops but plant_type not in it → mild penalty
+                            doc.rerank_score = max(0.0, doc.rerank_score - 0.15)
+                            logger.info(f"  - Crop-mismatch penalty -0.15 for {doc.title} (crops: {crops[:50]}, wanted: {plant_type})")
                     reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
 
             # Stage 3.7: Promote best Skyrocket/Expand to position 1

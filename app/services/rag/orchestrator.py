@@ -275,6 +275,25 @@ class AgenticRAG:
                     hints['weed_synonyms'] = list(weed_synonyms)
                     logger.info(f"  - Weed synonyms injected: {hints['weed_synonyms']}")
 
+                # --- Nutrient Synonym Injection ---
+                # "เร่งดอก" is PGR/Biostimulant, not "ปุ๋ย" in embeddings
+                # Inject synonyms so vector search finds PGR/Biostimulant products
+                if hints.get('problem_type') == 'nutrient':
+                    _NUTRIENT_SYNONYM_MAP = {
+                        'เร่งดอก': ['สารเร่งดอก', 'ฮอร์โมนพืช', 'PGR', 'บำรุงดอก'],
+                        'เร่งผล': ['สารเร่งผล', 'ฮอร์โมนพืช', 'PGR', 'บำรุงผล'],
+                        'บำรุง': ['สารบำรุงพืช', 'biostimulant', 'ธาตุอาหาร'],
+                        'ติดดอก': ['สารเร่งดอก', 'ฮอร์โมนพืช', 'PGR'],
+                        'ติดผล': ['สารเร่งผล', 'ฮอร์โมนพืช', 'PGR'],
+                    }
+                    nutrient_synonyms = set()
+                    for pattern, synonyms in _NUTRIENT_SYNONYM_MAP.items():
+                        if pattern in query:
+                            nutrient_synonyms.update(synonyms)
+                    if nutrient_synonyms:
+                        hints['nutrient_synonyms'] = list(nutrient_synonyms)
+                        logger.info(f"  - Nutrient synonyms injected: {hints['nutrient_synonyms']}")
+
                 # --- Validate: drop product when query is about a new topic ---
                 # Case 1: Disease/pest entity detected + product not literally in query
                 #   e.g. "โรครากเน่าโคนเน่า" → fuzzy "โค-ราซ" (false positive)

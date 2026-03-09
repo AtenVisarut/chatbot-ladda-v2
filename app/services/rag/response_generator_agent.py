@@ -366,6 +366,7 @@ class ResponseGeneratorAgent:
                 logger.info(f"  - Context disease filter: no docs match '{context_disease}' — keeping all (mismatch_note will block)")
 
         # Build product data context from retrieval results
+        plant_type = query_analysis.entities.get('plant_type', '')
         product_context_parts = []
         for i, doc in enumerate(docs_to_use, 1):
             meta = doc.metadata
@@ -381,7 +382,19 @@ class ResponseGeneratorAgent:
             if _pest_disp:
                 part += f"  ใช้กำจัด: {_pest_disp}\n"
             if meta.get('applicable_crops'):
-                part += f"  พืชที่ใช้ได้: {str(meta['applicable_crops'])}\n"
+                _crops_str = str(meta['applicable_crops'])
+                part += f"  พืชที่ใช้ได้: {_crops_str}\n"
+                # Warn LLM if product is not suitable for user's plant_type
+                if plant_type and _crops_str.strip():
+                    _all_text = f"{_crops_str} {str(meta.get('how_to_use') or '')}"
+                    _prohibit_kw = [f"ห้ามใช้ใน{plant_type}", f"ห้ามใช้กับ{plant_type}",
+                                    f"ห้ามใช้ในนาข้าว" if plant_type == "ข้าว" else "",
+                                    f"ห้ามใช้ในนา{plant_type}" if plant_type == "ข้าว" else ""]
+                    _prohibit_kw = [p for p in _prohibit_kw if p]
+                    if any(p in _all_text for p in _prohibit_kw):
+                        part += f"  [!! ห้ามใช้กับ{plant_type} — ห้ามแนะนำสินค้านี้เด็ดขาด !!]\n"
+                    elif plant_type not in _crops_str:
+                        part += f"  [!! สินค้านี้ไม่ได้ระบุว่าใช้กับ{plant_type}ได้ — ห้ามแนะนำสำหรับ{plant_type} !!]\n"
             if meta.get('usage_rate'):
                 part += f"  อัตราใช้: {meta['usage_rate']}\n"
             if meta.get('how_to_use'):
