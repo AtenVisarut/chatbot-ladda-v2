@@ -336,6 +336,21 @@ class ResponseGeneratorAgent:
                 if filtered:
                     docs_to_use = filtered
 
+        # Pre-filter: when plant_type is known, remove crop-mismatched docs before LLM
+        # to prevent LLM from being overwhelmed by "ห้ามแนะนำ" warnings (9/10 mismatch → "ไม่มีข้อมูล")
+        # Skip when user asks about a specific product (e.g. "โม-เซ่ ใช้กับทุเรียนได้ไหม")
+        _product_from_query = query_analysis.entities.get('_product_from_query', False)
+        if plant_type_filter and docs_to_use and not _product_from_query:
+            _crop_matched = [
+                d for d in docs_to_use
+                if _plant_matches_crops(plant_type_filter, str(d.metadata.get('applicable_crops') or ''))
+            ]
+            if _crop_matched:
+                _removed_count = len(docs_to_use) - len(_crop_matched)
+                if _removed_count > 0:
+                    docs_to_use = _crop_matched
+                    logger.info(f"  - Crop pre-filter: kept {len(_crop_matched)} crop-matching docs, removed {_removed_count} mismatched for '{plant_type_filter}'")
+
         # Early extract: disease from conversation context for follow-up queries
         # (full extraction + assignment to disease_name happens later at line ~427)
         # Skip for WEED_CONTROL / PEST_CONTROL — disease context is irrelevant for these intents
