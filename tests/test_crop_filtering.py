@@ -348,3 +348,66 @@ class TestCropFilteringEndToEnd:
         # ทูโฟฟอส (rice only) should be penalized
         assert docs_sorted[1].title == "ทูโฟฟอส"
         assert docs_sorted[1].rerank_score == pytest.approx(0.55, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Test: Broader category matching (ทุเรียน → ไม้ยืนต้น)
+# ---------------------------------------------------------------------------
+
+class TestBroaderCategoryMatching:
+    """Test that plant_type matches via broader category (e.g. ทุเรียน → ไม้ยืนต้น)."""
+
+    def test_plant_matches_crops_direct(self):
+        """Direct match: 'ทุเรียน' in 'ทุเรียน, มะม่วง'."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+        assert _plant_matches_crops("ทุเรียน", "ทุเรียน, มะม่วง") is True
+
+    def test_plant_matches_crops_via_broader_category(self):
+        """Broader match: ทุเรียน is ไม้ยืนต้น, so 'ไม้ยืนต้น เช่น ปาล์ม ยาง' should match."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+        assert _plant_matches_crops("ทุเรียน", "ไม้ยืนต้น เช่น ปาล์ม ยาง") is True
+
+    def test_plant_matches_crops_via_fruit_tree(self):
+        """Broader match: มะม่วง is ไม้ผล."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+        assert _plant_matches_crops("มะม่วง", "ไม้ผล ทุกชนิด") is True
+
+    def test_plant_no_match(self):
+        """No match: ข้าว is not in 'อ้อย, มันสำปะหลัง'."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+        assert _plant_matches_crops("ข้าว", "อ้อย, มันสำปะหลัง") is False
+
+    def test_plant_field_crop_broader(self):
+        """Broader match: อ้อย is พืชไร่."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+        assert _plant_matches_crops("อ้อย", "พืชไร่ เช่น มันสำปะหลัง") is True
+
+    def test_durian_broader_no_penalty_in_scoring(self):
+        """For ทุเรียน query, product with 'ไม้ยืนต้น' should get +0.05, NOT -0.15."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+
+        doc = _make_doc("อัพดาว", "ไม้ยืนต้น เช่น ปาล์ม ยาง", rerank=0.70)
+        plant_type = "ทุเรียน"
+        crops = str(doc.metadata.get('applicable_crops') or '')
+        selling = str(doc.metadata.get('selling_point') or '')
+
+        if _plant_matches_crops(plant_type, crops) and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+            doc.rerank_score = min(1.0, doc.rerank_score + 0.20)
+        elif _plant_matches_crops(plant_type, crops):
+            doc.rerank_score = min(1.0, doc.rerank_score + 0.05)
+        elif crops.strip():
+            doc.rerank_score = max(0.0, doc.rerank_score - 0.15)
+
+        # Should get +0.05 (broader match), NOT -0.15 (mismatch)
+        assert doc.rerank_score == pytest.approx(0.75, abs=0.01)
+
+    def test_broader_category_in_response_warning(self):
+        """Product with 'ไม้ยืนต้น' should NOT get crop warning for ทุเรียน query."""
+        from app.services.rag.retrieval_agent import _plant_matches_crops
+
+        crops_str = "ไม้ยืนต้น เช่น ปาล์ม ยาง"
+        plant_type = "ทุเรียน"
+
+        # response_generator_agent imports _plant_matches_crops from retrieval_agent
+        # so same function is used — should match via broader category → no warning
+        assert _plant_matches_crops(plant_type, crops_str) is True

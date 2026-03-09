@@ -21,6 +21,7 @@ from app.services.rag import (
     IntentType
 )
 from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
+from app.services.rag.retrieval_agent import _plant_matches_crops
 from app.config import LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
@@ -393,7 +394,7 @@ class ResponseGeneratorAgent:
                     _prohibit_kw = [p for p in _prohibit_kw if p]
                     if any(p in _all_text for p in _prohibit_kw):
                         part += f"  [!! ห้ามใช้กับ{plant_type} — ห้ามแนะนำสินค้านี้เด็ดขาด !!]\n"
-                    elif plant_type not in _crops_str:
+                    elif not _plant_matches_crops(plant_type, _crops_str):
                         part += f"  [!! สินค้านี้ไม่ได้ระบุว่าใช้กับ{plant_type}ได้ — ห้ามแนะนำสำหรับ{plant_type} !!]\n"
             if meta.get('usage_rate'):
                 part += f"  อัตราใช้: {meta['usage_rate']}\n"
@@ -424,7 +425,7 @@ class ResponseGeneratorAgent:
                 crops = str(doc.metadata.get('applicable_crops') or '')
                 selling = str(doc.metadata.get('selling_point') or '')
                 product_name = doc.metadata.get('product_name', doc.title)
-                if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                if _plant_matches_crops(plant_type, crops) and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
                     if product_name not in relevant:
                         relevant.insert(0, product_name)
                         logger.info(f"  - Injected crop-specific product into relevant: {product_name}")

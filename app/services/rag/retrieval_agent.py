@@ -59,6 +59,38 @@ def _set_cached_embedding(text: str, embedding: list):
     _embedding_cache[key] = {"embedding": embedding, "ts": time.time()}
 
 
+# Broader category mapping: specific plant → parent categories
+# Used in Stage 3.65 crop-mismatch and Stage 3.7 priority promotion
+# e.g. ทุเรียน is ไม้ยืนต้น, so "ไม้ยืนต้น เช่น ปาล์ม ยาง" should match ทุเรียน
+_PLANT_BROADER_CATEGORIES = {
+    'ทุเรียน': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'มะม่วง': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'ลำไย': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'มังคุด': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'เงาะ': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'ลิ้นจี่': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'ส้ม': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'ยางพารา': ['ไม้ยืนต้น'],
+    'ปาล์ม': ['ไม้ยืนต้น'],
+    'ปาล์มน้ำมัน': ['ไม้ยืนต้น'],
+    'มะพร้าว': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'กาแฟ': ['ไม้ยืนต้น'],
+    'ข้าวโพด': ['พืชไร่'],
+    'อ้อย': ['พืชไร่'],
+    'มันสำปะหลัง': ['พืชไร่'],
+}
+
+
+def _plant_matches_crops(plant_type: str, crops_str: str) -> bool:
+    """Check if plant_type matches crops string (direct or via broader category)."""
+    if plant_type in crops_str:
+        return True
+    for cat in _PLANT_BROADER_CATEGORIES.get(plant_type, []):
+        if cat in crops_str:
+            return True
+    return False
+
+
 class RetrievalAgent:
     """
     Agent 2: Retrieval
@@ -701,13 +733,14 @@ class RetrievalAgent:
                             # Heavy penalty — explicitly prohibited for this crop
                             doc.rerank_score = max(0.0, doc.rerank_score - 0.30)
                             logger.info(f"  - Crop-prohibited penalty -0.30 for {doc.title} (prohibited for {plant_type})")
-                        elif plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                        elif _plant_matches_crops(plant_type, crops) and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
                             # "เน้นสำหรับ(ทุเรียน)" or "เฉพาะทุเรียน" → strong match
                             doc.rerank_score = min(1.0, doc.rerank_score + 0.20)
                             logger.info(f"  - Crop-specific boost +0.20 for {doc.title} (crops: {crops[:50]})")
-                        elif plant_type in crops:
-                            # Crop mentioned but not emphasized
+                        elif _plant_matches_crops(plant_type, crops):
+                            # Crop mentioned directly or via broader category
                             doc.rerank_score = min(1.0, doc.rerank_score + 0.05)
+                            logger.info(f"  - Crop-broader-match +0.05 for {doc.title} (crops: {crops[:50]}, plant: {plant_type})")
                         elif crops.strip():
                             # Has applicable_crops but plant_type not in it → mild penalty
                             doc.rerank_score = max(0.0, doc.rerank_score - 0.15)
@@ -736,7 +769,7 @@ class RetrievalAgent:
                         for d in all_priority:
                             crops = str(d.metadata.get('applicable_crops') or '')
                             selling = str(d.metadata.get('selling_point') or '')
-                            if plant_type in crops and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
+                            if _plant_matches_crops(plant_type, crops) and ('เน้นสำหรับ' in crops or f'{plant_type}อันดับ' in selling):
                                 best_priority = d
                                 logger.info(f"  - Crop-specific match: {d.title} (crops: {crops[:50]})")
                                 break
