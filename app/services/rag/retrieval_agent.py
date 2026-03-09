@@ -357,12 +357,12 @@ class RetrievalAgent:
             return []
 
     async def _weed_category_fallback_search(
-        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 5
+        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 10
     ) -> List[RetrievedDocument]:
         """Search ALL Herbicide products when weed query has insufficient results.
 
         Unlike _supplementary_priority_search (Skyrocket/Expand only), this catches
-        Natural/Standard herbicides too.
+        Natural/Standard herbicides too.  top_k=10 to avoid missing products like พาสนาว.
         """
         if not self.supabase:
             return []

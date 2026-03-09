@@ -338,8 +338,10 @@ class ResponseGeneratorAgent:
 
         # Early extract: disease from conversation context for follow-up queries
         # (full extraction + assignment to disease_name happens later at line ~427)
+        # Skip for WEED_CONTROL / PEST_CONTROL — disease context is irrelevant for these intents
         context_disease = ''
-        if context and not query_analysis.entities.get('disease_name', ''):
+        _skip_disease_context = query_analysis.intent in (IntentType.WEED_CONTROL, IntentType.PEST_CONTROL)
+        if context and not query_analysis.entities.get('disease_name', '') and not _skip_disease_context:
             from app.utils.text_processing import diacritics_match as _dm_early
             from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_EARLY, get_canonical as _gc_early
             _orig_q = query_analysis.original_query
@@ -461,7 +463,8 @@ class ResponseGeneratorAgent:
 
         # Extract disease from conversation context (follow-up like "มีตัวอื่นไหม")
         # NOTE: context_disease already initialized earlier (before doc filter block)
-        if not context_disease and context and not disease_name and not original_disease_gen:
+        # Skip for WEED_CONTROL / PEST_CONTROL — disease from previous topic is irrelevant
+        if not context_disease and context and not disease_name and not original_disease_gen and not _skip_disease_context:
             for _pat in _DP_GEN:
                 if _dm_gen(context, _pat):
                     context_disease = _gc_gen(_pat)
