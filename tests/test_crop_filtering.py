@@ -619,6 +619,117 @@ class TestPestPreFilter:
 
 
 # ---------------------------------------------------------------------------
+# Test: Broad pest term skips pre-filter
+# ---------------------------------------------------------------------------
+
+class TestBroadPestTermSkipsFilter:
+    """Test that broad pest terms like 'แมลง' skip the pest pre-filter."""
+
+    @pytest.mark.asyncio
+    async def test_broad_pest_term_keeps_all_insecticides(self):
+        """For 'ยาฆ่าแมลงในนาข้าว' (pest_name='แมลง'), all insecticide products should pass."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำสินค้าค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            _make_disease_doc("ไฮซีส", "นาข้าว",
+                              insecticides="หนอนกอในนาข้าว, หนอนม้วนใบในนาข้าว",
+                              category="Insecticide"),
+            _make_disease_doc("เกรด 5 เอสซี", "นาข้าว",
+                              insecticides="เพลี้ยกระโดดสีน้ำตาลในนาข้าว",
+                              category="Insecticide"),
+            _make_disease_doc("อิมิดาโกลด์ 70", "นาข้าว",
+                              insecticides="เพลี้ยกระโดดสีน้ำตาลในนาข้าว, เพลี้ยไฟในนาข้าว",
+                              category="Insecticide"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="ยาฆ่าแมลงในนาข้าว",
+            intent=IntentType.PEST_CONTROL,
+            confidence=0.95,
+            entities={"plant_type": "ข้าว", "pest_name": "แมลง"},
+            expanded_queries=["ยาฆ่าแมลง นาข้าว"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=3, total_after_rerank=3,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # ALL insecticide products should appear (broad term skips filter)
+        assert "ไฮซีส" in all_content
+        assert "เกรด 5" in all_content
+        assert "อิมิดาโกลด์" in all_content
+
+    @pytest.mark.asyncio
+    async def test_specific_pest_still_filters(self):
+        """For specific pest 'เพลี้ยไก่แจ้', pre-filter should still work normally."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำสินค้าค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            _make_disease_doc("อิมิดาโกลด์ 70", "ทุเรียน",
+                              insecticides="เพลี้ยไก่แจ้ เพลี้ยแป้ง",
+                              category="Insecticide"),
+            _make_disease_doc("ชุด กล่องม่วง", "ทุเรียน",
+                              insecticides="เพลี้ยไฟ หนอนเจาะ",
+                              category="Insecticide"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="เพลี้ยไก่แจ้ในทุเรียน",
+            intent=IntentType.PEST_CONTROL,
+            confidence=0.95,
+            entities={"plant_type": "ทุเรียน", "pest_name": "เพลี้ยไก่แจ้"},
+            expanded_queries=["เพลี้ยไก่แจ้ ทุเรียน"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=2, total_after_rerank=2,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # อิมิดาโกลด์ has เพลี้ยไก่แจ้ → keep
+        assert "อิมิดาโกลด์" in all_content
+        # ชุด กล่องม่วง has เพลี้ยไฟ only → filtered out
+        assert "กล่องม่วง" not in all_content
+
+
+# ---------------------------------------------------------------------------
 # Test: Crop pre-filter exempts disease-matching docs
 # ---------------------------------------------------------------------------
 

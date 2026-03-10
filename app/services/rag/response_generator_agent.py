@@ -158,14 +158,24 @@ class ResponseGeneratorAgent:
                 # Check if pest query matched insecticide products via pest columns
                 has_pest_match = False
                 pest_name = query_analysis.entities.get('pest_name', '')
+                _BROAD_PEST_TERMS_OVERRIDE = {'แมลง', 'ศัตรูพืช', 'แมลงศัตรูพืช'}
                 if pest_name and has_documents and query_analysis.intent in (IntentType.PEST_CONTROL, IntentType.PRODUCT_RECOMMENDATION):
-                    for doc in retrieval_result.documents[:10]:
-                        _pest_text = _get_pest_text_from_meta(doc.metadata).lower()
-                        cat = str(doc.metadata.get('category') or '').lower()
-                        if pest_name.lower() in _pest_text and 'insecticide' in cat:
-                            has_pest_match = True
-                            logger.info(f"  - Pest override: '{pest_name}' found in {doc.title} pest columns")
-                            break
+                    if pest_name in _BROAD_PEST_TERMS_OVERRIDE:
+                        # Broad pest term — any Insecticide product counts as a match
+                        for doc in retrieval_result.documents[:10]:
+                            cat = str(doc.metadata.get('category') or '').lower()
+                            if 'insecticide' in cat:
+                                has_pest_match = True
+                                logger.info(f"  - Pest override (broad term): '{pest_name}' → Insecticide product '{doc.title}' found")
+                                break
+                    else:
+                        for doc in retrieval_result.documents[:10]:
+                            _pest_text = _get_pest_text_from_meta(doc.metadata).lower()
+                            cat = str(doc.metadata.get('category') or '').lower()
+                            if pest_name.lower() in _pest_text and 'insecticide' in cat:
+                                has_pest_match = True
+                                logger.info(f"  - Pest override: '{pest_name}' found in {doc.title} pest columns")
+                                break
 
                 # Check if weed query matched herbicide products
                 has_weed_match = False
@@ -405,17 +415,23 @@ class ResponseGeneratorAgent:
 
         elif _filter_pest and docs_to_use and query_analysis.intent.value in (
                 'pest_control', 'product_recommendation'):
-            _pest_filtered = [
-                d for d in docs_to_use
-                if _filter_pest.lower() in _get_pest_text_from_meta(d.metadata).lower()
-            ]
-            if _pest_filtered:
-                _removed = len(docs_to_use) - len(_pest_filtered)
-                if _removed > 0:
-                    docs_to_use = _pest_filtered
-                    logger.info(f"  - Pest pre-filter: kept {len(_pest_filtered)} matching, removed {_removed} non-matching for '{_filter_pest}'")
+            # Skip pre-filter for broad/generic pest terms — these are category-level,
+            # not specific pests. The intent→category mapping already ensures Insecticide products.
+            _BROAD_PEST_TERMS = {'แมลง', 'ศัตรูพืช', 'แมลงศัตรูพืช'}
+            if _filter_pest in _BROAD_PEST_TERMS:
+                logger.info(f"  - Pest pre-filter: SKIPPED for broad term '{_filter_pest}' (category filter sufficient)")
             else:
-                logger.info(f"  - Pest pre-filter: 0 docs match '{_filter_pest}' — keeping all")
+                _pest_filtered = [
+                    d for d in docs_to_use
+                    if _filter_pest.lower() in _get_pest_text_from_meta(d.metadata).lower()
+                ]
+                if _pest_filtered:
+                    _removed = len(docs_to_use) - len(_pest_filtered)
+                    if _removed > 0:
+                        docs_to_use = _pest_filtered
+                        logger.info(f"  - Pest pre-filter: kept {len(_pest_filtered)} matching, removed {_removed} non-matching for '{_filter_pest}'")
+                else:
+                    logger.info(f"  - Pest pre-filter: 0 docs match '{_filter_pest}' — keeping all")
 
         # Early extract: disease from conversation context for follow-up queries
         # (full extraction + assignment to disease_name happens later at line ~427)
