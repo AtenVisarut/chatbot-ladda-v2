@@ -107,7 +107,7 @@ class ResponseGeneratorAgent:
                 # Check if a specific product was asked about AND found in DB
                 has_product_in_query = (
                     bool(query_analysis.entities.get('product_name'))
-                    and query_analysis.entities.get('_product_from_query', True)
+                    and query_analysis.entities.get('_product_from_query', False)
                 )
                 has_documents = bool(retrieval_result.documents)
 
@@ -387,7 +387,7 @@ class ResponseGeneratorAgent:
                 f"ไม่ควรใช้ใน{plant_type_filter}",
             ]
             if plant_type_filter == "ข้าว":
-                _prohibit_pats.extend(["ห้ามใช้ในนาข้าว", "ห้ามใช้ในนาข้าว"])
+                _prohibit_pats.extend(["ห้ามใช้ในนาข้าว", "ห้ามใช้ในข้าว"])
 
             def _is_prohibited_for_crop(d):
                 _all = f"{d.metadata.get('applicable_crops', '')} {d.metadata.get('how_to_use', '')}"

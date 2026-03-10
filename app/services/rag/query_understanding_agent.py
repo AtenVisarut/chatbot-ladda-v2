@@ -255,7 +255,8 @@ required_sources:
             }
             if (intent in _recommendation_intents
                     and entities.get('product_name')
-                    and not hints.get('product_name')):
+                    and not hints.get('product_name')
+                    and not hints.get('product_names')):
                 logger.info(f"  - Remove hallucinated product: LLM added '{entities['product_name']}' but user didn't mention any product")
                 del entities['product_name']
 
@@ -378,7 +379,7 @@ required_sources:
             confidence = 0.9
 
         # Extract plant type
-        plants = ["ข้าว", "ทุเรียน", "มะม่วง", "ส้ม", "พริก", "ข้าวโพด", "อ้อย", "ลำไย"]
+        plants = sorted(["ข้าว", "ทุเรียน", "มะม่วง", "ส้ม", "พริก", "ข้าวโพด", "อ้อย", "ลำไย", "ข้าวฟ่าง"], key=len, reverse=True)
         for plant in plants:
             if plant in query_lower:
                 entities["plant_type"] = plant

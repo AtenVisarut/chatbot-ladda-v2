@@ -1165,7 +1165,7 @@ class RetrievalAgent:
             existing_ids = {d.id for d in existing_docs}
             docs = []
             for item in result.data:
-                if item['id'] in existing_ids:
+                if str(item['id']) in existing_ids:
                     continue
                 # If plant_type specified, filter by crop match
                 if plant_type:
