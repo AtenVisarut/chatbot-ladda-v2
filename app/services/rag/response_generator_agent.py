@@ -406,6 +406,23 @@ class ResponseGeneratorAgent:
                     logger.info(f"  - Crop pre-filter: kept {len(_crop_matched)} docs (incl disease/pest exempt), removed {_removed_count} mismatched for '{plant_type_filter}'")
 
         # =====================================================================
+        # Category pre-filter for NUTRIENT_SUPPLEMENT: keep only Biostimulant/PGR
+        # Prevents recommending Fungicide/Insecticide for "บำรุง" queries
+        # =====================================================================
+        if query_analysis.intent == IntentType.NUTRIENT_SUPPLEMENT and docs_to_use and not _product_from_query:
+            _NUTRIENT_CATS = {'biostimulants', 'pgr', 'fertilizer'}
+            _nutrient_docs = [
+                d for d in docs_to_use
+                if any(nc in str(d.metadata.get('category') or d.metadata.get('product_category') or '').lower()
+                       for nc in _NUTRIENT_CATS)
+            ]
+            if _nutrient_docs:
+                _removed_cat = len(docs_to_use) - len(_nutrient_docs)
+                if _removed_cat > 0:
+                    docs_to_use = _nutrient_docs
+                    logger.info(f"  - Nutrient category pre-filter: kept {len(_nutrient_docs)}, removed {_removed_cat} non-nutrient docs")
+
+        # =====================================================================
         # Disease/Pest pre-filter: keep only docs whose pest columns match
         # the queried disease/pest. Prevents recommending generic products
         # that don't specifically target the user's problem.

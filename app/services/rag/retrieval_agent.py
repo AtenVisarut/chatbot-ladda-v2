@@ -133,8 +133,7 @@ class RetrievalAgent:
     """
 
     # Category-Intent mapping (single source, used in _search_products + retrieve stages)
-    # NOTE: NUTRIENT_SUPPLEMENT has no single category — covers Biostimulants, PGR, Fertilizer
-    # Use None so supplementary search doesn't filter by category (catches all relevant products)
+    # NOTE: NUTRIENT_SUPPLEMENT covers Biostimulants + PGR (multi-category)
     INTENT_CATEGORY_MAP = {
         IntentType.DISEASE_TREATMENT: "Fungicide",
         IntentType.PEST_CONTROL: "Insecticide",
@@ -146,6 +145,7 @@ class RetrievalAgent:
         IntentType.DISEASE_TREATMENT: ["Fungicide", "fungicide", "ป้องกันโรค"],
         IntentType.PEST_CONTROL: ["Insecticide", "insecticide", "กำจัดแมลง"],
         IntentType.WEED_CONTROL: ["Herbicide", "herbicide", "กำจัดวัชพืช"],
+        IntentType.NUTRIENT_SUPPLEMENT: ["Biostimulants", "biostimulants", "PGR", "pgr", "บำรุง", "ฮอร์โมน"],
     }
 
     def __init__(
