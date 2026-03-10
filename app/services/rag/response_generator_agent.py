@@ -339,17 +339,84 @@ class ResponseGeneratorAgent:
         # Pre-filter: when plant_type is known, remove crop-mismatched docs before LLM
         # to prevent LLM from being overwhelmed by "ห้ามแนะนำ" warnings (9/10 mismatch → "ไม่มีข้อมูล")
         # Skip when user asks about a specific product (e.g. "โม-เซ่ ใช้กับทุเรียนได้ไหม")
+        # IMPORTANT: Exempt disease/pest-matching docs — they must stay even if crop doesn't match
         _product_from_query = query_analysis.entities.get('_product_from_query', False)
         if plant_type_filter and docs_to_use and not _product_from_query:
+            # Build disease/pest check for exemption (prevent ราสีชมพู bug: crop filter kills disease doc)
+            _ex_disease = query_analysis.entities.get('disease_name', '')
+            _ex_possible = query_analysis.entities.get('possible_diseases', [])
+            _ex_pest = query_analysis.entities.get('pest_name', '')
+
+            def _exempt_from_crop_filter(d):
+                """Keep doc if its pest columns match queried disease/pest."""
+                _pt = _get_pest_text_from_meta(d.metadata)
+                if _ex_disease and _any_disease_variant_matches(
+                        generate_thai_disease_variants(_ex_disease), _pt):
+                    return True
+                for _pd in _ex_possible:
+                    if _any_disease_variant_matches(
+                            generate_thai_disease_variants(_pd), _pt):
+                        return True
+                if _ex_pest and _ex_pest.lower() in _pt.lower():
+                    return True
+                return False
+
             _crop_matched = [
                 d for d in docs_to_use
                 if _plant_matches_crops(plant_type_filter, str(d.metadata.get('applicable_crops') or ''))
+                or _exempt_from_crop_filter(d)
             ]
             if _crop_matched:
                 _removed_count = len(docs_to_use) - len(_crop_matched)
                 if _removed_count > 0:
                     docs_to_use = _crop_matched
-                    logger.info(f"  - Crop pre-filter: kept {len(_crop_matched)} crop-matching docs, removed {_removed_count} mismatched for '{plant_type_filter}'")
+                    logger.info(f"  - Crop pre-filter: kept {len(_crop_matched)} docs (incl disease/pest exempt), removed {_removed_count} mismatched for '{plant_type_filter}'")
+
+        # =====================================================================
+        # Disease/Pest pre-filter: keep only docs whose pest columns match
+        # the queried disease/pest. Prevents recommending generic products
+        # that don't specifically target the user's problem.
+        # e.g. "ใบจุดสีน้ำตาล" → remove products for "ใบจุดสนิม"
+        # e.g. "เพลี้ยแป้ง" → remove products for "เพลี้ยไฟ"
+        # =====================================================================
+        _filter_disease = query_analysis.entities.get('disease_name', '')
+        _filter_pest = query_analysis.entities.get('pest_name', '')
+
+        if _filter_disease and docs_to_use and query_analysis.intent.value in (
+                'disease_treatment', 'product_recommendation'):
+            _check_diseases = [_filter_disease] + [
+                pd for pd in query_analysis.entities.get('possible_diseases', [])
+                if pd != _filter_disease
+            ]
+            _disease_filtered = []
+            for d in docs_to_use:
+                _pt = _get_pest_text_from_meta(d.metadata)
+                for _cd in _check_diseases:
+                    if _any_disease_variant_matches(
+                            generate_thai_disease_variants(_cd), _pt):
+                        _disease_filtered.append(d)
+                        break
+            if _disease_filtered:
+                _removed = len(docs_to_use) - len(_disease_filtered)
+                if _removed > 0:
+                    docs_to_use = _disease_filtered
+                    logger.info(f"  - Disease pre-filter: kept {len(_disease_filtered)} matching, removed {_removed} non-matching for '{_filter_disease}'")
+            else:
+                logger.info(f"  - Disease pre-filter: 0 docs match '{_filter_disease}' — keeping all (mismatch check will handle)")
+
+        elif _filter_pest and docs_to_use and query_analysis.intent.value in (
+                'pest_control', 'product_recommendation'):
+            _pest_filtered = [
+                d for d in docs_to_use
+                if _filter_pest.lower() in _get_pest_text_from_meta(d.metadata).lower()
+            ]
+            if _pest_filtered:
+                _removed = len(docs_to_use) - len(_pest_filtered)
+                if _removed > 0:
+                    docs_to_use = _pest_filtered
+                    logger.info(f"  - Pest pre-filter: kept {len(_pest_filtered)} matching, removed {_removed} non-matching for '{_filter_pest}'")
+            else:
+                logger.info(f"  - Pest pre-filter: 0 docs match '{_filter_pest}' — keeping all")
 
         # Early extract: disease from conversation context for follow-up queries
         # (full extraction + assignment to disease_name happens later at line ~427)

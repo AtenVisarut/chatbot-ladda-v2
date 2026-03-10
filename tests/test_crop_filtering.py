@@ -411,3 +411,266 @@ class TestBroaderCategoryMatching:
         # response_generator_agent imports _plant_matches_crops from retrieval_agent
         # so same function is used — should match via broader category → no warning
         assert _plant_matches_crops(plant_type, crops_str) is True
+
+
+# ---------------------------------------------------------------------------
+# Helpers for disease/pest pre-filter tests
+# ---------------------------------------------------------------------------
+
+def _make_disease_doc(name, crops, fungicides="", insecticides="", category="Fungicide",
+                      strategy="Skyrocket", similarity=0.50, rerank=0.70):
+    """Create a doc with pest column data for disease/pest filter tests."""
+    return RetrievedDocument(
+        id=f"id-{name}",
+        title=name,
+        content=f"{name} product",
+        source="products",
+        similarity_score=similarity,
+        rerank_score=rerank,
+        metadata={
+            "product_name": name,
+            "active_ingredient": "test-ingredient",
+            "category": category,
+            "applicable_crops": crops,
+            "fungicides": fungicides,
+            "insecticides": insecticides,
+            "herbicides": "",
+            "biostimulant": "",
+            "pgr_hormones": "",
+            "how_to_use": "",
+            "usage_rate": "100 มล./ไร่",
+            "strategy": strategy,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test: Disease pre-filter (new)
+# ---------------------------------------------------------------------------
+
+class TestDiseasePreFilter:
+    """Test that response generator filters out products not targeting the queried disease."""
+
+    @pytest.mark.asyncio
+    async def test_disease_filter_removes_non_matching(self):
+        """For 'ใบจุดสีน้ำตาล', products for 'ใบจุดสนิม' should be filtered out."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำรีโนเวทค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            _make_disease_doc("รีโนเวท", "นาข้าว", fungicides="โรคใบจุดสีน้ำตาล, โรคไหม้"),
+            _make_disease_doc("ไซม๊อกซิเมท", "นาข้าว, ทุเรียน", fungicides="โรคเชื้อราทั่วไป ใบจุดสนิม"),
+            _make_disease_doc("ก๊อปกัน", "นาข้าว", fungicides="โรคเชื้อรา ใบจุดสนิม"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="ใบจุดสีน้ำตาลในนาข้าวใช้ยาอะไร",
+            intent=IntentType.DISEASE_TREATMENT,
+            confidence=0.95,
+            entities={"plant_type": "ข้าว", "disease_name": "ใบจุดสีน้ำตาล"},
+            expanded_queries=["ใบจุดสีน้ำตาล นาข้าว"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=3, total_after_rerank=3,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        # Check that only disease-matching product (รีโนเวท) appears in LLM context
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        assert "รีโนเวท" in all_content
+        # ไซม๊อกซิเมท and ก๊อปกัน should be filtered out (ใบจุดสนิม ≠ ใบจุดสีน้ำตาล)
+        assert "ไซม๊อกซิเมท" not in all_content
+        assert "ก๊อปกัน" not in all_content
+
+    @pytest.mark.asyncio
+    async def test_disease_filter_keeps_possible_diseases(self):
+        """For 'รากเน่า' with possible_diseases, keep products matching pathogens."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำไซม๊อกซิเมทค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            _make_disease_doc("ไซม๊อกซิเมท", "ทุเรียน",
+                              fungicides="ไฟทอปธอร่า, โรครากเน่าโคนเน่า"),
+            _make_disease_doc("คาริสมา", "ทุเรียน",
+                              fungicides="ฟิวซาเรียม, ราสนิม"),
+            _make_disease_doc("วอร์แรนต์", "ทุเรียน",
+                              fungicides="โรคเชื้อราทั่วไป ราสนิม"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="รากเน่า",
+            intent=IntentType.DISEASE_TREATMENT,
+            confidence=0.95,
+            entities={
+                "disease_name": "รากเน่า",
+                "possible_diseases": ["ไฟทอปธอร่า", "ฟิวซาเรียม", "พิเทียม"],
+            },
+            expanded_queries=["รากเน่า", "ไฟทอปธอร่า"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=3, total_after_rerank=3,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # ไซม๊อกซิเมท matches "ไฟทอปธอร่า" (possible_disease) → keep
+        assert "ไซม๊อกซิเมท" in all_content
+        # คาริสมา matches "ฟิวซาเรียม" (possible_disease) → keep
+        assert "คาริสมา" in all_content
+        # วอร์แรนต์ doesn't match any disease → should be filtered
+        assert "วอร์แรนต์" not in all_content
+
+
+# ---------------------------------------------------------------------------
+# Test: Pest pre-filter (new)
+# ---------------------------------------------------------------------------
+
+class TestPestPreFilter:
+    """Test that response generator filters out products not targeting the queried pest."""
+
+    @pytest.mark.asyncio
+    async def test_pest_filter_removes_non_matching(self):
+        """For 'เพลี้ยแป้ง', products for 'เพลี้ยไฟ' should be filtered out."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำอิมิดาโกลด์ค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            _make_disease_doc("อิมิดาโกลด์ 70", "ทุเรียน",
+                              insecticides="เพลี้ยไฟ เพลี้ยแป้ง เพลี้ยไก่แจ้",
+                              category="Insecticide"),
+            _make_disease_doc("ชุด กล่องม่วง", "ทุเรียน",
+                              insecticides="เพลี้ยไฟ หนอนเจาะ",
+                              category="Insecticide"),
+            _make_disease_doc("เกรด 5 เอสซี", "ทุเรียน",
+                              insecticides="แมลงค่อมทอง ดวงกัดใบ",
+                              category="Insecticide"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="เพลี้ยแป้งในทุเรียนใช้ยาอะไร",
+            intent=IntentType.PEST_CONTROL,
+            confidence=0.95,
+            entities={"plant_type": "ทุเรียน", "pest_name": "เพลี้ยแป้ง"},
+            expanded_queries=["เพลี้ยแป้ง ทุเรียน"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=3, total_after_rerank=3,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # อิมิดาโกลด์ has เพลี้ยแป้ง → keep
+        assert "อิมิดาโกลด์" in all_content
+        # ชุด กล่องม่วง has เพลี้ยไฟ only → filtered out
+        assert "กล่องม่วง" not in all_content
+        # เกรด 5 has แมลงค่อมทอง → filtered out
+        assert "เกรด 5" not in all_content
+
+
+# ---------------------------------------------------------------------------
+# Test: Crop pre-filter exempts disease-matching docs
+# ---------------------------------------------------------------------------
+
+class TestCropFilterDiseaseExemption:
+    """Test that crop pre-filter preserves disease-matching docs (ราสีชมพู bug fix)."""
+
+    @pytest.mark.asyncio
+    async def test_crop_filter_keeps_disease_matching_doc(self):
+        """Disease-matching doc should survive crop pre-filter even if crops don't match."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำสินค้าค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            # This product matches crop (ทุเรียน) but NOT disease
+            _make_disease_doc("คาริสมา", "ทุเรียน, มันฝรั่ง",
+                              fungicides="ราสนิม, ใบจุด"),
+            # This product matches disease (ราสีชมพู) but NOT crop
+            _make_disease_doc("ซัลเฟอร์โปร", "มะม่วง, มะพร้าว",
+                              fungicides="ราสีชมพู, ราแป้ง"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="ราสีชมพูในทุเรียนใช้ยาอะไร",
+            intent=IntentType.DISEASE_TREATMENT,
+            confidence=0.95,
+            entities={"plant_type": "ทุเรียน", "disease_name": "ราสีชมพู"},
+            expanded_queries=["ราสีชมพู ทุเรียน"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=2, total_after_rerank=2,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # ซัลเฟอร์โปร should survive crop filter (disease exempt) AND pass disease filter
+        assert "ซัลเฟอร์โปร" in all_content
+        # คาริสมา should be removed by disease pre-filter (doesn't target ราสีชมพู)
+        assert "คาริสมา" not in all_content
