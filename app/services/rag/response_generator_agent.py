@@ -384,10 +384,9 @@ class ResponseGeneratorAgent:
 
         if _filter_disease and docs_to_use and query_analysis.intent.value in (
                 'disease_treatment', 'product_recommendation'):
-            _check_diseases = [_filter_disease] + [
-                pd for pd in query_analysis.entities.get('possible_diseases', [])
-                if pd != _filter_disease
-            ]
+            # Only filter by the EXACT disease user asked about, NOT possible_diseases
+            # (possible_diseases are broad pathogens like แอนแทรคโนส that most fungicides match)
+            _check_diseases = [_filter_disease]
             _disease_filtered = []
             for d in docs_to_use:
                 _pt = _get_pest_text_from_meta(d.metadata)

@@ -547,11 +547,11 @@ class TestDiseasePreFilter:
         messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
         all_content = " ".join(m.get("content", "") for m in messages)
 
-        # ไซม๊อกซิเมท matches "ไฟทอปธอร่า" (possible_disease) → keep
+        # ไซม๊อกซิเมท has "โรครากเน่าโคนเน่า" matching "รากเน่า" → keep
         assert "ไซม๊อกซิเมท" in all_content
-        # คาริสมา matches "ฟิวซาเรียม" (possible_disease) → keep
-        assert "คาริสมา" in all_content
-        # วอร์แรนต์ doesn't match any disease → should be filtered
+        # คาริสมา has "ฟิวซาเรียม" which is only a possible_disease pathogen, NOT the queried disease → filter
+        assert "คาริสมา" not in all_content
+        # วอร์แรนต์ doesn't match queried disease → filter
         assert "วอร์แรนต์" not in all_content
 
 
