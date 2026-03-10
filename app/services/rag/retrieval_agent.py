@@ -448,6 +448,67 @@ class RetrievalAgent:
             logger.error(f"Weed category fallback search error: {e}")
             return []
 
+    async def _pest_column_fallback_search(
+        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 10
+    ) -> List[RetrievedDocument]:
+        """Search Insecticide products by pest_name in insecticides column.
+
+        Triggered when PEST_CONTROL query has a specific pest_name but
+        none of the retrieved docs mention it in their insecticides text.
+        This catches products that vector search missed.
+        """
+        if not self.supabase:
+            return []
+
+        pest_name = query_analysis.entities.get('pest_name', '')
+        if not pest_name:
+            return []
+
+        # Skip broad terms — they match everything, no targeted fallback needed
+        _BROAD = {'แมลง', 'ศัตรูพืช', 'แมลงศัตรูพืช'}
+        if pest_name in _BROAD:
+            return []
+
+        try:
+            from app.utils.pest_columns import build_pest_or_conditions
+            or_conditions = build_pest_or_conditions(pest_name)
+            if not or_conditions:
+                return []
+            or_filter = ",".join(or_conditions)
+
+            existing_ids = {d.id for d in existing_docs}
+
+            result = self.supabase.table('products2') \
+                .select('*') \
+                .ilike('product_category', '%Insecticide%') \
+                .or_(or_filter) \
+                .limit(top_k) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            docs = []
+            for item in result.data:
+                doc_id = str(item.get('id', ''))
+                if doc_id in existing_ids:
+                    continue
+                # Verify pest_name actually appears in insecticides text
+                ins_text = (item.get('insecticides') or '').lower()
+                if pest_name.lower() not in ins_text:
+                    continue
+                selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
+                doc = self._build_doc_from_row(item, similarity=0.55, content_extra=selling_extra)
+                docs.append(doc)
+
+            if docs:
+                logger.info(f"    Pest column fallback: {len(docs)} Insecticide docs matching '{pest_name}'")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Pest column fallback search error: {e}")
+            return []
+
     async def _enrich_strategy(self, docs: List[RetrievedDocument]):
         """Fetch strategy, selling_point, applicable_crops from DB for docs missing them (e.g. from RPC)"""
         if not self.supabase:
@@ -513,6 +574,7 @@ class RetrievalAgent:
             all_docs = []
             direct_lookup_ids = set()
             symptom_fallback_ids = set()
+            pest_fallback_ids = set()
             product_name = query_analysis.entities.get('product_name')
             # Support multi-product queries (e.g. "แกนเตอร์กับแมสฟอดใช้ต่างกันยังไง")
             product_names_list = query_analysis.entities.get('product_names', [])
@@ -624,6 +686,22 @@ class RetrievalAgent:
                     all_docs.extend(weed_docs)
                     logger.info(f"  - Weed category fallback added: {len(weed_docs)} docs")
 
+            # Stage 1.96: Pest column fallback — search insecticides column for specific pest_name
+            # Triggered when vector search missed products that DO target the queried pest
+            pest_name = query_analysis.entities.get('pest_name', '')
+            if pest_name and query_analysis.intent in (IntentType.PEST_CONTROL, IntentType.PRODUCT_RECOMMENDATION):
+                # Check if ANY retrieved doc mentions pest_name in insecticides
+                _has_pest_in_docs = any(
+                    pest_name.lower() in (d.metadata.get('insecticides') or '').lower()
+                    for d in all_docs
+                )
+                if not _has_pest_in_docs:
+                    pest_fallback_docs = await self._pest_column_fallback_search(query_analysis, all_docs)
+                    if pest_fallback_docs:
+                        pest_fallback_ids = {d.id for d in pest_fallback_docs}
+                        all_docs.extend(pest_fallback_docs)
+                        logger.info(f"  - Pest column fallback added: {len(pest_fallback_docs)} docs for '{pest_name}'")
+
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")
 
@@ -683,6 +761,14 @@ class RetrievalAgent:
                 reranked_docs = boosted + others
                 if boosted:
                     logger.info(f"  - Boosted {len(boosted)} symptom fallback docs to top")
+
+            # Stage 3.54: Boost pest column fallback docs (matched pest_name in insecticides column)
+            if pest_fallback_ids:
+                boosted = [doc for doc in reranked_docs if doc.id in pest_fallback_ids]
+                others = [doc for doc in reranked_docs if doc.id not in pest_fallback_ids]
+                reranked_docs = boosted + others
+                if boosted:
+                    logger.info(f"  - Boosted {len(boosted)} pest fallback docs to top")
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
@@ -852,6 +938,7 @@ class RetrievalAgent:
                 or doc.id in direct_lookup_ids
                 or doc.id in disease_fallback_ids
                 or doc.id in symptom_fallback_ids
+                or doc.id in pest_fallback_ids
             ]
 
             # Ensure we have at least some results
