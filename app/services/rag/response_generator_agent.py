@@ -371,10 +371,23 @@ class ResponseGeneratorAgent:
                     return True
                 return False
 
+            # Prohibition patterns — products explicitly banned for this crop
+            _prohibit_pats = [
+                f"ห้ามใช้ใน{plant_type_filter}", f"ห้ามใช้กับ{plant_type_filter}",
+                f"ไม่ควรใช้ใน{plant_type_filter}",
+            ]
+            if plant_type_filter == "ข้าว":
+                _prohibit_pats.extend(["ห้ามใช้ในนาข้าว", "ห้ามใช้ในนาข้าว"])
+
+            def _is_prohibited_for_crop(d):
+                _all = f"{d.metadata.get('applicable_crops', '')} {d.metadata.get('how_to_use', '')}"
+                return any(p in _all for p in _prohibit_pats)
+
             _crop_matched = [
                 d for d in docs_to_use
-                if _plant_matches_crops(plant_type_filter, str(d.metadata.get('applicable_crops') or ''))
-                or _exempt_from_crop_filter(d)
+                if (not _is_prohibited_for_crop(d))
+                and (_plant_matches_crops(plant_type_filter, str(d.metadata.get('applicable_crops') or ''))
+                     or _exempt_from_crop_filter(d))
             ]
             if _crop_matched:
                 _removed_count = len(docs_to_use) - len(_crop_matched)

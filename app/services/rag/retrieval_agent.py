@@ -81,9 +81,44 @@ _PLANT_BROADER_CATEGORIES = {
 }
 
 
+# Thai substring disambiguation: prevent "ข้าว" matching "ข้าวโพด", etc.
+# Map: short plant name → list of longer plant names that contain it as prefix
+_PLANT_FALSE_POSITIVES = {
+    'ข้าว': ['ข้าวโพด', 'ข้าวฟ่าง'],
+    'ส้ม': ['ส้มโอ'],  # ส้ม ≠ ส้มโอ (different crops)
+}
+
+
+def _plant_in_text_boundary(plant_type: str, text: str) -> bool:
+    """Check if plant_type appears in text without being part of a longer word.
+
+    e.g. 'ข้าว' should match 'นาข้าว' and 'ข้าว, อ้อย' but NOT 'ข้าวโพด'.
+    """
+    if plant_type not in text:
+        return False
+    false_positives = _PLANT_FALSE_POSITIVES.get(plant_type, [])
+    if not false_positives:
+        return True
+    # Check every occurrence of plant_type in text
+    start = 0
+    while True:
+        idx = text.find(plant_type, start)
+        if idx == -1:
+            return False  # no more occurrences
+        # Check if this occurrence is part of a false positive
+        remainder = text[idx:]
+        is_false_positive = any(remainder.startswith(fp) for fp in false_positives)
+        if not is_false_positive:
+            return True  # genuine match found
+        start = idx + len(plant_type)
+
+
 def _plant_matches_crops(plant_type: str, crops_str: str) -> bool:
-    """Check if plant_type matches crops string (direct or via broader category)."""
-    if plant_type in crops_str:
+    """Check if plant_type matches crops string (direct or via broader category).
+
+    Uses boundary-aware matching to avoid false positives like ข้าว→ข้าวโพด.
+    """
+    if _plant_in_text_boundary(plant_type, crops_str):
         return True
     for cat in _PLANT_BROADER_CATEGORIES.get(plant_type, []):
         if cat in crops_str:
