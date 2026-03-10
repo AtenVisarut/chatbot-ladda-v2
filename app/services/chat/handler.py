@@ -1301,7 +1301,7 @@ _FOLLOWUP_MARKERS = [
     "ตัวเดิม", "ที่บอก", "ที่แนะนำ", "สินค้าด้านบน",
 ]
 
-RESPONSE_CACHE_TTL = 3600  # 1 hour
+RESPONSE_CACHE_TTL = 1800  # 30 min (was 1h — shorter to pick up DB changes faster)
 
 
 def _is_cacheable_message(message: str) -> bool:
