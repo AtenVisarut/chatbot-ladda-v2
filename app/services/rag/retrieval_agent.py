@@ -620,26 +620,41 @@ class RetrievalAgent:
                     logger.info(f"  - Disease split: added {_split_names} from combined names")
 
                 if disease_names_to_check:
-                    # Build combined variants from all disease names
-                    all_variants = []
-                    for d in disease_names_to_check:
-                        all_variants.extend(generate_thai_disease_variants(d))
-                    all_variants = list(set(all_variants))
+                    # Broad disease terms — search by category instead of literal text
+                    _BROAD_DISEASE_TERMS = {'เชื้อรา', 'โรคเชื้อรา', 'โรคพืช', 'โรคราพืช'}
+                    _is_broad_disease = any(d in _BROAD_DISEASE_TERMS for d in disease_names_to_check)
 
-                    # Check if any existing doc already matches
-                    from app.utils.pest_columns import get_pest_text_lower
-                    has_disease_in_docs = any(
-                        any(v.lower() in get_pest_text_lower(doc.metadata) for v in all_variants)
-                        for doc in all_docs
-                    ) if all_docs else False
-
-                    if not has_disease_in_docs:
-                        logger.info(f"  - Disease fallback: {disease_names_to_check} not in retrieved docs, searching pest columns")
-                        fallback_docs = await self._search_by_target_pest(all_variants, query_analysis)
+                    if _is_broad_disease:
+                        # Broad disease: search Fungicide category + crop filter
+                        plant_type = query_analysis.entities.get('plant_type', '')
+                        logger.info(f"  - Disease fallback: broad term {disease_names_to_check}, searching Fungicide category" +
+                                    (f" for crop '{plant_type}'" if plant_type else ""))
+                        fallback_docs = await self._broad_disease_category_search(plant_type, all_docs)
                         if fallback_docs:
                             disease_fallback_ids = {doc.id for doc in fallback_docs}
                             all_docs.extend(fallback_docs)
-                            logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via pest columns")
+                            logger.info(f"  - Broad disease fallback found: {len(fallback_docs)} Fungicide products")
+                    else:
+                        # Build combined variants from all disease names
+                        all_variants = []
+                        for d in disease_names_to_check:
+                            all_variants.extend(generate_thai_disease_variants(d))
+                        all_variants = list(set(all_variants))
+
+                        # Check if any existing doc already matches
+                        from app.utils.pest_columns import get_pest_text_lower
+                        has_disease_in_docs = any(
+                            any(v.lower() in get_pest_text_lower(doc.metadata) for v in all_variants)
+                            for doc in all_docs
+                        ) if all_docs else False
+
+                        if not has_disease_in_docs:
+                            logger.info(f"  - Disease fallback: {disease_names_to_check} not in retrieved docs, searching pest columns")
+                            fallback_docs = await self._search_by_target_pest(all_variants, query_analysis)
+                            if fallback_docs:
+                                disease_fallback_ids = {doc.id for doc in fallback_docs}
+                                all_docs.extend(fallback_docs)
+                                logger.info(f"  - Disease fallback found: {len(fallback_docs)} products via pest columns")
 
             # Stage 1.3: Symptom-based pest columns fallback
             # Matches symptom phrases (ไม่โต, ไม่กินปุ๋ย, เหลือง, etc.) against DB pest columns
@@ -1128,6 +1143,42 @@ class RetrievalAgent:
             return []
         except Exception as e:
             logger.error(f"Pest columns fallback search error: {e}")
+            return []
+
+    async def _broad_disease_category_search(
+        self, plant_type: str, existing_docs: List[RetrievedDocument], top_k: int = 15
+    ) -> List[RetrievedDocument]:
+        """Fallback for broad disease terms like 'เชื้อรา': search all Fungicide products,
+        then filter by crop if plant_type is specified."""
+        if not self.supabase:
+            return []
+        try:
+            result = self.supabase.table('products2') \
+                .select('*') \
+                .ilike('product_category', '%Fungicide%') \
+                .limit(top_k) \
+                .execute()
+
+            if not result.data:
+                return []
+
+            existing_ids = {d.id for d in existing_docs}
+            docs = []
+            for item in result.data:
+                if item['id'] in existing_ids:
+                    continue
+                # If plant_type specified, filter by crop match
+                if plant_type:
+                    crops = item.get('applicable_crops', '') or ''
+                    fungi = item.get('fungicides', '') or ''
+                    combined = f"{crops} {fungi}"
+                    if not _plant_matches_crops(plant_type, combined):
+                        continue
+                docs.append(self._build_doc_from_row(item, similarity=0.50))
+
+            return docs
+        except Exception as e:
+            logger.error(f"Broad disease category search error: {e}")
             return []
 
     async def _search_by_symptom_keywords(

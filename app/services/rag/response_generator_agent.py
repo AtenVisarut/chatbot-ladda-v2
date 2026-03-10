@@ -114,7 +114,17 @@ class ResponseGeneratorAgent:
                 # Check if disease query matched via pest columns (fallback products)
                 has_disease_match = False
                 disease_name = query_analysis.entities.get('disease_name', '')
-                if disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                _BROAD_DISEASE_TERMS_OVERRIDE = {'เชื้อรา', 'โรคเชื้อรา', 'โรคพืช', 'โรคราพืช'}
+                # Broad disease terms: match if any Fungicide doc exists
+                if disease_name in _BROAD_DISEASE_TERMS_OVERRIDE and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+                    for doc in retrieval_result.documents[:10]:
+                        cat = str(doc.metadata.get('category') or doc.metadata.get('product_category') or '').lower()
+                        if 'fungicide' in cat:
+                            has_disease_match = True
+                            logger.info(f"  - Disease override: broad term '{disease_name}' matched Fungicide doc {doc.title}")
+                            break
+
+                if not has_disease_match and disease_name and has_documents and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                     disease_variants = generate_thai_disease_variants(disease_name)
                     for doc in retrieval_result.documents[:10]:
                         _pest_text = _get_pest_text_from_meta(doc.metadata)
@@ -405,26 +415,32 @@ class ResponseGeneratorAgent:
         _filter_disease = query_analysis.entities.get('disease_name', '')
         _filter_pest = query_analysis.entities.get('pest_name', '')
 
+        # Broad disease terms — skip pre-filter (category + crop filter is sufficient)
+        _BROAD_DISEASE_TERMS = {'เชื้อรา', 'โรคเชื้อรา', 'โรคพืช', 'โรคราพืช'}
+
         if _filter_disease and docs_to_use and query_analysis.intent.value in (
                 'disease_treatment', 'product_recommendation'):
-            # Only filter by the EXACT disease user asked about, NOT possible_diseases
-            # (possible_diseases are broad pathogens like แอนแทรคโนส that most fungicides match)
-            _check_diseases = [_filter_disease]
-            _disease_filtered = []
-            for d in docs_to_use:
-                _pt = _get_pest_text_from_meta(d.metadata)
-                for _cd in _check_diseases:
-                    if _any_disease_variant_matches(
-                            generate_thai_disease_variants(_cd), _pt):
-                        _disease_filtered.append(d)
-                        break
-            if _disease_filtered:
-                _removed = len(docs_to_use) - len(_disease_filtered)
-                if _removed > 0:
-                    docs_to_use = _disease_filtered
-                    logger.info(f"  - Disease pre-filter: kept {len(_disease_filtered)} matching, removed {_removed} non-matching for '{_filter_disease}'")
+            if _filter_disease in _BROAD_DISEASE_TERMS:
+                logger.info(f"  - Disease pre-filter: SKIPPED for broad term '{_filter_disease}' (category filter sufficient)")
             else:
-                logger.info(f"  - Disease pre-filter: 0 docs match '{_filter_disease}' — keeping all (mismatch check will handle)")
+                # Only filter by the EXACT disease user asked about, NOT possible_diseases
+                # (possible_diseases are broad pathogens like แอนแทรคโนส that most fungicides match)
+                _check_diseases = [_filter_disease]
+                _disease_filtered = []
+                for d in docs_to_use:
+                    _pt = _get_pest_text_from_meta(d.metadata)
+                    for _cd in _check_diseases:
+                        if _any_disease_variant_matches(
+                                generate_thai_disease_variants(_cd), _pt):
+                            _disease_filtered.append(d)
+                            break
+                if _disease_filtered:
+                    _removed = len(docs_to_use) - len(_disease_filtered)
+                    if _removed > 0:
+                        docs_to_use = _disease_filtered
+                        logger.info(f"  - Disease pre-filter: kept {len(_disease_filtered)} matching, removed {_removed} non-matching for '{_filter_disease}'")
+                else:
+                    logger.info(f"  - Disease pre-filter: 0 docs match '{_filter_disease}' — keeping all (mismatch check will handle)")
 
         elif _filter_pest and docs_to_use and query_analysis.intent.value in (
                 'pest_control', 'product_recommendation'):

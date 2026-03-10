@@ -233,6 +233,15 @@ class AgenticRAG:
                         logger.info(f"  - Pre-extracted disease: '{pattern}' variants={hints['disease_variants']}")
                         break
 
+                # --- Broad disease term detection (e.g. "เชื้อรา" = generic fungal disease) ---
+                if not hints.get('disease_name') and hints.get('problem_type') == 'disease':
+                    _BROAD_DISEASE_KW = {'เชื้อรา': 'เชื้อรา', 'โรคเชื้อรา': 'เชื้อรา', 'โรคราพืช': 'เชื้อรา'}
+                    for kw, canonical in _BROAD_DISEASE_KW.items():
+                        if kw in query:
+                            hints['disease_name'] = canonical
+                            logger.info(f"  - Pre-extracted broad disease: '{canonical}'")
+                            break
+
                 # --- Pre-LLM Entity Extraction: Plant type ---
                 detected_plant = extract_plant_type_from_question(query)
                 if detected_plant:
