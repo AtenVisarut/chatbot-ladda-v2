@@ -17,7 +17,7 @@ from slowapi.util import get_remote_address
 
 from app.dependencies import supabase_client, handoff_manager
 from app.services.memory import add_to_memory
-from app.services.user_service import refresh_display_name
+from app.services.user_service import refresh_display_name, get_facebook_profile
 from app.utils.line.helpers import push_line
 from app.utils.facebook.helpers import send_facebook_message, split_message
 
@@ -298,6 +298,23 @@ async def send_admin_message(
 # ============================================================================
 
 
+@router.post("/api/admin/conversations/{user_id:path}/refresh-name")
+@limiter.limit("10/minute")
+async def refresh_user_name(request: Request, user_id: str):
+    """Admin กด refresh display name (re-fetch จาก LINE/FB API)"""
+    _require_auth(request)
+
+    try:
+        new_name = await refresh_display_name(user_id)
+        if new_name:
+            return {"status": "ok", "display_name": new_name}
+        else:
+            return {"status": "failed", "detail": "Could not fetch profile — check logs"}
+    except Exception as e:
+        logger.error(f"Manual refresh failed for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/api/admin/handoffs")
 @limiter.limit("120/minute")
 async def get_handoffs(request: Request, status: Optional[str] = None):
@@ -334,6 +351,37 @@ async def claim_handoff(request: Request, handoff_id: int):
     if not success:
         raise HTTPException(status_code=500, detail="Failed to claim handoff")
     return {"status": "claimed", "admin": admin_name}
+
+
+@router.get("/api/admin/debug/fb-profile/{psid}")
+@limiter.limit("10/minute")
+async def debug_fb_profile(request: Request, psid: str):
+    """Debug: ทดสอบ fetch FB profile — ดู error จริงๆ"""
+    _require_auth(request)
+    from app.config import FB_PAGE_ACCESS_TOKEN
+
+    result = {
+        "psid": psid,
+        "token_set": bool(FB_PAGE_ACCESS_TOKEN),
+        "token_prefix": (FB_PAGE_ACCESS_TOKEN or "")[:10] + "..." if FB_PAGE_ACCESS_TOKEN else "(empty)",
+    }
+
+    try:
+        profile = await get_facebook_profile(psid)
+        if profile:
+            result["status"] = "success"
+            result["profile"] = {
+                "first_name": profile.get("first_name"),
+                "last_name": profile.get("last_name"),
+            }
+        else:
+            result["status"] = "failed"
+            result["detail"] = "get_facebook_profile() returned None — check Railway logs for details"
+    except Exception as e:
+        result["status"] = "error"
+        result["detail"] = str(e)
+
+    return result
 
 
 @router.post("/api/admin/handoffs/{handoff_id}/resolve")

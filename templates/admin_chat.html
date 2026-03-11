@@ -504,6 +504,13 @@
                 + '</div></div>'
                 + '<div class="chat-actions">';
 
+            // Refresh Name button (for fallback names like User_xxx)
+            if (displayName.startsWith('User_')) {
+                html += '<button class="btn btn-sm" style="background:var(--color-warning-light);color:var(--color-warning-dark);border:none;font-size:12px;" '
+                    + 'onclick="refreshUserName(\'' + data.user_id + '\')">'
+                    + '<i data-lucide="refresh-cw" class="icon-xs"></i> Refresh Name</button>';
+            }
+
             if (handoff) {
                 html += '<button class="btn btn-success btn-sm" onclick="resolveHandoff(' + handoff.id + ')"'
                     + (handoff.status === 'resolved' ? ' disabled' : '')
@@ -615,6 +622,22 @@
                     showToast('Error: ' + e.message, 'error');
                 }
             }, 'Resolve', 'Cancel');
+        }
+
+        async function refreshUserName(userId) {
+            try {
+                var res = await fetch('/api/admin/conversations/' + encodeURIComponent(userId) + '/refresh-name', { method: 'POST' });
+                var data = await res.json();
+                if (res.ok && data.status === 'ok') {
+                    showToast('Updated: ' + data.display_name, 'success');
+                    await loadConversations();
+                    await loadMessages();
+                } else {
+                    showToast('Could not refresh: ' + (data.detail || 'check logs'), 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
         }
 
         function handleInputKey(e) {
