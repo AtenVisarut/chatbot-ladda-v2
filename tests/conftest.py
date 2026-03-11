@@ -46,7 +46,7 @@ def mock_supabase():
     table.limit.return_value = table
     table.execute.return_value = MagicMock(data=[], count=0)
     client.table.return_value = table
-    # .rpc("hybrid_search_products2", ...).execute() → empty
+    # .rpc("hybrid_search_products3", ...).execute() → empty
     client.rpc.return_value = MagicMock(execute=MagicMock(return_value=MagicMock(data=[])))
     return client
 

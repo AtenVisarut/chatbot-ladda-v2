@@ -6,7 +6,7 @@ from app.dependencies import supabase_client, openai_client
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import extract_keywords_from_question
 from app.services.reranker import rerank_products_with_llm, simple_relevance_boost
-from app.config import LLM_MODEL_RESPONSE_GEN, EMBEDDING_MODEL, LLM_TEMP_PRODUCT_FORMAT, LLM_TOKENS_PRODUCT_FORMAT
+from app.config import LLM_MODEL_RESPONSE_GEN, EMBEDDING_MODEL, LLM_TEMP_PRODUCT_FORMAT, LLM_TOKENS_PRODUCT_FORMAT, PRODUCT_TABLE, PRODUCT_RPC
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +271,7 @@ async def get_recommended_products_from_diseases(disease_name: str) -> List[Dict
         products = []
         for product_name in recommended_names:
             try:
-                prod_result = supabase_client.table('products2').select('*').ilike(
+                prod_result = supabase_client.table(PRODUCT_TABLE).select('*').ilike(
                     'product_name', f"%{product_name}%"
                 ).limit(1).execute()
 
@@ -314,7 +314,7 @@ async def query_products_by_target_pest(disease_name: str, required_category: st
         for keyword in keywords[:5]:
             try:
                 or_filter = build_pest_or_filter(keyword)
-                query = supabase_client.table('products2').select('*').or_(or_filter)
+                query = supabase_client.table(PRODUCT_TABLE).select('*').or_(or_filter)
 
                 if required_category:
                     category_synonyms = CATEGORY_SYNONYMS.get(required_category, [required_category])
@@ -422,7 +422,7 @@ async def fetch_products_by_pathogen_type(pathogen_type: str, plant_type: str = 
 
         logger.info(f"📦 Direct query: pathogen_type='{pathogen_type}'")
 
-        query = supabase_client.table("products2").select(
+        query = supabase_client.table(PRODUCT_TABLE).select(
             "id, product_name, active_ingredient, fungicides, insecticides, herbicides, "
             "biostimulant, pgr_hormones, applicable_crops, "
             "how_to_use, usage_period, usage_rate, link_product, pathogen_type, image_url"
@@ -1185,10 +1185,10 @@ async def hybrid_search_products(query: str, match_count: int = 15,
         )
         query_embedding = response.data[0].embedding
 
-        # Try hybrid_search_products2 RPC first (if SQL function exists)
+        # Try hybrid search RPC first (if SQL function exists)
         try:
             result = supabase_client.rpc(
-                'hybrid_search_products2',
+                PRODUCT_RPC,
                 {
                     'query_embedding': query_embedding,
                     'search_query': query,
@@ -1211,7 +1211,7 @@ async def hybrid_search_products(query: str, match_count: int = 15,
                     product_ids = [p.get('id') for p in products if p.get('id')]
                     if product_ids:
                         try:
-                            img_result = supabase_client.table('products2')\
+                            img_result = supabase_client.table(PRODUCT_TABLE)\
                                 .select('id, image_url')\
                                 .in_('id', product_ids)\
                                 .execute()
@@ -1280,7 +1280,7 @@ async def manual_hybrid_search(query: str, query_embedding: List[float],
             logger.warning(f"keyword_search_products RPC failed: {e}, trying ILIKE")
             # Fallback: ILIKE search
             try:
-                result = supabase_client.table('products2')\
+                result = supabase_client.table(PRODUCT_TABLE)\
                     .select('*')\
                     .or_(f"product_name.ilike.%{query}%,"
                          f"fungicides.ilike.%{query}%,"
@@ -1315,7 +1315,7 @@ async def manual_hybrid_search(query: str, query_embedding: List[float],
             product_ids = [p.get('id') for p in final_results if p.get('id')]
             if product_ids:
                 try:
-                    img_result = supabase_client.table('products2')\
+                    img_result = supabase_client.table(PRODUCT_TABLE)\
                         .select('id, image_url')\
                         .in_('id', product_ids)\
                         .execute()
@@ -1414,7 +1414,7 @@ async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
         for name in product_names:
             # ค้นหาแบบ exact match ก่อน
             try:
-                result = supabase_client.table('products2')\
+                result = supabase_client.table(PRODUCT_TABLE)\
                     .select('*')\
                     .eq('product_name', name)\
                     .execute()
@@ -1430,7 +1430,7 @@ async def fetch_products_by_names(product_names: List[str]) -> List[Dict]:
 
             # ถ้าไม่เจอ exact match ลอง ILIKE
             try:
-                result = supabase_client.table('products2')\
+                result = supabase_client.table(PRODUCT_TABLE)\
                     .select('*')\
                     .ilike('product_name', f'%{name}%')\
                     .limit(2)\
@@ -1650,7 +1650,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
         # Search in pest columns
         from app.utils.pest_columns import build_pest_or_filter
         try:
-            result = supabase_client.table('products2')\
+            result = supabase_client.table(PRODUCT_TABLE)\
                 .select('*')\
                 .or_(build_pest_or_filter(disease_name))\
                 .limit(10)\
@@ -1676,7 +1676,7 @@ async def retrieve_product_recommendation(disease_info: DiseaseDetectionResult) 
                     pest_keywords = ["วัชพืช", "หญ้า"]
 
                 for keyword in pest_keywords:
-                    result = supabase_client.table('products2')\
+                    result = supabase_client.table(PRODUCT_TABLE)\
                         .select('*')\
                         .or_(build_pest_or_filter(keyword))\
                         .limit(5)\
@@ -1890,7 +1890,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
             if crops:
                 for crop in crops[:2]:
                     try:
-                        result = supabase_client.table('products2')\
+                        result = supabase_client.table(PRODUCT_TABLE)\
                             .select('*')\
                             .ilike('applicable_crops', f'%{crop}%')\
                             .limit(10)\
@@ -1907,7 +1907,7 @@ async def recommend_products_by_intent(question: str, keywords: dict) -> str:
                 from app.utils.pest_columns import build_pest_or_filter
                 for pest in pests[:2]:
                     try:
-                        result = supabase_client.table('products2')\
+                        result = supabase_client.table(PRODUCT_TABLE)\
                             .select('*')\
                             .or_(build_pest_or_filter(pest))\
                             .limit(10)\
@@ -2563,7 +2563,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         if keywords["pests"]:
             from app.utils.pest_columns import build_pest_or_filter
             for pest in keywords["pests"][:2]:
-                result = supabase_client.table('products2')\
+                result = supabase_client.table(PRODUCT_TABLE)\
                     .select('*')\
                     .or_(build_pest_or_filter(pest))\
                     .limit(5)\
@@ -2574,7 +2574,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         # Search by crop
         if keywords["crops"]:
             for crop in keywords["crops"][:2]:
-                result = supabase_client.table('products2')\
+                result = supabase_client.table(PRODUCT_TABLE)\
                     .select('*')\
                     .ilike('applicable_crops', f'%{crop}%')\
                     .limit(5)\
@@ -2586,7 +2586,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         if keywords["products"]:
             for prod in keywords["products"]:
                 if len(prod) > 3:
-                    result = supabase_client.table('products2')\
+                    result = supabase_client.table(PRODUCT_TABLE)\
                         .select('*')\
                         .ilike('product_name', f'%{prod}%')\
                         .limit(5)\
@@ -2596,7 +2596,7 @@ async def answer_product_question(question: str, keywords: dict) -> str:
         
         # If no specific keywords, get general products
         if not products_data:
-            result = supabase_client.table('products2')\
+            result = supabase_client.table(PRODUCT_TABLE)\
                 .select('*')\
                 .limit(10)\
                 .execute()

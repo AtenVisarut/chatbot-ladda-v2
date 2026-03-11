@@ -71,6 +71,12 @@ MEMORY_CONTENT_PREVIEW = 800  # Characters to show in context preview (เพิ
 USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
 
 # ============================================================================#
+# PRODUCT TABLE — switch between products2 (backup) and products3 (new Excel)
+# ============================================================================#
+PRODUCT_TABLE = os.getenv("PRODUCT_TABLE", "products3")
+PRODUCT_RPC = os.getenv("PRODUCT_RPC", "hybrid_search_products3")
+
+# ============================================================================#
 # AGENTIC RAG CONFIGURATION
 # ============================================================================#
 # Set to "1" to enable Agentic RAG pipeline for Q&A

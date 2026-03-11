@@ -24,6 +24,7 @@ from app.config import (
     LLM_TOKENS_HANDLER_USAGE,
     LLM_TEMP_GENERAL_CHAT,
     LLM_TOKENS_GENERAL_CHAT,
+    PRODUCT_TABLE,
 )
 from app.prompts import GENERAL_CHAT_PROMPT, ERROR_GENERIC, ERROR_AI_UNAVAILABLE, GREETINGS, GREETING_KEYWORDS
 
@@ -1092,11 +1093,11 @@ async def _fetch_product_from_db(product_name: str) -> list:
         from app.dependencies import supabase_client as _sb
         if not _sb:
             return []
-        result = _sb.table('products2').select(
+        result = _sb.table(PRODUCT_TABLE).select(
             'product_name, active_ingredient, fungicides, insecticides, herbicides, '
             'biostimulant, pgr_hormones, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, '
-            'absorption_method, mechanism_of_action, phytotoxicity'
+            'absorption_method, mechanism_of_action, phytotoxicity, caution_notes'
         ).ilike('product_name', f'%{product_name}%').limit(5).execute()
         return result.data if result.data else []
     except Exception as e:
@@ -1140,7 +1141,7 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
                         'how_to_use', 'usage_rate', 'usage_period',
                         'fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones',
-                        'active_ingredient', 'applicable_crops', 'phytotoxicity']
+                        'active_ingredient', 'applicable_crops', 'phytotoxicity', 'caution_notes']
         if product_in_question:
             db_product = await _fetch_product_from_db(product_in_question)
             if db_product:
@@ -1204,6 +1205,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                 products_text += f"\n   • กลไกการออกฤทธิ์: {p.get('mechanism_of_action')}"
             if p.get('phytotoxicity'):
                 products_text += f"\n   • ความเป็นพิษต่อพืช: {p.get('phytotoxicity')}"
+            if p.get('caution_notes'):
+                products_text += f"\n   • ข้อควรระวังเพิ่มเติม: {p.get('caution_notes')}"
             products_text += "\n"
 
         prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการใช้ยาฆ่าศัตรูพืชจาก ICP Ladda

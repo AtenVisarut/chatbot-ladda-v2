@@ -14,6 +14,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+PRODUCT_TABLE = os.getenv("PRODUCT_TABLE", "products3")
 
 def generate_embedding(text: str, openai_client: OpenAI) -> list:
     """Generate embedding using OpenAI"""
@@ -40,7 +41,7 @@ def generate_embeddings_for_products():
     
     # Fetch all products
     print("\n1. Fetching products from Supabase...")
-    response = supabase.table('products2').select('*').execute()
+    response = supabase.table(PRODUCT_TABLE).select('*').execute()
     products = response.data
     print(f"✓ Found {len(products)} products")
     
@@ -60,6 +61,7 @@ def generate_embeddings_for_products():
                 f"สารกำจัดวัชพืช: {product.get('herbicides', '')}",
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
                 f"กลุ่มสาร: {product.get('product_group', '')}",
+                f"ข้อควรระวัง: {product.get('caution_notes', '')}",
             ]
             text = " | ".join([p for p in text_parts if p])
             
@@ -74,7 +76,7 @@ def generate_embeddings_for_products():
                 continue
             
             # Update product with embedding
-            supabase.table('products2').update({
+            supabase.table(PRODUCT_TABLE).update({
                 'embedding': embedding
             }).eq('id', product['id']).execute()
             

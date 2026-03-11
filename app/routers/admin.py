@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.config import ADMIN_USERNAME, ADMIN_PASSWORD, EMBEDDING_MODEL
+from app.config import ADMIN_USERNAME, ADMIN_PASSWORD, EMBEDDING_MODEL, PRODUCT_TABLE
 from app.dependencies import openai_client, supabase_client
 from app.services.cache import clear_all_caches
 
@@ -70,9 +70,9 @@ async def regenerate_embeddings_endpoint(request: Request):
 
     # Fetch products to regenerate
     if product_name:
-        result = supabase_client.table('products2').select('*').ilike('product_name', f'%{product_name}%').execute()
+        result = supabase_client.table(PRODUCT_TABLE).select('*').ilike('product_name', f'%{product_name}%').execute()
     else:
-        result = supabase_client.table('products2').select('*').execute()
+        result = supabase_client.table(PRODUCT_TABLE).select('*').execute()
 
     if not result.data:
         return {"status": "error", "message": f"ไม่พบสินค้า: {product_name}" if product_name else "ไม่พบสินค้าในระบบ"}
@@ -92,6 +92,7 @@ async def regenerate_embeddings_endpoint(request: Request):
                 f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
                 f"กลุ่มสาร: {product.get('product_group', '')}",
                 f"ความเป็นพิษต่อพืช: {product.get('phytotoxicity', '')}",
+                f"ข้อควรระวัง: {product.get('caution_notes', '')}",
             ]
             text = " | ".join([p for p in text_parts if p])
 
@@ -101,7 +102,7 @@ async def regenerate_embeddings_endpoint(request: Request):
             )
             embedding = resp.data[0].embedding
 
-            supabase_client.table('products2').update({
+            supabase_client.table(PRODUCT_TABLE).update({
                 'embedding': embedding
             }).eq('id', product['id']).execute()
 

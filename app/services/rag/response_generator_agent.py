@@ -557,6 +557,8 @@ class ResponseGeneratorAgent:
                 part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
             if meta.get('phytotoxicity'):
                 part += f"  ความเป็นพิษต่อพืช: {meta['phytotoxicity']}\n"
+            if meta.get('caution_notes'):
+                part += f"  ข้อควรระวังเพิ่มเติม: {meta['caution_notes']}\n"
             # strategy is internal-only — NOT sent to LLM to prevent leaking to users
             product_context_parts.append(part)
 
@@ -921,6 +923,8 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 parts.append(f"   - ขนาดบรรจุ: {meta['package_size']}")
             if meta.get('phytotoxicity'):
                 parts.append(f"   - ความเป็นพิษต่อพืช: {meta['phytotoxicity']}")
+            if meta.get('caution_notes'):
+                parts.append(f"   - ข้อควรระวังเพิ่มเติม: {meta['caution_notes']}")
             parts.append("")
 
         return "\n".join(parts)

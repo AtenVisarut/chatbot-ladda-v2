@@ -21,7 +21,7 @@ from app.services.rag import (
     RetrievalResult,
     IntentType
 )
-from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL, LLM_TEMP_RERANKING, LLM_TOKENS_RERANKING
+from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL, LLM_TEMP_RERANKING, LLM_TOKENS_RERANKING, PRODUCT_TABLE, PRODUCT_RPC
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,7 @@ class RetrievalAgent:
                 'strategy': item.get('strategy'),
                 'package_size': item.get('package_size'),
                 'phytotoxicity': item.get('phytotoxicity'),
+                'caution_notes': item.get('caution_notes'),
                 'aliases': item.get('aliases'),
             }
         )
@@ -236,7 +237,7 @@ class RetrievalAgent:
 
         try:
             # Try ilike search on product_name
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_name', f'%{product_name}%') \
                 .limit(5) \
@@ -282,7 +283,7 @@ class RetrievalAgent:
 
             or_filter = ",".join(or_conditions)
 
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .or_(or_filter) \
                 .limit(top_k) \
@@ -360,7 +361,7 @@ class RetrievalAgent:
                 if inferred:
                     cat_filter = inferred[0]
 
-            query_builder = self.supabase.table('products2') \
+            query_builder = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .in_('strategy', ['Skyrocket', 'Expand']) \
                 .or_(or_filter) \
@@ -421,7 +422,7 @@ class RetrievalAgent:
 
             existing_ids = {d.id for d in existing_docs}
 
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Herbicide%') \
                 .or_(or_filter) \
@@ -478,7 +479,7 @@ class RetrievalAgent:
 
             existing_ids = {d.id for d in existing_docs}
 
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Insecticide%') \
                 .or_(or_filter) \
@@ -523,7 +524,7 @@ class RetrievalAgent:
             return
 
         try:
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('id, strategy, selling_point, applicable_crops, package_size') \
                 .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
                 .execute()
@@ -1066,7 +1067,7 @@ class RetrievalAgent:
                 'match_count': top_k * 2
             }
 
-            result = self.supabase.rpc('hybrid_search_products2', rpc_params).execute()
+            result = self.supabase.rpc(PRODUCT_RPC, rpc_params).execute()
 
             if not result.data:
                 return []
@@ -1136,7 +1137,7 @@ class RetrievalAgent:
                 if len(variant) < 3:
                     continue
                 or_filter = build_pest_or_filter(variant)
-                result = self.supabase.table('products2').select('*').or_(
+                result = self.supabase.table(PRODUCT_TABLE).select('*').or_(
                     or_filter
                 ).limit(5).execute()
 
@@ -1156,7 +1157,7 @@ class RetrievalAgent:
         if not self.supabase:
             return []
         try:
-            result = self.supabase.table('products2') \
+            result = self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Fungicide%') \
                 .limit(top_k) \
@@ -1223,7 +1224,7 @@ class RetrievalAgent:
                 or_conditions.extend(build_pest_or_conditions(s))
             or_filter = ",".join(or_conditions)
 
-            query_builder = self.supabase.table('products2').select('*').or_(or_filter).limit(10)
+            query_builder = self.supabase.table(PRODUCT_TABLE).select('*').or_(or_filter).limit(10)
 
             # Narrow by plant type if available
             plant_type = query_analysis.entities.get('plant_type', '')
