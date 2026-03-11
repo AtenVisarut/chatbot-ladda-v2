@@ -14,6 +14,7 @@ from app.services.chat.handler import handle_natural_conversation
 from app.services.memory import clear_memory, add_to_memory
 from app.utils.rate_limiter import check_user_rate_limit
 from app.config import MAX_CONCURRENT_TASKS
+from app.dependencies import handoff_manager
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,10 @@ async def _process_fb_message(event: dict) -> None:
 
             logger.info(f"FB reply sent to {psid} ({len(chunks)} chunk(s)) in {time.time() - start_time:.2f}s")
         else:
-            logger.info(f"⏭️ No data for fb:{psid} — skipping reply (admin will handle)")
+            logger.info(f"⏭️ No data for fb:{psid} — creating handoff")
+            if handoff_manager:
+                await handoff_manager.create_handoff(user_id=user_id, platform="facebook", trigger_message=text)
+                await send_facebook_message(psid, "ขออภัยค่ะ คำถามนี้ลัดดาต้องส่งต่อให้เจ้าหน้าที่ดูแลนะคะ กรุณารอสักครู่ เจ้าหน้าที่จะมาตอบให้เร็วที่สุดค่ะ")
 
     except Exception as e:
         logger.error(f"Error processing FB message from {psid}: {e}", exc_info=True)

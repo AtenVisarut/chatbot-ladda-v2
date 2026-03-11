@@ -511,6 +511,10 @@
             </div>
             
             <div class="export-buttons">
+                <a href="/admin/chat" class="export-btn" style="background:#ef4444;color:white;text-decoration:none;display:inline-flex;align-items:center;gap:4px;position:relative;">
+                    💬 Admin Chat
+                    <span id="handoffBadge" style="background:white;color:#ef4444;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700;min-width:18px;text-align:center;display:none;">0</span>
+                </a>
                 <button class="export-btn export-csv" onclick="exportCSV()">
                     📥 Export CSV
                 </button>
@@ -569,20 +573,59 @@
             </div>
         </div>
         
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+            <div class="stat-card" style="border-left: 4px solid #06C755;">
+                <h3>LINE Users</h3>
+                <div class="value" style="color: #06C755;"><span id="lineUsers">-</span></div>
+                <div class="label">คน</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #0084FF;">
+                <h3>FB Users</h3>
+                <div class="value" style="color: #0084FF;"><span id="fbUsers">-</span></div>
+                <div class="label">คน</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #06C755;">
+                <h3>LINE Messages</h3>
+                <div class="value" style="color: #06C755;"><span id="lineMsgs">-</span></div>
+                <div class="label">ข้อความ</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #0084FF;">
+                <h3>FB Messages</h3>
+                <div class="value" style="color: #0084FF;"><span id="fbMsgs">-</span></div>
+                <div class="label">ข้อความ</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="chart-container">
+                <h2>Platform (Messages)</h2>
+                <canvas id="chartPlatformMsgs" style="max-height:280px;"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Intent / หมวดคำถาม</h2>
+                <canvas id="chartIntents" style="max-height:280px;"></canvas>
+            </div>
+        </div>
+
         <div class="grid-2">
             <div class="list-container">
                 <h2>🐛 โรคที่พบบ่อยที่สุด</h2>
                 <div id="topDiseases">กำลังโหลด...</div>
             </div>
-            
+
             <div class="list-container">
                 <h2>💊 ผลิตภัณฑ์ที่แนะนำบ่อยที่สุด</h2>
                 <div id="topProducts">กำลังโหลด...</div>
             </div>
-            
+
             <div class="list-container">
                 <h2>📍 จังหวัดที่มีผู้ใช้งานมากที่สุด (Top 5)</h2>
                 <div id="topProvinces">กำลังโหลด...</div>
+            </div>
+
+            <div class="list-container">
+                <h2>Top Questions / คำถามยอดนิยม</h2>
+                <div id="topQuestions">กำลังโหลด...</div>
             </div>
         </div>
         
@@ -701,6 +744,34 @@
                 // Update alerts
                 updateAlerts(currentData.alerts);
                 
+                // Update platform stats
+                if (currentData.platform) {
+                    document.getElementById('lineUsers').textContent = currentData.platform.line?.users || 0;
+                    document.getElementById('fbUsers').textContent = currentData.platform.facebook?.users || 0;
+                    document.getElementById('lineMsgs').textContent = currentData.platform.line?.messages || 0;
+                    document.getElementById('fbMsgs').textContent = currentData.platform.facebook?.messages || 0;
+                }
+
+                // Render platform & intent charts
+                renderPlatformChart(currentData);
+                renderIntentChart(currentData);
+
+                // Update top questions
+                updateQuestionsList(currentData.top_questions);
+
+                // Update handoff badge
+                try {
+                    const hRes = await fetch('/api/admin/handoffs/count');
+                    const hData = await hRes.json();
+                    const badge = document.getElementById('handoffBadge');
+                    if (badge && hData.pending > 0) {
+                        badge.textContent = hData.pending;
+                        badge.style.display = 'inline';
+                    } else if (badge) {
+                        badge.style.display = 'none';
+                    }
+                } catch(e) {}
+
                 // Update top diseases
                 updateList('topDiseases', currentData.top_diseases, currentData.overview.images_analyzed);
                 
@@ -1000,6 +1071,31 @@
             csv += `Avg Response Time (ms),${currentData.performance.avg_response_time_ms.toFixed(2)}\n`;
             csv += `Error Rate (%),${currentData.performance.error_rate_percent.toFixed(2)}\n\n`;
             
+            // Platform
+            csv += 'Platform\n';
+            csv += 'Platform,Users,Messages\n';
+            if (currentData.platform) {
+                csv += `LINE,${currentData.platform.line?.users || 0},${currentData.platform.line?.messages || 0}\n`;
+                csv += `Facebook,${currentData.platform.facebook?.users || 0},${currentData.platform.facebook?.messages || 0}\n`;
+            }
+            csv += '\n';
+
+            // Top Intents
+            csv += 'Top Intents\n';
+            csv += 'Intent,Count\n';
+            (currentData.top_intents || []).forEach(i => {
+                csv += `"${i.name}",${i.count}\n`;
+            });
+            csv += '\n';
+
+            // Top Questions
+            csv += 'Top Questions\n';
+            csv += 'Question,Count\n';
+            (currentData.top_questions || []).forEach(q => {
+                csv += `"${q.text}",${q.count}\n`;
+            });
+            csv += '\n';
+
             // Top Diseases
             csv += 'Top Diseases\n';
             csv += 'Disease,Count\n';
@@ -1094,6 +1190,92 @@
             }
         }
         
+        function renderPlatformChart(data) {
+            try {
+                const p = data.platform || {};
+                const lineM = p.line?.messages || 0;
+                const fbM = p.facebook?.messages || 0;
+                const ctx = document.getElementById('chartPlatformMsgs').getContext('2d');
+                const cfg = {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['LINE', 'Facebook'],
+                        datasets: [{
+                            data: [lineM, fbM],
+                            backgroundColor: ['#06C755', '#0084FF'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            title: { display: false }
+                        }
+                    }
+                };
+                if (window.trendCharts['platformMsgs']) {
+                    window.trendCharts['platformMsgs'].data = cfg.data;
+                    window.trendCharts['platformMsgs'].update();
+                } else {
+                    window.trendCharts['platformMsgs'] = new Chart(ctx, cfg);
+                }
+            } catch (e) { console.error('Platform chart error:', e); }
+        }
+
+        function renderIntentChart(data) {
+            try {
+                const intents = data.top_intents || [];
+                if (!intents.length) {
+                    document.getElementById('chartIntents').parentElement.innerHTML += '<p style="color:#999;text-align:center;">ยังไม่มีข้อมูล intent</p>';
+                    return;
+                }
+                const labels = intents.map(i => i.name);
+                const values = intents.map(i => i.count);
+                const colors = ['#667eea','#764ba2','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+                const ctx = document.getElementById('chartIntents').getContext('2d');
+                const cfg = {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'จำนวนคำถาม',
+                            data: values,
+                            backgroundColor: colors.slice(0, labels.length),
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                };
+                if (window.trendCharts['intents']) {
+                    window.trendCharts['intents'].data = cfg.data;
+                    window.trendCharts['intents'].update();
+                } else {
+                    window.trendCharts['intents'] = new Chart(ctx, cfg);
+                }
+            } catch (e) { console.error('Intent chart error:', e); }
+        }
+
+        function updateQuestionsList(questions) {
+            const el = document.getElementById('topQuestions');
+            if (!questions || !questions.length) {
+                el.innerHTML = '<p style="color:#999;text-align:center;">ยังไม่มีข้อมูลคำถาม (จะเริ่มเก็บหลัง deploy)</p>';
+                return;
+            }
+            const maxCount = questions[0].count || 1;
+            let html = '';
+            questions.forEach(q => {
+                const barWidth = maxCount > 0 ? (q.count / maxCount * 100) : 0;
+                html += '<div class="list-item"><div style="flex:1;"><div class="name">' + q.text + '</div><div class="progress-bar"><div class="progress-fill" style="width:' + barWidth + '%"></div></div></div><div class="count">' + q.count + '</div></div>';
+            });
+            el.innerHTML = html;
+        }
+
         // Load dashboard on page load
         loadDashboard();
         

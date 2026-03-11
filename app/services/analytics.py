@@ -190,6 +190,11 @@ class AnalyticsTracker:
             daily_response_times_by_day = {}
             daily_requests_by_day = {}
             daily_errors_by_day = {}
+            # Platform & Intent tracking
+            platform_counter = {"line": 0, "facebook": 0}
+            platform_users = {"line": set(), "facebook": set()}
+            intent_counter = {}
+            question_texts = {}
             
             for event in events:
                 user_id = event.get('user_id')
@@ -197,7 +202,11 @@ class AnalyticsTracker:
                 
                 if user_id:
                     unique_users.add(user_id)
-                
+                    # Platform detection from user_id
+                    platform = "facebook" if user_id.startswith("fb:") else "line"
+                    platform_counter[platform] += 1
+                    platform_users[platform].add(user_id)
+
                 # Track by event type
                 if event_type == 'image_analysis':
                     image_count += 1
@@ -222,6 +231,15 @@ class AnalyticsTracker:
                     response_time = event.get('response_time_ms', 0)
                     if response_time:
                         response_times.append(response_time)
+                    # Intent tracking
+                    intent = event.get('intent')
+                    if intent:
+                        intent_counter[intent] = intent_counter.get(intent, 0) + 1
+                    # Question text tracking (group by short text)
+                    q_text = event.get('question_text', '')
+                    if q_text:
+                        key = q_text[:60]
+                        question_texts[key] = question_texts.get(key, 0) + 1
                 
                 elif event_type == 'product_recommendation':
                     product = event.get('product_name')
@@ -352,8 +370,26 @@ class AnalyticsTracker:
                     for name, count in top_provinces
                 ],
                 "top_errors": [
-                    {"type": etype, "count": count} 
+                    {"type": etype, "count": count}
                     for etype, count in top_errors
+                ],
+                "platform": {
+                    "line": {
+                        "users": len(platform_users["line"]),
+                        "messages": platform_counter["line"]
+                    },
+                    "facebook": {
+                        "users": len(platform_users["facebook"]),
+                        "messages": platform_counter["facebook"]
+                    }
+                },
+                "top_intents": [
+                    {"name": name, "count": count}
+                    for name, count in sorted(intent_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+                ],
+                "top_questions": [
+                    {"text": text, "count": count}
+                    for text, count in sorted(question_texts.items(), key=lambda x: x[1], reverse=True)[:15]
                 ],
                 "daily_activity": dict(sorted(daily_activity.items())),
                 "daily_requests": dict(sorted(daily_requests_by_day.items())),

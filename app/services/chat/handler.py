@@ -2,6 +2,7 @@ import logging
 import re
 import asyncio
 import hashlib
+import time
 from typing import List, Dict, Optional, Tuple
 from app.dependencies import openai_client, supabase_client
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
@@ -1327,6 +1328,18 @@ def _make_response_cache_key(message: str) -> str:
 async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
+        _start_time = time.time()
+
+        # 0. Check active handoff — if admin is handling, don't auto-reply
+        try:
+            from app.dependencies import handoff_manager as _hm
+            if _hm and await _hm.has_active_handoff(user_id):
+                await add_to_memory(user_id, "user", message)
+                logger.info(f"User {user_id[:8]} has active handoff — storing message, no bot reply")
+                return None
+        except Exception:
+            pass
+
         # 1. Add user message to memory
         await add_to_memory(user_id, "user", message)
 
@@ -1481,6 +1494,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                     )
                                     logger.info(f"Tracked {len(product_names)} products from AgenticRAG")
 
+                        # Track question analytics
+                        try:
+                            from app.dependencies import analytics_tracker as _at
+                            if _at:
+                                _elapsed = (time.time() - _start_time) * 1000
+                                await _at.track_question(
+                                    user_id=user_id,
+                                    question=message[:200],
+                                    intent=rag_response.intent if rag_response else "unknown",
+                                    response_time_ms=_elapsed
+                                )
+                        except Exception:
+                            pass
+
                         # Add assistant response to memory WITH product metadata
                         rag_metadata = {}
                         mentioned_products = [
@@ -1545,6 +1572,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         )
                         logger.info(f"Tracked {len(product_names)} products from Q&A")
 
+            # Track question analytics (legacy path)
+            try:
+                from app.dependencies import analytics_tracker as _at2
+                if _at2:
+                    _elapsed = (time.time() - _start_time) * 1000
+                    await _at2.track_question(
+                        user_id=user_id,
+                        question=message[:200],
+                        intent="legacy_qa",
+                        response_time_ms=_elapsed
+                    )
+            except Exception:
+                pass
+
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
             # Cache response for identical future questions
@@ -1575,6 +1616,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             except Exception as llm_err:
                 logger.error(f"General chat LLM call failed: {llm_err}", exc_info=True)
                 return ERROR_GENERIC
+
+            # Track question analytics (general chat)
+            try:
+                from app.dependencies import analytics_tracker as _at3
+                if _at3:
+                    _elapsed = (time.time() - _start_time) * 1000
+                    await _at3.track_question(
+                        user_id=user_id,
+                        question=message[:200],
+                        intent="general_chat",
+                        response_time_ms=_elapsed
+                    )
+            except Exception:
+                pass
 
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
