@@ -371,7 +371,7 @@
 
         async function loadConversations() {
             try {
-                var res = await fetch('/api/admin/conversations?hours=48');
+                var res = await fetch('/api/admin/conversations');
                 if (res.status === 401) { window.location.href = '/login'; return; }
                 allConversations = await res.json();
                 renderSidebar();

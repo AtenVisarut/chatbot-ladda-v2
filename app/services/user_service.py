@@ -162,6 +162,33 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
         return False
 
 
+async def refresh_display_name(user_id: str) -> Optional[str]:
+    """Re-fetch profile and update display_name for users with fallback names (User_xxx)."""
+    try:
+        display_name = None
+        if user_id.startswith("fb:"):
+            psid = user_id.replace("fb:", "", 1)
+            profile = await get_facebook_profile(psid)
+            if profile:
+                display_name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
+        else:
+            profile = await get_line_profile(user_id)
+            if profile:
+                display_name = profile.get("displayName")
+
+        if display_name and supabase_client:
+            supabase_client.table(TABLE) \
+                .update({"display_name": display_name}) \
+                .eq("line_user_id", user_id) \
+                .execute()
+            logger.info(f"Refreshed display_name for {user_id[:12]}... → {display_name}")
+
+        return display_name
+    except Exception as e:
+        logger.error(f"Error refreshing display_name for {user_id}: {e}")
+        return None
+
+
 async def ensure_user_exists(user_id: str) -> bool:
     """
     Ensure user exists in user_ladda(LINE,FACE) table.

@@ -17,6 +17,7 @@ from slowapi.util import get_remote_address
 
 from app.dependencies import supabase_client, handoff_manager
 from app.services.memory import add_to_memory
+from app.services.user_service import refresh_display_name
 from app.utils.line.helpers import push_line
 from app.utils.facebook.helpers import send_facebook_message, split_message
 
@@ -53,128 +54,102 @@ async def admin_chat_page(request: Request):
 
 @router.get("/api/admin/conversations")
 @limiter.limit("120/minute")
-async def get_conversations(request: Request, hours: int = 24):
-    """ดึงรายการแชทล่าสุดจาก conversation_memory"""
+async def get_conversations(request: Request):
+    """ดึงรายการแชทจาก user_ladda เป็นหลัก + ดึง preview จาก conversation_memory"""
     _require_auth(request)
     if not supabase_client:
         raise HTTPException(status_code=503, detail="Database not available")
 
     try:
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(hours=hours)
-        ).isoformat()
+        # Step 1: ดึง ALL registered users จาก user_ladda (แหล่งหลัก)
+        users_result = (
+            supabase_client.table("user_ladda(LINE,FACE)")
+            .select("line_user_id, display_name, updated_at")
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        all_users = users_result.data or []
 
-        # ดึง recent messages
-        result = (
+        # Step 2: สร้าง sessions จาก user_ladda (ทุกคนที่ลงทะเบียน)
+        sessions = {}
+        for u in all_users:
+            uid = u["line_user_id"]
+            sessions[uid] = {
+                "user_id": uid,
+                "display_name": u.get("display_name") or uid[:14],
+                "platform": "facebook" if uid.startswith("fb:") else "line",
+                "last_message": "",
+                "last_role": "",
+                "last_activity": u.get("updated_at", ""),
+                "message_count": 0,
+                "has_handoff": False,
+                "handoff_id": None,
+            }
+
+        # Step 3: ดึง recent messages (7 วัน) เพื่อ preview + sort
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=7)
+        ).isoformat()
+        msg_result = (
             supabase_client.table("conversation_memory")
-            .select("user_id, role, content, created_at")
+            .select("user_id, content, role, created_at")
             .gte("created_at", cutoff)
             .order("created_at", desc=True)
-            .limit(500)
+            .limit(3000)
             .execute()
         )
 
-        # Group by user_id
-        sessions = {}
-        for msg in result.data or []:
+        for msg in msg_result.data or []:
             uid = msg["user_id"]
-            if uid not in sessions:
-                sessions[uid] = {
-                    "user_id": uid,
-                    "last_message": (msg["content"] or "")[:100],
-                    "last_role": msg["role"],
-                    "last_activity": msg["created_at"],
-                    "platform": "facebook"
-                    if uid.startswith("fb:")
-                    else "line",
-                    "message_count": 0,
-                    "has_handoff": False,
-                    "handoff_id": None,
-                    "display_name": "",
-                }
-            sessions[uid]["message_count"] += 1
+            if uid in sessions:
+                sessions[uid]["message_count"] += 1
+                # อัพเดท last_message/last_activity ถ้ายังว่าง (เอาอันล่าสุด)
+                if not sessions[uid]["last_message"]:
+                    sessions[uid]["last_message"] = (msg["content"] or "")[:100]
+                    sessions[uid]["last_role"] = msg["role"]
+                    sessions[uid]["last_activity"] = msg["created_at"]
 
-        # ดึง display names จาก user_ladda + กรองเฉพาะ user ของ project นี้
-        # (conversation_memory อาจมี user จาก project อื่นที่ share DB เดียวกัน)
-        valid_user_ids = set()
-        if sessions:
-            user_ids = list(sessions.keys())
-            for i in range(0, len(user_ids), 50):
-                batch = user_ids[i : i + 50]
+        # Step 4: Auto-refresh fallback display names (User_xxx → real name)
+        for uid, sess in sessions.items():
+            if sess["display_name"].startswith("User_"):
                 try:
-                    user_result = (
-                        supabase_client.table("user_ladda(LINE,FACE)")
-                        .select("line_user_id, display_name")
-                        .in_("line_user_id", batch)
-                        .execute()
-                    )
-                    for u in user_result.data or []:
-                        uid = u["line_user_id"]
-                        valid_user_ids.add(uid)
-                        if uid in sessions and u.get("display_name"):
-                            sessions[uid]["display_name"] = u["display_name"]
+                    new_name = await refresh_display_name(uid)
+                    if new_name:
+                        sess["display_name"] = new_name
                 except Exception:
                     pass
 
-            # กรองเฉพาะ user ที่ลงทะเบียนใน user_ladda(LINE,FACE) ของ project นี้
-            sessions = {uid: s for uid, s in sessions.items() if uid in valid_user_ids}
-
-        # Mark handoffs (only for users registered in this project)
+        # Step 5: Mark handoffs
+        handoff_convos = []
         if handoff_manager:
             handoffs = await handoff_manager.get_handoffs(status="pending")
-
-            # Ensure handoff users are checked against user_ladda too
-            handoff_uids = [h["user_id"] for h in handoffs if h["user_id"] not in valid_user_ids]
-            for i in range(0, len(handoff_uids), 50):
-                batch = handoff_uids[i : i + 50]
-                try:
-                    hr = (
-                        supabase_client.table("user_ladda(LINE,FACE)")
-                        .select("line_user_id")
-                        .in_("line_user_id", batch)
-                        .execute()
-                    )
-                    for u in hr.data or []:
-                        valid_user_ids.add(u["line_user_id"])
-                except Exception:
-                    pass
-
             for h in handoffs:
                 uid = h["user_id"]
                 if uid in sessions:
                     sessions[uid]["has_handoff"] = True
                     sessions[uid]["handoff_id"] = h["id"]
-                elif uid in valid_user_ids:
-                    # Handoff user registered but no recent messages in window
-                    sessions[uid] = {
-                        "user_id": uid,
-                        "last_message": h.get("trigger_message", "")[:100],
-                        "last_role": "user",
-                        "last_activity": h["created_at"],
-                        "platform": h.get("platform", "line"),
-                        "message_count": 0,
-                        "has_handoff": True,
-                        "handoff_id": h["id"],
-                        "display_name": h.get("display_name", ""),
-                    }
 
-        # Sort: handoffs first, then by last_activity
-        conversations = sorted(
-            sessions.values(),
-            key=lambda x: (not x["has_handoff"], x["last_activity"]),
-            reverse=False,
+            handoff_convos = sorted(
+                [s for s in sessions.values() if s["has_handoff"]],
+                key=lambda x: x["last_activity"],
+                reverse=True,
+            )
+
+        # Step 6: Sort — active users first (มี messages ใน 7 วัน), inactive ตามหลัง
+        active = sorted(
+            [s for s in sessions.values() if s["message_count"] > 0 and not s["has_handoff"]],
+            key=lambda x: x["last_activity"],
+            reverse=True,
         )
-        # Reverse so newest first within each group
-        handoff_convos = [c for c in conversations if c["has_handoff"]]
-        normal_convos = sorted(
-            [c for c in conversations if not c["has_handoff"]],
+        inactive = sorted(
+            [s for s in sessions.values() if s["message_count"] == 0 and not s["has_handoff"]],
             key=lambda x: x["last_activity"],
             reverse=True,
         )
 
         return {
             "handoffs": handoff_convos,
-            "recent": normal_convos[:30],
+            "recent": active + inactive,
         }
 
     except HTTPException:
