@@ -695,7 +695,10 @@ class RetrievalAgent:
                     logger.info(f"  - Supplementary priority search added: {len(priority_docs)} docs")
 
             # Stage 1.95: Weed category fallback — search ALL Herbicides when still insufficient
-            if query_analysis.intent == IntentType.WEED_CONTROL and len(all_docs) < MIN_RELEVANT_DOCS:
+            # Trigger for WEED_CONTROL intent OR any query with weed_type entity
+            # (LLM sometimes classifies weed queries as PRODUCT_RECOMMENDATION)
+            _has_weed_entity = bool(query_analysis.entities.get('weed_type'))
+            if (query_analysis.intent == IntentType.WEED_CONTROL or _has_weed_entity) and len(all_docs) < MIN_RELEVANT_DOCS:
                 weed_docs = await self._weed_category_fallback_search(query_analysis, all_docs)
                 if weed_docs:
                     all_docs.extend(weed_docs)
