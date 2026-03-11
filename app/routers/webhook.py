@@ -279,10 +279,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — creating handoff")
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:
                                 await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
-                                await reply_line(reply_token, "ขออภัยค่ะ คำถามนี้ลัดดาต้องส่งต่อให้เจ้าหน้าที่ดูแลนะคะ กรุณารอสักครู่ เจ้าหน้าที่จะมาตอบให้เร็วที่สุดค่ะ")
+                            # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
                         continue
 
                     # === NEW: ตรวจจับ interrupt ก่อนประมวลผล ===
@@ -523,10 +523,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — creating handoff")
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:
                                 await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
-                                await reply_line(reply_token, "ขออภัยค่ะ คำถามนี้ลัดดาต้องส่งต่อให้เจ้าหน้าที่ดูแลนะคะ กรุณารอสักครู่ เจ้าหน้าที่จะมาตอบให้เร็วที่สุดค่ะ")
+                            # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
 
                 else:
                     # Normal text message handling
@@ -545,10 +545,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — creating handoff")
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:
                                 await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
-                                await reply_line(reply_token, "ขออภัยค่ะ คำถามนี้ลัดดาต้องส่งต่อให้เจ้าหน้าที่ดูแลนะคะ กรุณารอสักครู่ เจ้าหน้าที่จะมาตอบให้เร็วที่สุดค่ะ")
+                            # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
 
             # 4. Handle Sticker (Just for fun)
             elif event_type == "message" and event.get("message", {}).get("type") == "sticker":

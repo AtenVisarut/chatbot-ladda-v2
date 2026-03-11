@@ -1333,16 +1333,6 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
     try:
         _start_time = time.time()
 
-        # 0. Check active handoff — if admin is handling, don't auto-reply
-        try:
-            from app.dependencies import handoff_manager as _hm
-            if _hm and await _hm.has_active_handoff(user_id):
-                await add_to_memory(user_id, "user", message)
-                logger.info(f"User {user_id[:8]} has active handoff — storing message, no bot reply")
-                return None
-        except Exception:
-            pass
-
         # 1. Add user message to memory
         await add_to_memory(user_id, "user", message)
 
