@@ -8,11 +8,12 @@ from typing import Optional, Dict
 from datetime import datetime, timezone
 import httpx
 from app.dependencies import supabase_client
-from app.config import LINE_CHANNEL_ACCESS_TOKEN
+from app.config import LINE_CHANNEL_ACCESS_TOKEN, FB_PAGE_ACCESS_TOKEN
 
 logger = logging.getLogger(__name__)
 
 LINE_PROFILE_API = "https://api.line.me/v2/bot/profile/{user_id}"
+FB_GRAPH_API = "https://graph.facebook.com/v21.0/{psid}"
 
 TABLE = 'user_ladda(LINE,FACE)'
 
@@ -47,6 +48,42 @@ async def get_line_profile(user_id: str) -> Optional[Dict]:
 
     except Exception as e:
         logger.error(f"Error fetching LINE profile for {user_id}: {e}", exc_info=True)
+        return None
+
+
+async def get_facebook_profile(psid: str) -> Optional[Dict]:
+    """
+    Fetch user profile from Facebook Graph API
+
+    Returns:
+        dict with keys: first_name, last_name, profile_pic
+        None if failed
+    """
+    if not FB_PAGE_ACCESS_TOKEN:
+        return None
+    try:
+        params = {
+            "fields": "first_name,last_name,profile_pic",
+            "access_token": FB_PAGE_ACCESS_TOKEN,
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                FB_GRAPH_API.format(psid=psid),
+                params=params,
+                timeout=10.0,
+            )
+
+        if response.status_code == 200:
+            profile = response.json()
+            name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
+            logger.info(f"Fetched FB profile for {psid}: {name}")
+            return profile
+        else:
+            logger.warning(f"Failed to fetch FB profile: {response.status_code}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching FB profile for {psid}: {e}")
         return None
 
 
@@ -128,12 +165,18 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
 async def ensure_user_exists(user_id: str) -> bool:
     """
     Ensure user exists in user_ladda(LINE,FACE) table.
-    Fetches LINE profile for display_name if new LINE user.
+    Fetches LINE/Facebook profile for display_name.
     """
     try:
-        # For LINE users, fetch profile to get display_name
         display_name = None
-        if not user_id.startswith("fb:"):
+        if user_id.startswith("fb:"):
+            # Facebook user — fetch profile via Graph API
+            psid = user_id.replace("fb:", "", 1)
+            profile = await get_facebook_profile(psid)
+            if profile:
+                display_name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
+        else:
+            # LINE user — fetch profile via LINE API
             profile = await get_line_profile(user_id)
             if profile:
                 display_name = profile.get("displayName")

@@ -102,7 +102,7 @@ async def get_conversations(request: Request, hours: int = 24):
                 batch = user_ids[i : i + 50]
                 try:
                     user_result = (
-                        supabase_client.table("user_ladda")
+                        supabase_client.table("user_ladda(LINE,FACE)")
                         .select("line_user_id, display_name")
                         .in_("line_user_id", batch)
                         .execute()
@@ -204,7 +204,7 @@ async def get_conversation_messages(
         display_name = user_id[:12]
         try:
             user_result = (
-                supabase_client.table("user_ladda")
+                supabase_client.table("user_ladda(LINE,FACE)")
                 .select("display_name")
                 .eq("line_user_id", user_id)
                 .limit(1)
