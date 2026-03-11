@@ -313,17 +313,13 @@ class AnalyticsTracker:
             elif error_rate > 10 or avg_response_time > 5000:
                 health_status = "degraded"
 
-            # Get user statistics (provinces)
-            users_result = self.supabase.table('users').select('province').execute()
+            # Get user statistics from user_ladda(LINE,FACE)
+            users_result = self.supabase.table('user_ladda(LINE,FACE)').select('line_user_id, display_name, created_at').execute()
             users_data = users_result.data if users_result.data else []
-            
-            province_counter = {}
-            for user in users_data:
-                province = user.get('province')
-                if province:
-                    province_counter[province] = province_counter.get(province, 0) + 1
-            
-            top_provinces = sorted(province_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+            total_registered = len(users_data)
+
+            # Recent users (newest first, top 10)
+            recent_users = sorted(users_data, key=lambda u: u.get('created_at', ''), reverse=True)[:10]
 
             # Prepare daily series: avg response time and error rate per day
             daily_response_time_avg = {}
@@ -365,9 +361,14 @@ class AnalyticsTracker:
                     {"type": ptype, "count": count} 
                     for ptype, count in top_pest_types
                 ],
-                "top_provinces": [
-                    {"name": name, "count": count} 
-                    for name, count in top_provinces
+                "total_registered": total_registered,
+                "recent_users": [
+                    {
+                        "name": u.get('display_name', 'Unknown'),
+                        "user_id": u.get('line_user_id', ''),
+                        "created_at": u.get('created_at', '')
+                    }
+                    for u in recent_users
                 ],
                 "top_errors": [
                     {"type": etype, "count": count}
