@@ -17,6 +17,11 @@ FB_GRAPH_API = "https://graph.facebook.com/v21.0/{psid}"
 
 TABLE = 'user_ladda(LINE,FACE)'
 
+# Cache FB profile failures to avoid spamming Graph API every poll cycle
+# Key: psid, Value: timestamp of last failure
+_fb_profile_fail_cache: Dict[str, float] = {}
+_FB_FAIL_CACHE_TTL = 3600  # Don't retry for 1 hour after failure
+
 
 async def get_line_profile(user_id: str) -> Optional[Dict]:
     """
@@ -51,9 +56,12 @@ async def get_line_profile(user_id: str) -> Optional[Dict]:
         return None
 
 
-async def get_facebook_profile(psid: str) -> Optional[Dict]:
+async def get_facebook_profile(psid: str, skip_cache: bool = False) -> Optional[Dict]:
     """
-    Fetch user profile from Facebook Graph API
+    Fetch user profile from Facebook Graph API.
+
+    Uses failure cache to avoid spamming Graph API on repeated failures
+    (e.g. missing permissions).
 
     Returns:
         dict with keys: first_name, last_name, profile_pic
@@ -62,6 +70,17 @@ async def get_facebook_profile(psid: str) -> Optional[Dict]:
     if not FB_PAGE_ACCESS_TOKEN:
         logger.warning("FB_PAGE_ACCESS_TOKEN is empty — cannot fetch FB profile")
         return None
+
+    # Check failure cache (skip if called from debug endpoint)
+    if not skip_cache and psid in _fb_profile_fail_cache:
+        import time
+        age = time.time() - _fb_profile_fail_cache[psid]
+        if age < _FB_FAIL_CACHE_TTL:
+            logger.debug(f"Skipping FB profile for {psid} — cached failure ({int(age)}s ago)")
+            return None
+        else:
+            del _fb_profile_fail_cache[psid]
+
     try:
         params = {
             "fields": "first_name,last_name,profile_pic",
@@ -75,8 +94,12 @@ async def get_facebook_profile(psid: str) -> Optional[Dict]:
             profile = response.json()
             name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
             logger.info(f"Fetched FB profile for {psid}: {name}")
+            # Clear failure cache on success
+            _fb_profile_fail_cache.pop(psid, None)
             return profile
         else:
+            import time
+            _fb_profile_fail_cache[psid] = time.time()
             logger.warning(
                 f"Failed to fetch FB profile for {psid}: "
                 f"status={response.status_code} body={response.text[:200]}"
@@ -84,6 +107,8 @@ async def get_facebook_profile(psid: str) -> Optional[Dict]:
             return None
 
     except Exception as e:
+        import time
+        _fb_profile_fail_cache[psid] = time.time()
         logger.error(f"Error fetching FB profile for {psid}: {e}")
         return None
 
@@ -145,9 +170,18 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
             logger.debug(f"✓ Updated user_ladda for {user_id}")
         else:
             # New user → insert
+            # Better fallback name for FB users
+            if not display_name:
+                if user_id.startswith("fb:"):
+                    fallback = f"FB User #{user_id[-4:]}"
+                else:
+                    fallback = f"User_{user_id[:8]}"
+            else:
+                fallback = display_name
+
             insert_data = {
                 "line_user_id": user_id,
-                "display_name": display_name or f"User_{user_id[:8]}",
+                "display_name": fallback,
                 "created_at": now,
                 "updated_at": now,
             }

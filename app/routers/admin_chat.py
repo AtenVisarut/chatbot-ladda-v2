@@ -74,9 +74,15 @@ async def get_conversations(request: Request):
         sessions = {}
         for u in all_users:
             uid = u["line_user_id"]
+            raw_name = u.get("display_name") or ""
+            # Clean up ugly fallback names like "User_fb:33879..."
+            if raw_name.startswith("User_fb:") or raw_name.startswith("User_fb%"):
+                display_name = f"FB User #{uid[-4:]}"
+            else:
+                display_name = raw_name or uid[:14]
             sessions[uid] = {
                 "user_id": uid,
-                "display_name": u.get("display_name") or uid[:14],
+                "display_name": display_name,
                 "platform": "facebook" if uid.startswith("fb:") else "line",
                 "last_message": "",
                 "last_role": "",
@@ -109,17 +115,31 @@ async def get_conversations(request: Request):
                     sessions[uid]["last_role"] = msg["role"]
                     sessions[uid]["last_activity"] = msg["created_at"]
 
-        # Step 4: Auto-refresh fallback display names (User_xxx → real name)
+        # Step 4: Auto-refresh fallback display names (LINE users only)
+        # FB users: skip API refresh (requires pages_read_engagement permission)
+        # Instead, fix ugly "User_fb:..." names to "FB User #xxxx" in DB
         refresh_count = 0
         for uid, sess in sessions.items():
-            if sess["display_name"].startswith("User_") and refresh_count < 5:
+            dn = sess["display_name"]
+            if uid.startswith("fb:") and (dn.startswith("User_fb:") or dn.startswith("User_fb%")):
+                # Fix ugly DB name without calling FB API
+                clean_name = f"FB User #{uid[-4:]}"
+                sess["display_name"] = clean_name
+                try:
+                    if supabase_client:
+                        supabase_client.table("user_ladda(LINE,FACE)") \
+                            .update({"display_name": clean_name}) \
+                            .eq("line_user_id", uid) \
+                            .execute()
+                except Exception:
+                    pass
+            elif dn.startswith("User_") and not uid.startswith("fb:") and refresh_count < 5:
+                # LINE user — try API refresh
                 try:
                     new_name = await refresh_display_name(uid)
                     if new_name:
                         sess["display_name"] = new_name
                         logger.info(f"Auto-refreshed name: {uid[:12]}... → {new_name}")
-                    else:
-                        logger.warning(f"Auto-refresh returned None for {uid[:12]}...")
                     refresh_count += 1
                 except Exception as e:
                     logger.error(f"Auto-refresh failed for {uid[:12]}...: {e}")
@@ -367,7 +387,7 @@ async def debug_fb_profile(request: Request, psid: str):
     }
 
     try:
-        profile = await get_facebook_profile(psid)
+        profile = await get_facebook_profile(psid, skip_cache=True)
         if profile:
             result["status"] = "success"
             result["profile"] = {
