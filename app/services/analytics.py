@@ -170,140 +170,79 @@ class AnalyticsTracker:
             
             events = result.data if result.data else []
             
-            # Calculate statistics
+            # Calculate statistics (chat-only — no image analysis)
             unique_users = set()
-            image_count = 0
             question_count = 0
             error_count = 0
-            disease_counter = {}
-            pest_type_counter = {
-                "เชื้อรา": 0,
-                "แมลง": 0,
-                "วัชพืช": 0
-            }
-            product_counter = {}
             response_times = []
             error_types = {}
             daily_activity = {}
-            # Additional per-day metrics
             daily_users_sets = {}
             daily_response_times_by_day = {}
             daily_requests_by_day = {}
             daily_errors_by_day = {}
-            # Platform & Intent tracking
             platform_counter = {"line": 0, "facebook": 0}
             platform_users = {"line": set(), "facebook": set()}
             intent_counter = {}
             question_texts = {}
-            
+
             for event in events:
                 user_id = event.get('user_id')
                 event_type = event.get('event_type')
-                
+
                 if user_id:
                     unique_users.add(user_id)
-                    # Platform detection from user_id
                     platform = "facebook" if user_id.startswith("fb:") else "line"
                     platform_counter[platform] += 1
                     platform_users[platform].add(user_id)
 
-                # Track by event type
-                if event_type == 'image_analysis':
-                    image_count += 1
-                    disease = event.get('disease_name')
-                    if disease:
-                        disease_counter[disease] = disease_counter.get(disease, 0) + 1
-                    
-                    pest_type = event.get('pest_type')
-                    if pest_type:
-                        # Normalize pest type if needed, or just count
-                        if pest_type in pest_type_counter:
-                            pest_type_counter[pest_type] += 1
-                        else:
-                            pest_type_counter[pest_type] = pest_type_counter.get(pest_type, 0) + 1
-                    
-                    response_time = event.get('response_time_ms', 0)
-                    if response_time:
-                        response_times.append(response_time)
-                
-                elif event_type == 'question':
+                if event_type == 'question':
                     question_count += 1
                     response_time = event.get('response_time_ms', 0)
                     if response_time:
                         response_times.append(response_time)
-                    # Intent tracking
                     intent = event.get('intent')
                     if intent:
                         intent_counter[intent] = intent_counter.get(intent, 0) + 1
-                    # Question text tracking (group by short text)
                     q_text = event.get('question_text', '')
                     if q_text:
                         key = q_text[:60]
                         question_texts[key] = question_texts.get(key, 0) + 1
-                
-                elif event_type == 'product_recommendation':
-                    product = event.get('product_name')
-                    if product:
-                        product_counter[product] = product_counter.get(product, 0) + 1
-                
+
                 elif event_type == 'error':
                     error_count += 1
                     error_type = event.get('error_type', 'unknown')
                     error_types[error_type] = error_types.get(error_type, 0) + 1
-                
-                # Track daily activity and per-day aggregates
+
+                # Track daily activity
                 created_at = event.get('created_at')
                 if created_at:
                     try:
-                        # Parse date (YYYY-MM-DD)
                         date_str = datetime.fromisoformat(created_at).strftime('%Y-%m-%d')
-                        # total events per day
                         daily_activity[date_str] = daily_activity.get(date_str, 0) + 1
 
-                        # unique users per day
                         if user_id:
                             if date_str not in daily_users_sets:
                                 daily_users_sets[date_str] = set()
                             daily_users_sets[date_str].add(user_id)
 
-                        # requests (image_analysis + question) per day
-                        if event_type in ('image_analysis', 'question'):
+                        if event_type == 'question':
                             daily_requests_by_day[date_str] = daily_requests_by_day.get(date_str, 0) + 1
+                            response_time = event.get('response_time_ms', 0)
+                            if response_time:
+                                if date_str not in daily_response_times_by_day:
+                                    daily_response_times_by_day[date_str] = []
+                                daily_response_times_by_day[date_str].append(response_time)
 
-                        # response times per day
-                        response_time = event.get('response_time_ms', 0)
-                        if response_time and event_type in ('image_analysis', 'question'):
-                            if date_str not in daily_response_times_by_day:
-                                daily_response_times_by_day[date_str] = []
-                            daily_response_times_by_day[date_str].append(response_time)
-
-                        # errors per day
                         if event_type == 'error':
                             daily_errors_by_day[date_str] = daily_errors_by_day.get(date_str, 0) + 1
-
                     except:
                         pass
-            
-            # Calculate averages
+
             avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-            total_requests = image_count + question_count
+            total_requests = question_count
             error_rate = (error_count / total_requests * 100) if total_requests > 0 else 0
-            
-            # Sort and get top items
-            top_diseases = sorted(disease_counter.items(), key=lambda x: x[1], reverse=True)[:10]
-            top_products = sorted(product_counter.items(), key=lambda x: x[1], reverse=True)[:10]
-            # Ensure specific order for pest types
-            # User wants: เชื้อรา, แมลง, วัชพืช
-            priority_types = ["เชื้อรา", "แมลง", "วัชพืช"]
-            top_pest_types = []
-            for pt in priority_types:
-                if pt in pest_type_counter:
-                    top_pest_types.append((pt, pest_type_counter[pt]))
-            # Add others if any
-            for pt, count in pest_type_counter.items():
-                if pt not in priority_types:
-                    top_pest_types.append((pt, count))
-            
+
             top_errors = sorted(error_types.items(), key=lambda x: x[1], reverse=True)[:5]
             
             # Determine health status
@@ -337,7 +276,6 @@ class AnalyticsTracker:
             return {
                 "overview": {
                     "unique_users": len(unique_users),
-                    "images_analyzed": image_count,
                     "questions_asked": question_count,
                     "total_requests": total_requests,
                     "errors": error_count
@@ -349,18 +287,6 @@ class AnalyticsTracker:
                 "health": {
                     "status": health_status
                 },
-                "top_diseases": [
-                    {"name": name, "count": count} 
-                    for name, count in top_diseases
-                ],
-                "top_products": [
-                    {"name": name, "count": count} 
-                    for name, count in top_products
-                ],
-                "pest_types": [
-                    {"type": ptype, "count": count} 
-                    for ptype, count in top_pest_types
-                ],
                 "total_registered": total_registered,
                 "recent_users": [
                     {
@@ -409,7 +335,6 @@ class AnalyticsTracker:
             return {
                 "overview": {
                     "unique_users": 0,
-                    "images_analyzed": 0,
                     "questions_asked": 0,
                     "total_requests": 0,
                     "errors": 0
@@ -418,11 +343,7 @@ class AnalyticsTracker:
                     "avg_response_time_ms": 0,
                     "error_rate_percent": 0
                 },
-                "top_diseases": [],
-                "top_products": [],
-                "pest_types": [],
                 "top_errors": [],
-                "hourly_activity": {},
                 "error": str(e)
             }
     

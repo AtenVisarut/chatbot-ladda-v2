@@ -493,15 +493,7 @@
                 <div class="label">unique per period</div>
             </div>
             <div class="stat-card">
-                <h3><span class="stat-icon green"><i data-lucide="image" class="icon-sm"></i></span> Images</h3>
-                <div class="value">
-                    <span id="imagesAnalyzed">-</span>
-                    <span class="change" id="imagesChange"></span>
-                </div>
-                <div class="label">analyzed</div>
-            </div>
-            <div class="stat-card">
-                <h3><span class="stat-icon purple"><i data-lucide="message-square" class="icon-sm"></i></span> Questions</h3>
+                <h3><span class="stat-icon green"><i data-lucide="message-square" class="icon-sm"></i></span> Messages</h3>
                 <div class="value">
                     <span id="questionsAsked">-</span>
                     <span class="change" id="questionsChange"></span>
@@ -565,14 +557,6 @@
         <!-- Lists -->
         <div class="grid-2">
             <div class="section-card">
-                <h2><i data-lucide="bug" class="icon"></i> Top Diseases</h2>
-                <div id="topDiseases"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
-            </div>
-            <div class="section-card">
-                <h2><i data-lucide="pill" class="icon"></i> Top Products</h2>
-                <div id="topProducts"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
-            </div>
-            <div class="section-card">
                 <h2><i data-lucide="users" class="icon"></i> Registered Users <span id="totalRegistered" style="font-size:var(--font-size-sm);font-weight:var(--font-weight-normal);color:var(--color-text-muted);margin-left:var(--space-2);"></span></h2>
                 <div id="recentUsers"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
             </div>
@@ -601,12 +585,6 @@
                 <div><canvas id="chartResponseTime" class="chart"></canvas></div>
                 <div><canvas id="chartErrorRate" class="chart"></canvas></div>
             </div>
-        </div>
-
-        <!-- Pest Types -->
-        <div class="section-card">
-            <h2><i data-lucide="search" class="icon"></i> Pest Types</h2>
-            <div id="pestTypes"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
         </div>
 
         <!-- Performance Metrics -->
@@ -666,8 +644,6 @@
 
                 updateStatWithComparison('uniqueUsers', 'usersChange',
                     currentData.overview.unique_users, previousData.overview.unique_users);
-                updateStatWithComparison('imagesAnalyzed', 'imagesChange',
-                    currentData.overview.images_analyzed, previousData.overview.images_analyzed);
                 updateStatWithComparison('questionsAsked', 'questionsChange',
                     currentData.overview.questions_asked, previousData.overview.questions_asked);
                 updateStatWithComparison('avgResponseTime', 'responseTimeChange',
@@ -705,10 +681,7 @@
                     }
                 } catch(e) {}
 
-                updateList('topDiseases', currentData.top_diseases, currentData.overview.images_analyzed);
-                updateList('topProducts', currentData.top_products, currentData.overview.images_analyzed);
                 updateRecentUsers(currentData.recent_users, currentData.total_registered);
-                updateList('pestTypes', currentData.pest_types, currentData.overview.images_analyzed);
                 updateDailyChart(currentData.daily_activity);
                 updatePerformanceMetrics(currentData);
                 renderTrendCharts(currentData);
@@ -889,8 +862,7 @@
             csv += 'Generated: ' + new Date().toLocaleString('th-TH') + '\n\n';
             csv += 'Overview\nMetric,Value\n';
             csv += 'Unique Users,' + currentData.overview.unique_users + '\n';
-            csv += 'Images Analyzed,' + currentData.overview.images_analyzed + '\n';
-            csv += 'Questions Asked,' + currentData.overview.questions_asked + '\n';
+            csv += 'Messages,' + currentData.overview.questions_asked + '\n';
             csv += 'Total Requests,' + currentData.overview.total_requests + '\n';
             csv += 'Errors,' + currentData.overview.errors + '\n';
             csv += 'Avg Response Time (ms),' + currentData.performance.avg_response_time_ms.toFixed(2) + '\n';
@@ -904,10 +876,6 @@
             (currentData.top_intents || []).forEach(function(i) { csv += '"' + i.name + '",' + i.count + '\n'; });
             csv += '\nTop Questions\nQuestion,Count\n';
             (currentData.top_questions || []).forEach(function(q) { csv += '"' + q.text + '",' + q.count + '\n'; });
-            csv += '\nTop Diseases\nDisease,Count\n';
-            currentData.top_diseases.forEach(function(d) { csv += '"' + d.name + '",' + d.count + '\n'; });
-            csv += '\nTop Products\nProduct,Count\n';
-            currentData.top_products.forEach(function(p) { csv += '"' + p.name + '",' + p.count + '\n'; });
 
             var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
             var blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8' });
