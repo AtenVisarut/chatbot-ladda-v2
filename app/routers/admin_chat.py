@@ -110,14 +110,20 @@ async def get_conversations(request: Request):
                     sessions[uid]["last_activity"] = msg["created_at"]
 
         # Step 4: Auto-refresh fallback display names (User_xxx → real name)
+        refresh_count = 0
         for uid, sess in sessions.items():
-            if sess["display_name"].startswith("User_"):
+            if sess["display_name"].startswith("User_") and refresh_count < 5:
                 try:
                     new_name = await refresh_display_name(uid)
                     if new_name:
                         sess["display_name"] = new_name
-                except Exception:
-                    pass
+                        logger.info(f"Auto-refreshed name: {uid[:12]}... → {new_name}")
+                    else:
+                        logger.warning(f"Auto-refresh returned None for {uid[:12]}...")
+                    refresh_count += 1
+                except Exception as e:
+                    logger.error(f"Auto-refresh failed for {uid[:12]}...: {e}")
+                    refresh_count += 1
 
         # Step 5: Mark handoffs
         handoff_convos = []

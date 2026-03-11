@@ -60,18 +60,16 @@ async def get_facebook_profile(psid: str) -> Optional[Dict]:
         None if failed
     """
     if not FB_PAGE_ACCESS_TOKEN:
+        logger.warning("FB_PAGE_ACCESS_TOKEN is empty — cannot fetch FB profile")
         return None
     try:
         params = {
             "fields": "first_name,last_name,profile_pic",
             "access_token": FB_PAGE_ACCESS_TOKEN,
         }
+        url = FB_GRAPH_API.format(psid=psid)
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                FB_GRAPH_API.format(psid=psid),
-                params=params,
-                timeout=10.0,
-            )
+            response = await client.get(url, params=params, timeout=10.0)
 
         if response.status_code == 200:
             profile = response.json()
@@ -79,7 +77,10 @@ async def get_facebook_profile(psid: str) -> Optional[Dict]:
             logger.info(f"Fetched FB profile for {psid}: {name}")
             return profile
         else:
-            logger.warning(f"Failed to fetch FB profile: {response.status_code}")
+            logger.warning(
+                f"Failed to fetch FB profile for {psid}: "
+                f"status={response.status_code} body={response.text[:200]}"
+            )
             return None
 
     except Exception as e:
