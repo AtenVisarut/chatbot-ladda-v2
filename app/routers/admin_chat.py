@@ -94,10 +94,11 @@ async def get_conversations(request: Request, hours: int = 24):
                 }
             sessions[uid]["message_count"] += 1
 
-        # ดึง display names จาก user_ladda
+        # ดึง display names จาก user_ladda + กรองเฉพาะ user ของ project นี้
+        # (conversation_memory อาจมี user จาก project อื่นที่ share DB เดียวกัน)
+        valid_user_ids = set()
         if sessions:
             user_ids = list(sessions.keys())
-            # Batch query (max 50 per batch to avoid URL length issues)
             for i in range(0, len(user_ids), 50):
                 batch = user_ids[i : i + 50]
                 try:
@@ -109,21 +110,42 @@ async def get_conversations(request: Request, hours: int = 24):
                     )
                     for u in user_result.data or []:
                         uid = u["line_user_id"]
+                        valid_user_ids.add(uid)
                         if uid in sessions and u.get("display_name"):
                             sessions[uid]["display_name"] = u["display_name"]
                 except Exception:
                     pass
 
-        # Mark handoffs
+            # กรองเฉพาะ user ที่ลงทะเบียนใน user_ladda(LINE,FACE) ของ project นี้
+            sessions = {uid: s for uid, s in sessions.items() if uid in valid_user_ids}
+
+        # Mark handoffs (only for users registered in this project)
         if handoff_manager:
             handoffs = await handoff_manager.get_handoffs(status="pending")
+
+            # Ensure handoff users are checked against user_ladda too
+            handoff_uids = [h["user_id"] for h in handoffs if h["user_id"] not in valid_user_ids]
+            for i in range(0, len(handoff_uids), 50):
+                batch = handoff_uids[i : i + 50]
+                try:
+                    hr = (
+                        supabase_client.table("user_ladda(LINE,FACE)")
+                        .select("line_user_id")
+                        .in_("line_user_id", batch)
+                        .execute()
+                    )
+                    for u in hr.data or []:
+                        valid_user_ids.add(u["line_user_id"])
+                except Exception:
+                    pass
+
             for h in handoffs:
                 uid = h["user_id"]
                 if uid in sessions:
                     sessions[uid]["has_handoff"] = True
                     sessions[uid]["handoff_id"] = h["id"]
-                else:
-                    # Handoff user might not have recent messages in window
+                elif uid in valid_user_ids:
+                    # Handoff user registered but no recent messages in window
                     sessions[uid] = {
                         "user_id": uid,
                         "last_message": h.get("trigger_message", "")[:100],
