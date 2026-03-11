@@ -64,9 +64,11 @@ _NO_DATA_PHRASES_FINAL = [
 
 def _is_no_data_answer(answer: str) -> bool:
     """ตรวจว่า answer เป็นคำตอบ 'ไม่มีข้อมูล' ที่ไม่ควรส่งให้ user
-    ถ้ามี no-data phrase → suppress เลย ไม่ว่าจะยาวแค่ไหน
-    ให้ admin มาตอบแทน
+    suppress เฉพาะคำตอบสั้น (< 150 chars) ที่มี no-data phrase
+    ถ้ายาว = มีข้อมูลจริงปนอยู่ → ส่งให้ user ได้
     """
+    if len(answer) >= 150:
+        return False
     return any(p in answer for p in _NO_DATA_PHRASES_FINAL)
 
 router = APIRouter()

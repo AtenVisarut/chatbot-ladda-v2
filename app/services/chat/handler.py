@@ -1116,7 +1116,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
     """
     try:
         # ตรวจสอบว่าคำถามระบุสินค้าหรือพืชหรือไม่
-        product_in_question = extract_product_name_from_question(message)
+        products_in_question = extract_all_product_names_from_question(message)
+        product_in_question = products_in_question[0] if products_in_question else None
         plant_in_question = extract_plant_type_from_question(message)
 
         # ถ้าถามแบบสั้นๆ (เช่น "อัตราการใช้", "วิธีใช้") โดยไม่ระบุสินค้า → ต้องถามกลับ
@@ -1131,9 +1132,12 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         products = await get_recommended_products(user_id, limit=5)
 
         if not products:
-            # ถ้าไม่มี memory แต่ระบุชื่อสินค้า → ดึงจาก DB ตรงๆ
-            if product_in_question:
-                products = await _fetch_product_from_db(product_in_question)
+            # ถ้าไม่มี memory แต่ระบุชื่อสินค้า → ดึงจาก DB ตรงๆ (ทุกตัวที่พบ)
+            if products_in_question:
+                for piq in products_in_question:
+                    db_rows = await _fetch_product_from_db(piq)
+                    if db_rows:
+                        products.extend(db_rows)
             if not products:
                 return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
 
@@ -1142,23 +1146,24 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                         'how_to_use', 'usage_rate', 'usage_period',
                         'fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones',
                         'active_ingredient', 'applicable_crops', 'phytotoxicity', 'caution_notes']
-        if product_in_question:
-            db_product = await _fetch_product_from_db(product_in_question)
-            if db_product:
-                # Merge DB data into memory products
-                merged = False
-                for p in products:
-                    if product_in_question.lower() in p.get('product_name', '').lower():
-                        db_p = db_product[0]
-                        for key in _ENRICH_KEYS:
-                            if db_p.get(key) and not p.get(key):
-                                p[key] = db_p[key]
-                        merged = True
-                        break
-                # ถ้าสินค้าที่ถามไม่อยู่ใน memory → เพิ่ม DB product เข้าไปเป็นตัวแรก
-                if not merged:
-                    logger.info(f"📦 Product '{product_in_question}' not in memory, adding from DB")
-                    products.insert(0, db_product[0])
+        if products_in_question:
+            for piq in products_in_question:
+                db_product = await _fetch_product_from_db(piq)
+                if db_product:
+                    # Merge DB data into memory products
+                    merged = False
+                    for p in products:
+                        if piq.lower() in p.get('product_name', '').lower():
+                            db_p = db_product[0]
+                            for key in _ENRICH_KEYS:
+                                if db_p.get(key) and not p.get(key):
+                                    p[key] = db_p[key]
+                            merged = True
+                            break
+                    # ถ้าสินค้าที่ถามไม่อยู่ใน memory → เพิ่มจาก DB
+                    if not merged:
+                        logger.info(f"📦 Product '{piq}' not in memory, adding from DB")
+                        products.append(db_product[0])
         else:
             # ไม่มีชื่อสินค้าในคำถาม (เช่น "กี่กระสอบ", "1ขวดฉีดได้กี่ไร่")
             # → enrich ทุกตัวใน memory ที่ยังขาด field สำคัญ
@@ -1369,8 +1374,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                     "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                 ]
-                if any(p in usage_answer for p in _NO_DATA_USAGE):
-                    logger.info(f"⏭️ No data — usage answer contains no-data phrase, skipping reply (admin will handle)")
+                if len(usage_answer) < 150 and any(p in usage_answer for p in _NO_DATA_USAGE):
+                    logger.info(f"⏭️ No data — usage answer is short ({len(usage_answer)} chars) + no-data phrase, skipping reply")
                     return None
                 # Add assistant response to memory
                 await add_to_memory(user_id, "assistant", usage_answer)
@@ -1463,8 +1468,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                             "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                         ]
-                        if any(p in answer for p in _NO_DATA_PHRASES):
-                            logger.info(f"⏭️ No data — answer contains no-data phrase ({len(answer)} chars), skipping reply (admin will handle)")
+                        if len(answer) < 150 and any(p in answer for p in _NO_DATA_PHRASES):
+                            logger.info(f"⏭️ No data — answer is short ({len(answer)} chars) + no-data phrase, skipping reply")
                             return None
 
                         # Track analytics if product recommendation
@@ -1541,8 +1546,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                 "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
             ]
-            if any(p in answer for p in _NO_DATA_PHRASES_LEGACY):
-                logger.info(f"⏭️ No data — legacy LLM response contains no-data phrase, skipping reply (admin will handle)")
+            if len(answer) < 150 and any(p in answer for p in _NO_DATA_PHRASES_LEGACY):
+                logger.info(f"⏭️ No data — legacy answer is short ({len(answer)} chars) + no-data phrase, skipping reply")
                 return None
 
             # Track analytics if product recommendation
