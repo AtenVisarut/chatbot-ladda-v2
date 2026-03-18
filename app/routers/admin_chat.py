@@ -20,6 +20,7 @@ from app.services.memory import add_to_memory
 from app.services.user_service import refresh_display_name, get_facebook_profile
 from app.utils.line.helpers import push_line
 from app.utils.facebook.helpers import send_facebook_message, split_message
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +63,10 @@ async def get_conversations(request: Request):
 
     try:
         # Step 1: ดึง ALL registered users จาก user_ladda (แหล่งหลัก)
-        users_result = (
+        users_result = await aexecute(
             supabase_client.table("user_ladda(LINE,FACE)")
             .select("line_user_id, display_name, updated_at")
             .order("updated_at", desc=True)
-            .execute()
         )
         all_users = users_result.data or []
 
@@ -96,13 +96,12 @@ async def get_conversations(request: Request):
         cutoff = (
             datetime.now(timezone.utc) - timedelta(days=7)
         ).isoformat()
-        msg_result = (
+        msg_result = await aexecute(
             supabase_client.table("conversation_memory")
             .select("user_id, content, role, created_at")
             .gte("created_at", cutoff)
             .order("created_at", desc=True)
             .limit(3000)
-            .execute()
         )
 
         for msg in msg_result.data or []:
@@ -127,10 +126,9 @@ async def get_conversations(request: Request):
                 sess["display_name"] = clean_name
                 try:
                     if supabase_client:
-                        supabase_client.table("user_ladda(LINE,FACE)") \
+                        await aexecute(supabase_client.table("user_ladda(LINE,FACE)") \
                             .update({"display_name": clean_name}) \
-                            .eq("line_user_id", uid) \
-                            .execute()
+                            .eq("line_user_id", uid))
                 except Exception:
                     pass
             elif dn.startswith("User_") and not uid.startswith("fb:") and refresh_count < 5:
@@ -196,13 +194,12 @@ async def get_conversation_messages(
         raise HTTPException(status_code=503, detail="Database not available")
 
     try:
-        result = (
+        result = await aexecute(
             supabase_client.table("conversation_memory")
             .select("role, content, metadata, created_at")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .limit(limit)
-            .execute()
         )
 
         messages = list(reversed(result.data or []))
@@ -226,12 +223,11 @@ async def get_conversation_messages(
         # Get display name
         display_name = user_id[:12]
         try:
-            user_result = (
+            user_result = await aexecute(
                 supabase_client.table("user_ladda(LINE,FACE)")
                 .select("display_name")
                 .eq("line_user_id", user_id)
                 .limit(1)
-                .execute()
             )
             if user_result.data and user_result.data[0].get("display_name"):
                 display_name = user_result.data[0]["display_name"]

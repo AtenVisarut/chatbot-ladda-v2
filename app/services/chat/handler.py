@@ -5,8 +5,9 @@ import hashlib
 import time
 from typing import List, Dict, Optional, Tuple
 from app.dependencies import openai_client, supabase_client
+from app.utils.async_db import aexecute
 from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
-from app.services.cache import get_from_cache, set_to_cache
+from app.services.cache import get_from_cache, set_to_cache, save_conversation_state, clear_conversation_state
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product.recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
 try:
@@ -1093,12 +1094,12 @@ async def _fetch_product_from_db(product_name: str) -> list:
         from app.dependencies import supabase_client as _sb
         if not _sb:
             return []
-        result = _sb.table(PRODUCT_TABLE).select(
+        result = await aexecute(_sb.table(PRODUCT_TABLE).select(
             'product_name, active_ingredient, fungicides, insecticides, herbicides, '
             'biostimulant, pgr_hormones, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, '
             'absorption_method, mechanism_of_action, phytotoxicity, caution_notes'
-        ).ilike('product_name', f'%{product_name}%').limit(5).execute()
+        ).ilike('product_name', f'%{product_name}%').limit(5))
         return result.data if result.data else []
     except Exception as e:
         logger.error(f"_fetch_product_from_db error: {e}")
@@ -1333,6 +1334,50 @@ def _make_response_cache_key(message: str) -> str:
     return hashlib.md5(normalized.encode('utf-8')).hexdigest()
 
 
+async def _save_conv_state_from_answer(
+    user_id: str, answer: str, intent: str = None, query: str = "", rag_response=None,
+):
+    """Extract entities from answer + query and save conversation state."""
+    try:
+        state = {}
+
+        # Extract products mentioned in the answer
+        mentioned_products = [p for p in ICP_PRODUCT_NAMES.keys() if p in answer]
+        if mentioned_products:
+            state["active_product"] = mentioned_products[0]
+            state["active_products"] = mentioned_products[:5]
+
+        # If RAG response has query_analysis, use its structured entities
+        if rag_response and hasattr(rag_response, 'query_analysis') and rag_response.query_analysis:
+            qa = rag_response.query_analysis
+            entities = qa.entities or {}
+            if entities.get('product_name') and not state.get('active_product'):
+                state["active_product"] = entities['product_name']
+            if entities.get('plant_type'):
+                state["active_plant"] = entities['plant_type']
+            if entities.get('disease_name'):
+                state["active_disease"] = entities['disease_name']
+            if entities.get('pest_name'):
+                state["active_pest"] = entities['pest_name']
+            state["active_intent"] = str(qa.intent.value) if hasattr(qa.intent, 'value') else intent
+        else:
+            # Fallback: extract from query text
+            product_in_q = extract_product_name_from_question(query)
+            if product_in_q and not state.get('active_product'):
+                state["active_product"] = product_in_q
+            plant_in_q = extract_plant_type_from_question(query)
+            if plant_in_q:
+                state["active_plant"] = plant_in_q
+            state["active_intent"] = intent or "unknown"
+
+        # Only save if we have meaningful state
+        if state.get("active_product") or state.get("active_plant") or state.get("active_disease"):
+            await save_conversation_state(user_id, state)
+
+    except Exception as e:
+        logger.error(f"Error saving conversation state: {e}")
+
+
 async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
@@ -1377,8 +1422,19 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 if len(usage_answer) < 150 and any(p in usage_answer for p in _NO_DATA_USAGE):
                     logger.info(f"⏭️ No data — usage answer is short ({len(usage_answer)} chars) + no-data phrase, skipping reply")
                     return None
-                # Add assistant response to memory
-                await add_to_memory(user_id, "assistant", usage_answer)
+                # Add assistant response to memory WITH product metadata
+                # (fix: เดิมไม่ save metadata → get_recommended_products() หา product ไม่เจอ)
+                usage_metadata = {}
+                usage_products = [p for p in ICP_PRODUCT_NAMES.keys() if p in usage_answer]
+                if not usage_products:
+                    usage_products_mem = await get_recommended_products(user_id, limit=3)
+                    usage_products = [p.get('product_name', '') for p in usage_products_mem if p.get('product_name')]
+                if usage_products:
+                    usage_metadata["type"] = "product_recommendation"
+                    usage_metadata["products"] = [{"product_name": p} for p in usage_products[:5]]
+                await add_to_memory(user_id, "assistant", usage_answer, metadata=usage_metadata)
+                # Save conversation state
+                await _save_conv_state_from_answer(user_id, usage_answer, intent="usage_instruction", query=message)
                 return usage_answer
             # ถ้าไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
             logger.info("No products in memory, falling back to normal flow")
@@ -1406,6 +1462,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             greeting_answer = random.choice(GREETINGS)
             logger.info(f"Greeting detected: '{message[:30]}' → instant reply")
             await add_to_memory(user_id, "assistant", greeting_answer)
+            await clear_conversation_state(user_id)
             return greeting_answer
 
         # 5b. Response cache — return cached answer for identical questions
@@ -1485,11 +1542,11 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                     if clean_name and len(clean_name) > 3:
                                         product_names.append(clean_name)
                                 if product_names:
-                                    await analytics_tracker.track_product_recommendation(
+                                    asyncio.create_task(analytics_tracker.track_product_recommendation(
                                         user_id=user_id,
                                         disease_name="AgenticRAG",
                                         products=product_names[:5]
-                                    )
+                                    ))
                                     logger.info(f"Tracked {len(product_names)} products from AgenticRAG")
 
                         # Track question analytics
@@ -1497,12 +1554,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             from app.dependencies import analytics_tracker as _at
                             if _at:
                                 _elapsed = (time.time() - _start_time) * 1000
-                                await _at.track_question(
+                                asyncio.create_task(_at.track_question(
                                     user_id=user_id,
                                     question=message[:200],
                                     intent=rag_response.intent if rag_response else "unknown",
                                     response_time_ms=_elapsed
-                                )
+                                ))
                         except Exception:
                             pass
 
@@ -1526,6 +1583,10 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                     enriched_products.append({"product_name": mp})
                             rag_metadata["products"] = enriched_products
                         await add_to_memory(user_id, "assistant", answer, metadata=rag_metadata)
+                        # Save conversation state
+                        await _save_conv_state_from_answer(
+                            user_id, answer, query=message, rag_response=rag_response
+                        )
                         # Cache response for identical future questions
                         if _response_cache_key:
                             await set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL)
@@ -1563,11 +1624,11 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         if clean_name and len(clean_name) > 3:
                             product_names.append(clean_name)
                     if product_names:
-                        await analytics_tracker.track_product_recommendation(
+                        asyncio.create_task(analytics_tracker.track_product_recommendation(
                             user_id=user_id,
                             disease_name="Q&A",
                             products=product_names[:5]
-                        )
+                        ))
                         logger.info(f"Tracked {len(product_names)} products from Q&A")
 
             # Track question analytics (legacy path)
@@ -1575,17 +1636,19 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 from app.dependencies import analytics_tracker as _at2
                 if _at2:
                     _elapsed = (time.time() - _start_time) * 1000
-                    await _at2.track_question(
+                    asyncio.create_task(_at2.track_question(
                         user_id=user_id,
                         question=message[:200],
                         intent="legacy_qa",
                         response_time_ms=_elapsed
-                    )
+                    ))
             except Exception:
                 pass
 
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
+            # Save conversation state (legacy Q&A path)
+            await _save_conv_state_from_answer(user_id, answer, intent="legacy_qa", query=message)
             # Cache response for identical future questions
             if _response_cache_key:
                 await set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL)
@@ -1620,17 +1683,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 from app.dependencies import analytics_tracker as _at3
                 if _at3:
                     _elapsed = (time.time() - _start_time) * 1000
-                    await _at3.track_question(
+                    asyncio.create_task(_at3.track_question(
                         user_id=user_id,
                         question=message[:200],
                         intent="general_chat",
                         response_time_ms=_elapsed
-                    )
+                    ))
             except Exception:
                 pass
 
             # Add assistant response to memory
             await add_to_memory(user_id, "assistant", answer)
+            # General chat — clear product state (non-agri topic)
+            if not any(p in answer for p in ICP_PRODUCT_NAMES.keys()):
+                await clear_conversation_state(user_id)
             return answer
 
     except Exception as e:

@@ -1,6 +1,7 @@
 # LINE Plant Disease Detection Bot v2.5.1
 import logging
 import asyncio
+import concurrent.futures
 import os
 import uvicorn
 from fastapi import FastAPI
@@ -56,7 +57,11 @@ async def periodic_cleanup():
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
-    # Startup
+    # Startup — increase thread pool for asyncio.to_thread() (Supabase sync calls)
+    loop = asyncio.get_event_loop()
+    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=20))
+    logger.info("Thread pool executor set to 20 workers")
+
     logger.info("=" * 60)
     logger.info("Starting LINE Plant Pest & Disease Detection Bot (Refactored)")
     logger.info(f"OpenAI API: {'✓' if OPENAI_API_KEY else '✗'}")

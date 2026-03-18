@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import httpx
 from app.dependencies import supabase_client
 from app.config import LINE_CHANNEL_ACCESS_TOKEN, FB_PAGE_ACCESS_TOKEN
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -119,10 +120,9 @@ async def get_user(user_id: str) -> Optional[Dict]:
         if not supabase_client:
             return None
 
-        result = supabase_client.table(TABLE)\
+        result = await aexecute(supabase_client.table(TABLE)\
             .select('*')\
-            .eq('line_user_id', user_id)\
-            .execute()
+            .eq('line_user_id', user_id))
 
         if result.data and len(result.data) > 0:
             return result.data[0]
@@ -150,10 +150,9 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
             return False
 
         # Check if user already exists
-        result = supabase_client.table(TABLE) \
+        result = await aexecute(supabase_client.table(TABLE) \
             .select('id, line_user_id') \
-            .eq('line_user_id', user_id) \
-            .execute()
+            .eq('line_user_id', user_id))
 
         now = datetime.now(timezone.utc).isoformat()
 
@@ -163,10 +162,9 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
             if display_name:
                 update_data["display_name"] = display_name
 
-            supabase_client.table(TABLE) \
+            await aexecute(supabase_client.table(TABLE) \
                 .update(update_data) \
-                .eq('line_user_id', user_id) \
-                .execute()
+                .eq('line_user_id', user_id))
             logger.debug(f"✓ Updated user_ladda for {user_id}")
         else:
             # New user → insert
@@ -185,9 +183,8 @@ async def register_user_ladda(user_id: str, display_name: Optional[str] = None) 
                 "created_at": now,
                 "updated_at": now,
             }
-            supabase_client.table(TABLE) \
-                .insert(insert_data) \
-                .execute()
+            await aexecute(supabase_client.table(TABLE) \
+                .insert(insert_data))
             logger.info(f"🆕 Registered new user_ladda: {user_id} ({display_name or 'no name'})")
 
         return True
@@ -212,10 +209,9 @@ async def refresh_display_name(user_id: str) -> Optional[str]:
                 display_name = profile.get("displayName")
 
         if display_name and supabase_client:
-            supabase_client.table(TABLE) \
+            await aexecute(supabase_client.table(TABLE) \
                 .update({"display_name": display_name}) \
-                .eq("line_user_id", user_id) \
-                .execute()
+                .eq("line_user_id", user_id))
             logger.info(f"Refreshed display_name for {user_id[:12]}... → {display_name}")
 
         return display_name
@@ -224,11 +220,19 @@ async def refresh_display_name(user_id: str) -> Optional[str]:
         return None
 
 
+# In-memory cache of known user IDs — skip DB check for repeat messages
+_known_users: set = set()
+
+
 async def ensure_user_exists(user_id: str) -> bool:
     """
     Ensure user exists in user_ladda(LINE,FACE) table.
     Fetches LINE/Facebook profile for display_name.
+    Uses in-memory cache to skip DB for known users.
     """
+    if user_id in _known_users:
+        return True
+
     try:
         display_name = None
         if user_id.startswith("fb:"):
@@ -243,7 +247,10 @@ async def ensure_user_exists(user_id: str) -> bool:
             if profile:
                 display_name = profile.get("displayName")
 
-        return await register_user_ladda(user_id, display_name)
+        success = await register_user_ladda(user_id, display_name)
+        if success:
+            _known_users.add(user_id)
+        return success
 
     except Exception as e:
         logger.error(f"Error ensuring user exists {user_id}: {e}", exc_info=True)

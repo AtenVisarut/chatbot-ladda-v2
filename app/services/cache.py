@@ -6,9 +6,10 @@ import base64
 import threading
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
-from app.config import CACHE_TTL, PENDING_CONTEXT_TTL, MAX_CACHE_SIZE
+from app.config import CACHE_TTL, PENDING_CONTEXT_TTL, CONVERSATION_STATE_TTL, MAX_CACHE_SIZE
 from app.dependencies import supabase_client
 from app.services.redis_cache import is_redis_available, redis_get, redis_set, redis_delete
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -174,11 +175,10 @@ async def get_from_cache(cache_type: str, key: str) -> Optional[Any]:
         if not supabase_client:
             return None
         
-        result = supabase_client.table('cache')\
+        result = await aexecute(supabase_client.table('cache')\
             .select('value, expires_at')\
             .eq('key', full_key)\
-            .gt('expires_at', datetime.now(timezone.utc).isoformat())\
-            .execute()
+            .gt('expires_at', datetime.now(timezone.utc).isoformat()))
         
         if result.data:
             value = result.data[0]['value']
@@ -226,11 +226,11 @@ async def set_to_cache(cache_type: str, key: str, data: Any, ttl: int = CACHE_TT
         
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=ttl)).isoformat()
         
-        supabase_client.table('cache').upsert({
+        await aexecute(supabase_client.table('cache').upsert({
             'key': full_key,
             'value': data,
             'expires_at': expires_at
-        }).execute()
+        }))
         
         logger.debug(f"✓ Cache set (L1+L2): {full_key[:50]}")
         
@@ -253,7 +253,7 @@ async def delete_from_cache(cache_type: str, key: str):
     # L2: Delete from Supabase
     try:
         if supabase_client:
-            supabase_client.table('cache').delete().eq('key', full_key).execute()
+            await aexecute(supabase_client.table('cache').delete().eq('key', full_key))
     except Exception as e:
         logger.error(f"Cache delete error: {e}")
 
@@ -303,6 +303,85 @@ async def delete_pending_context(user_id: str):
 
 
 # ============================================================================
+# Conversation State Tracking (L1 Memory + L0 Redis only, no Supabase)
+# ============================================================================
+# Explicit state ว่าตอนนี้คุยเรื่องสินค้าอะไร — ใช้แทน heuristic text scanning
+# State structure:
+# {
+#     "active_product": "พรีดิก",
+#     "active_products": ["พรีดิก", "A", "B"],
+#     "active_intent": "product_inquiry",
+#     "active_plant": "ทุเรียน",
+#     "active_disease": None,
+#     "active_pest": None,
+#     "updated_at": 1710000000.0
+# }
+
+async def save_conversation_state(user_id: str, state: Dict[str, Any]):
+    """Save conversation state to L1 Memory + L0 Redis (ephemeral, no Supabase)."""
+    try:
+        import time as _time
+        state["updated_at"] = _time.time()
+
+        full_key = f"conv_state:{user_id}"
+
+        # L1: Memory cache (fast, same process)
+        _memory_cache.set(full_key, state, CONVERSATION_STATE_TTL)
+
+        # L0: Redis (cross-process, survives restart)
+        if is_redis_available():
+            redis_set(full_key, state, CONVERSATION_STATE_TTL)
+
+        logger.info(f"✓ Conversation state saved: user={user_id[:8]}, product={state.get('active_product')}, intent={state.get('active_intent')}")
+
+    except Exception as e:
+        logger.error(f"Error saving conversation state: {e}")
+
+
+async def get_conversation_state(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get conversation state from L1 Memory → L0 Redis. Returns None if expired."""
+    try:
+        full_key = f"conv_state:{user_id}"
+
+        # L1: Check memory cache first
+        state = _memory_cache.get(full_key)
+        if state is not None:
+            return state
+
+        # L0: Redis fallback
+        if is_redis_available():
+            state = redis_get(full_key)
+            if state is not None:
+                # Backfill L1
+                _memory_cache.set(full_key, state, CONVERSATION_STATE_TTL)
+                return state
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error getting conversation state: {e}")
+        return None
+
+
+async def clear_conversation_state(user_id: str):
+    """Clear conversation state (on greeting or explicit topic change)."""
+    try:
+        full_key = f"conv_state:{user_id}"
+
+        # L1: Memory
+        _memory_cache.delete(full_key)
+
+        # L0: Redis
+        if is_redis_available():
+            redis_delete(full_key)
+
+        logger.info(f"✓ Conversation state cleared: user={user_id[:8]}")
+
+    except Exception as e:
+        logger.error(f"Error clearing conversation state: {e}")
+
+
+# ============================================================================
 # Cleanup & Stats
 # ============================================================================
 
@@ -316,10 +395,9 @@ async def cleanup_expired_cache():
         if not supabase_client:
             return
         
-        result = supabase_client.table('cache')\
+        result = await aexecute(supabase_client.table('cache')\
             .delete()\
-            .lt('expires_at', datetime.now(timezone.utc).isoformat())\
-            .execute()
+            .lt('expires_at', datetime.now(timezone.utc).isoformat()))
         
         if result.data:
             logger.info(f"L2 Cache cleanup: removed {len(result.data)} expired entries")
@@ -337,7 +415,7 @@ async def clear_all_caches():
     # L2: Clear Supabase cache
     try:
         if supabase_client:
-            supabase_client.table('cache').delete().neq('key', '0').execute()
+            await aexecute(supabase_client.table('cache').delete().neq('key', '0'))
             logger.info("L2 Supabase cache cleared")
     except Exception as e:
         logger.error(f"Error clearing L2 cache: {e}")
@@ -352,7 +430,7 @@ async def get_cache_stats() -> dict:
     
     try:
         if supabase_client:
-            result = supabase_client.table('cache').select('key', count='exact').execute()
+            result = await aexecute(supabase_client.table('cache').select('key', count='exact'))
             stats["l2_supabase"] = {
                 "items": result.count if result.count is not None else 0,
                 "storage": "Supabase (PostgreSQL)"

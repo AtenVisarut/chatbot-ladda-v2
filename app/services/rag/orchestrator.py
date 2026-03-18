@@ -138,6 +138,27 @@ class AgenticRAG:
                 if len(all_detected_products) > 1:
                     hints['product_names'] = all_detected_products
                     logger.info(f"  - Multi-product query: {all_detected_products}")
+                # ── Strategy -1: Conversation State (most reliable for follow-ups) ──
+                # Read explicit state instead of scanning text heuristically
+                if not detected_product and user_id:
+                    try:
+                        from app.services.cache import get_conversation_state
+                        conv_state = await get_conversation_state(user_id)
+                        if conv_state and conv_state.get('active_product'):
+                            _plant_in_q_s = extract_plant_type_from_question(query)
+                            _dp_kw = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
+                            _has_dp = any(kw in query for kw in _dp_kw)
+                            _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
+                            _is_app = _plant_in_q_s and any(v in query for v in _uv)
+                            _new_topic = (_plant_in_q_s and not _is_app) or _has_dp
+                            if not _new_topic:
+                                detected_product = conv_state['active_product']
+                                logger.info(f"  - Product from conversation state: {detected_product}")
+                            else:
+                                logger.info(f"  - State has '{conv_state['active_product']}' but query has new topic, skipping")
+                    except Exception as e:
+                        logger.warning(f"  - Conversation state read failed (non-critical): {e}")
+
                 # If no product in current query, try extracting from context (follow-up questions)
                 if not detected_product and context:
                     # Split context into active topic vs past sections
@@ -360,6 +381,14 @@ class AgenticRAG:
                     if drop_reason and not has_new_different_product:
                         logger.info(f"  - Drop product: '{hints['product_name']}' ({drop_reason})")
                         del hints['product_name']
+                        # Clear conversation state so stale product doesn't persist
+                        if user_id:
+                            try:
+                                from app.services.cache import clear_conversation_state
+                                await clear_conversation_state(user_id)
+                                logger.info(f"  - Conversation state cleared (topic change)")
+                            except Exception:
+                                pass
                     elif has_new_different_product:
                         logger.info(f"  - Switch product: → '{hints['product_name']}' ({drop_reason})")
 

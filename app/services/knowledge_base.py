@@ -2,6 +2,7 @@ import logging
 import json
 from typing import List, Dict, Optional
 from app.dependencies import supabase_client, openai_client
+from app.utils.async_db import aexecute
 from app.services.cache import get_from_cache, set_to_cache
 from app.utils.text_processing import clean_knowledge_text, post_process_answer
 from app.config import LLM_MODEL_KNOWLEDGE, EMBEDDING_MODEL, LLM_TEMP_KNOWLEDGE, LLM_TOKENS_KNOWLEDGE
@@ -46,14 +47,14 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                 )
                 query_embedding = response.data[0].embedding
                 
-                result = supabase_client.rpc(
+                result = await aexecute(supabase_client.rpc(
                     'match_knowledge',
                     {
                         'query_embedding': query_embedding,
                         'match_threshold': 0.35,  # ลด threshold เพื่อให้ค้นหาปุ๋ยได้ดีขึ้น
                         'match_count': 5
                     }
-                ).execute()
+                ))
                 
                 if result.data:
                     relevant_docs.extend(result.data)
@@ -68,11 +69,10 @@ async def answer_question_with_knowledge(question: str, context: str = "") -> st
                 keywords = [w for w in question.split() if len(w) > 3]
                 
                 for keyword in keywords[:3]:
-                    result = supabase_client.table('knowledge')\
+                    result = await aexecute(supabase_client.table('knowledge')\
                         .select('content, category')\
                         .ilike('content', f'%{keyword}%')\
-                        .limit(3)\
-                        .execute()
+                        .limit(3))
                     
                     if result.data:
                         relevant_docs.extend(result.data)

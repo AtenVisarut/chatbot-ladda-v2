@@ -39,3 +39,6 @@ line-bot-sdk==3.14.0
 
 # Templates
 jinja2==3.1.4
+
+# WSGI server (multi-worker support)
+gunicorn==22.0.0

@@ -16,6 +16,8 @@ import time
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Tuple
 
+from app.utils.async_db import aexecute
+
 logger = logging.getLogger(__name__)
 
 # Thai diacritics pattern (same as text_processing.py)
@@ -194,7 +196,7 @@ class ProductRegistry:
                 raise RuntimeError("supabase_client is None")
 
             from app.config import PRODUCT_TABLE
-            result = supabase_client.table(PRODUCT_TABLE).select('product_name, aliases').execute()
+            result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('product_name, aliases'))
             if not result.data:
                 raise RuntimeError("No products returned from DB")
 

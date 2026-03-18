@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.config import ADMIN_USERNAME, ADMIN_PASSWORD, EMBEDDING_MODEL, PRODUCT_TABLE
 from app.dependencies import openai_client, supabase_client
 from app.services.cache import clear_all_caches
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +71,9 @@ async def regenerate_embeddings_endpoint(request: Request):
 
     # Fetch products to regenerate
     if product_name:
-        result = supabase_client.table(PRODUCT_TABLE).select('*').ilike('product_name', f'%{product_name}%').execute()
+        result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('*').ilike('product_name', f'%{product_name}%'))
     else:
-        result = supabase_client.table(PRODUCT_TABLE).select('*').execute()
+        result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('*'))
 
     if not result.data:
         return {"status": "error", "message": f"ไม่พบสินค้า: {product_name}" if product_name else "ไม่พบสินค้าในระบบ"}
@@ -102,9 +103,9 @@ async def regenerate_embeddings_endpoint(request: Request):
             )
             embedding = resp.data[0].embedding
 
-            supabase_client.table(PRODUCT_TABLE).update({
+            await aexecute(supabase_client.table(PRODUCT_TABLE).update({
                 'embedding': embedding
-            }).eq('id', product['id']).execute()
+            }).eq('id', product['id']))
 
             success_count += 1
         except Exception as e:

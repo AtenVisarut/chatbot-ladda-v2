@@ -22,6 +22,7 @@ from app.services.rag import (
     IntentType
 )
 from app.config import LLM_MODEL_RERANKING, EMBEDDING_MODEL, LLM_TEMP_RERANKING, LLM_TOKENS_RERANKING, PRODUCT_TABLE, PRODUCT_RPC
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -237,11 +238,10 @@ class RetrievalAgent:
 
         try:
             # Try ilike search on product_name
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_name', f'%{product_name}%') \
-                .limit(5) \
-                .execute()
+                .limit(5))
 
             if not result.data:
                 return []
@@ -283,11 +283,10 @@ class RetrievalAgent:
 
             or_filter = ",".join(or_conditions)
 
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .or_(or_filter) \
-                .limit(top_k) \
-                .execute()
+                .limit(top_k))
 
             if not result.data:
                 return []
@@ -368,7 +367,7 @@ class RetrievalAgent:
                 .limit(top_k)
             if cat_filter:
                 query_builder = query_builder.ilike('product_category', f'%{cat_filter}%')
-            result = query_builder.execute()
+            result = await aexecute(query_builder)
 
             if not result.data:
                 return []
@@ -422,12 +421,11 @@ class RetrievalAgent:
 
             existing_ids = {d.id for d in existing_docs}
 
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Herbicide%') \
                 .or_(or_filter) \
-                .limit(top_k) \
-                .execute()
+                .limit(top_k))
 
             if not result.data:
                 return []
@@ -479,12 +477,11 @@ class RetrievalAgent:
 
             existing_ids = {d.id for d in existing_docs}
 
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Insecticide%') \
                 .or_(or_filter) \
-                .limit(top_k) \
-                .execute()
+                .limit(top_k))
 
             if not result.data:
                 return []
@@ -524,10 +521,9 @@ class RetrievalAgent:
             return
 
         try:
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('id, strategy, selling_point, applicable_crops, package_size') \
-                .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]) \
-                .execute()
+                .in_('id', [int(i) for i in set(missing_ids) if i.isdigit()]))
 
             if result.data:
                 enrich_map = {str(r['id']): r for r in result.data}
@@ -1067,7 +1063,7 @@ class RetrievalAgent:
                 'match_count': top_k * 2
             }
 
-            result = self.supabase.rpc(PRODUCT_RPC, rpc_params).execute()
+            result = await aexecute(self.supabase.rpc(PRODUCT_RPC, rpc_params))
 
             if not result.data:
                 return []
@@ -1137,9 +1133,9 @@ class RetrievalAgent:
                 if len(variant) < 3:
                     continue
                 or_filter = build_pest_or_filter(variant)
-                result = self.supabase.table(PRODUCT_TABLE).select('*').or_(
+                result = await aexecute(self.supabase.table(PRODUCT_TABLE).select('*').or_(
                     or_filter
-                ).limit(5).execute()
+                ).limit(5))
 
                 if result.data:
                     docs = [self._build_doc_from_row(item, similarity=0.50) for item in result.data]
@@ -1157,11 +1153,10 @@ class RetrievalAgent:
         if not self.supabase:
             return []
         try:
-            result = self.supabase.table(PRODUCT_TABLE) \
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
                 .ilike('product_category', '%Fungicide%') \
-                .limit(top_k) \
-                .execute()
+                .limit(top_k))
 
             if not result.data:
                 return []
@@ -1231,7 +1226,7 @@ class RetrievalAgent:
             if plant_type:
                 query_builder = query_builder.ilike('applicable_crops', f'%{plant_type}%')
 
-            result = query_builder.execute()
+            result = await aexecute(query_builder)
 
             if not result.data:
                 return []
@@ -1256,7 +1251,7 @@ class RetrievalAgent:
                 return []
 
             # Call hybrid search diseases
-            result = self.supabase.rpc(
+            result = await aexecute(self.supabase.rpc(
                 'hybrid_search_diseases',
                 {
                     'query_embedding': embedding,
@@ -1266,7 +1261,7 @@ class RetrievalAgent:
                     'match_threshold': self.vector_threshold,
                     'match_count': top_k
                 }
-            ).execute()
+            ))
 
             if not result.data:
                 return []

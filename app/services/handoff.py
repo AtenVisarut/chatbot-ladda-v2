@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from supabase import Client
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,11 @@ class HandoffManager:
         """สร้าง handoff เมื่อ bot ตอบไม่ได้ — ไม่สร้างซ้ำถ้ามี pending/active อยู่"""
         try:
             # เช็คว่ามี pending/active อยู่แล้วไหม
-            existing = (
+            existing = await aexecute(
                 self.supabase.table("admin_handoffs")
                 .select("id")
                 .eq("user_id", user_id)
                 .in_("status", ["pending", "active"])
-                .execute()
             )
             if existing.data:
                 logger.info(
@@ -49,8 +49,8 @@ class HandoffManager:
                 "trigger_message": trigger_message[:500] if trigger_message else "",
                 "status": "pending",
             }
-            result = (
-                self.supabase.table("admin_handoffs").insert(data).execute()
+            result = await aexecute(
+                self.supabase.table("admin_handoffs").insert(data)
             )
             if result.data:
                 hid = result.data[0]["id"]
@@ -66,13 +66,12 @@ class HandoffManager:
     async def has_active_handoff(self, user_id: str) -> bool:
         """เช็คว่า user มี handoff ที่ยังไม่ resolve"""
         try:
-            result = (
+            result = await aexecute(
                 self.supabase.table("admin_handoffs")
                 .select("id")
                 .eq("user_id", user_id)
                 .in_("status", ["pending", "active"])
                 .limit(1)
-                .execute()
             )
             return bool(result.data)
         except Exception as e:
@@ -95,7 +94,7 @@ class HandoffManager:
                     query = query.in_("status", ["pending", "active"])
                 else:
                     query = query.eq("status", status)
-            result = query.execute()
+            result = await aexecute(query)
             return result.data or []
         except Exception as e:
             logger.error(f"Failed to get handoffs: {e}")
@@ -104,11 +103,10 @@ class HandoffManager:
     async def get_pending_count(self) -> int:
         """นับ handoff ที่รอตอบ"""
         try:
-            result = (
+            result = await aexecute(
                 self.supabase.table("admin_handoffs")
                 .select("id", count="exact")
                 .in_("status", ["pending", "active"])
-                .execute()
             )
             return result.count or 0
         except Exception as e:
@@ -118,9 +116,9 @@ class HandoffManager:
     async def claim_handoff(self, handoff_id: int, admin_name: str) -> bool:
         """Admin claim handoff → status=active"""
         try:
-            self.supabase.table("admin_handoffs").update(
+            await aexecute(self.supabase.table("admin_handoffs").update(
                 {"status": "active", "assigned_admin": admin_name}
-            ).eq("id", handoff_id).execute()
+            ).eq("id", handoff_id))
             logger.info(f"Handoff {handoff_id} claimed by {admin_name}")
             return True
         except Exception as e:
@@ -138,9 +136,9 @@ class HandoffManager:
             }
             if admin_name:
                 update["assigned_admin"] = admin_name
-            self.supabase.table("admin_handoffs").update(update).eq(
+            await aexecute(self.supabase.table("admin_handoffs").update(update).eq(
                 "id", handoff_id
-            ).execute()
+            ))
             logger.info(f"Handoff {handoff_id} resolved by {admin_name}")
             return True
         except Exception as e:
@@ -150,14 +148,14 @@ class HandoffManager:
     async def resolve_by_user(self, user_id: str) -> bool:
         """Resolve all handoffs for a user"""
         try:
-            self.supabase.table("admin_handoffs").update(
+            await aexecute(self.supabase.table("admin_handoffs").update(
                 {
                     "status": "resolved",
                     "resolved_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("user_id", user_id).in_(
                 "status", ["pending", "active"]
-            ).execute()
+            ))
             logger.info(f"All handoffs resolved for user {user_id[:8]}...")
             return True
         except Exception as e:
@@ -167,14 +165,13 @@ class HandoffManager:
     async def get_handoff_for_user(self, user_id: str) -> Optional[dict]:
         """ดึง active/pending handoff ของ user"""
         try:
-            result = (
+            result = await aexecute(
                 self.supabase.table("admin_handoffs")
                 .select("*")
                 .eq("user_id", user_id)
                 .in_("status", ["pending", "active"])
                 .order("created_at", desc=True)
                 .limit(1)
-                .execute()
             )
             return result.data[0] if result.data else None
         except Exception as e:

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import os
 from supabase import Client
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class AnalyticsTracker:
                 "created_at": datetime.now().isoformat()
             }
             
-            self.supabase.table('analytics_events').insert(data).execute()
+            await aexecute(self.supabase.table('analytics_events').insert(data))
             logger.debug(f"✓ Tracked image analysis: {disease_name}")
             
         except Exception as e:
@@ -72,7 +73,7 @@ class AnalyticsTracker:
                 "created_at": datetime.now().isoformat()
             }
             
-            self.supabase.table('analytics_events').insert(data).execute()
+            await aexecute(self.supabase.table('analytics_events').insert(data))
             logger.debug(f"✓ Tracked question")
             
         except Exception as e:
@@ -95,7 +96,7 @@ class AnalyticsTracker:
                     "created_at": datetime.now().isoformat()
                 }
                 
-                self.supabase.table('analytics_events').insert(data).execute()
+                await aexecute(self.supabase.table('analytics_events').insert(data))
             
             logger.debug(f"✓ Tracked {len(products)} product recommendations")
             
@@ -124,7 +125,7 @@ class AnalyticsTracker:
             # However, looking at other methods, they use specific fields.
             # Let's try to keep it simple.
             
-            self.supabase.table('analytics_events').insert(data).execute()
+            await aexecute(self.supabase.table('analytics_events').insert(data))
             logger.debug(f"✓ Tracked registration for {user_id}")
             
         except Exception as e:
@@ -148,7 +149,7 @@ class AnalyticsTracker:
                 "created_at": datetime.now().isoformat()
             }
             
-            self.supabase.table('analytics_events').insert(data).execute()
+            await aexecute(self.supabase.table('analytics_events').insert(data))
             logger.debug(f"✓ Tracked error: {error_type}")
             
         except Exception as e:
@@ -162,11 +163,10 @@ class AnalyticsTracker:
             start_date = end_date - timedelta(days=days)
             
             # Get all events in date range
-            result = self.supabase.table('analytics_events')\
+            result = await aexecute(self.supabase.table('analytics_events')\
                 .select('*')\
                 .gte('created_at', start_date.isoformat())\
-                .lte('created_at', end_date.isoformat())\
-                .execute()
+                .lte('created_at', end_date.isoformat()))
             
             events = result.data if result.data else []
             
@@ -253,7 +253,7 @@ class AnalyticsTracker:
                 health_status = "degraded"
 
             # Get user statistics from user_ladda(LINE,FACE)
-            users_result = self.supabase.table('user_ladda(LINE,FACE)').select('line_user_id, display_name, created_at').execute()
+            users_result = await aexecute(self.supabase.table('user_ladda(LINE,FACE)').select('line_user_id, display_name, created_at'))
             users_data = users_result.data if users_result.data else []
             total_registered = len(users_data)
 
@@ -455,7 +455,7 @@ class AlertManager:
                 logger.warning(f"⚠️ ALERT: {message}")
             
             # Store in database
-            self.supabase.table('analytics_alerts').insert(alert).execute()
+            await aexecute(self.supabase.table('analytics_alerts').insert(alert))
             
         except Exception as e:
             logger.error(f"Failed to create alert: {e}")
@@ -465,11 +465,10 @@ class AlertManager:
         try:
             cutoff_time = datetime.now() - timedelta(hours=1)
             
-            result = self.supabase.table('analytics_alerts')\
+            result = await aexecute(self.supabase.table('analytics_alerts')\
                 .select('*')\
                 .gte('created_at', cutoff_time.isoformat())\
-                .order('created_at', desc=True)\
-                .execute()
+                .order('created_at', desc=True))
             
             return result.data if result.data else []
             

@@ -3,6 +3,7 @@ import asyncio
 import re
 from app.dependencies import supabase_client
 from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW
+from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def add_to_memory(user_id: str, role: str, content: str, metadata: dict = 
             "metadata": metadata or {}
         }
         
-        result = supabase_client.table('conversation_memory').insert(data).execute()
+        result = await aexecute(supabase_client.table('conversation_memory').insert(data))
         logger.info(f"✓ Added to memory: {role} message for user {user_id[:8]}...")
         
         # Clean up old messages (keep last N per user)
@@ -48,12 +49,11 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
             return ""
 
         # Get last N messages for this user
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(limit)\
-            .execute()
+            .limit(limit))
 
         if not result.data:
             return ""
@@ -96,11 +96,10 @@ async def cleanup_old_memory(user_id: str):
                 return
 
             # Get all message IDs for this user, ordered by created_at desc
-            result = supabase_client.table('conversation_memory')\
+            result = await aexecute(supabase_client.table('conversation_memory')\
                 .select('id')\
                 .eq('user_id', user_id)\
-                .order('created_at', desc=True)\
-                .execute()
+                .order('created_at', desc=True))
 
             if not result.data or len(result.data) <= MAX_MEMORY_MESSAGES:
                 return
@@ -110,10 +109,9 @@ async def cleanup_old_memory(user_id: str):
 
             if ids_to_delete:
                 # Delete old messages
-                supabase_client.table('conversation_memory')\
+                await aexecute(supabase_client.table('conversation_memory')\
                     .delete()\
-                    .in_('id', ids_to_delete)\
-                    .execute()
+                    .in_('id', ids_to_delete))
                 logger.info(f"✓ Cleaned up {len(ids_to_delete)} old messages for user {user_id[:8]}...")
 
         except Exception as e:
@@ -127,10 +125,9 @@ async def clear_memory(user_id: str):
             return
 
         # 1. Delete from conversation_memory table
-        supabase_client.table('conversation_memory')\
+        await aexecute(supabase_client.table('conversation_memory')\
             .delete()\
-            .eq('user_id', user_id)\
-            .execute()
+            .eq('user_id', user_id))
 
         logger.info(f"✓ Cleared memory for user {user_id[:8]}...")
 
@@ -143,10 +140,9 @@ async def get_memory_stats(user_id: str) -> dict:
         if not supabase_client:
             return {"total": 0, "user_messages": 0, "assistant_messages": 0}
 
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('role')\
-            .eq('user_id', user_id)\
-            .execute()
+            .eq('user_id', user_id))
 
         if not result.data:
             return {"total": 0, "user_messages": 0, "assistant_messages": 0}
@@ -230,7 +226,7 @@ async def save_recommended_products(user_id: str, products: list, disease_name: 
             "metadata": metadata
         }
 
-        result = supabase_client.table('conversation_memory').insert(data).execute()
+        result = await aexecute(supabase_client.table('conversation_memory').insert(data))
         logger.info(f"✓ Saved {len(products_data)} recommended products to memory for user {user_id[:8]}...")
 
     except Exception as e:
@@ -247,12 +243,11 @@ async def get_recommended_products(user_id: str, limit: int = 5) -> list:
             return []
 
         # ค้นหาข้อความที่มี metadata เป็น product_recommendation
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(20)\
-            .execute()
+            .limit(20))
 
         if not result.data:
             return []
@@ -294,12 +289,11 @@ async def get_full_conversation_history(user_id: str, limit: int = MEMORY_CONTEX
         if not supabase_client:
             return []
 
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(limit)\
-            .execute()
+            .limit(limit))
 
         if not result.data:
             return []
@@ -323,12 +317,11 @@ async def get_conversation_summary(user_id: str) -> dict:
         if not supabase_client:
             return {}
 
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(MEMORY_CONTEXT_WINDOW)\
-            .execute()
+            .limit(MEMORY_CONTEXT_WINDOW))
 
         if not result.data:
             return {}
@@ -632,12 +625,11 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
             return ""
 
         # Fetch raw messages from DB
-        result = supabase_client.table('conversation_memory')\
+        result = await aexecute(supabase_client.table('conversation_memory')\
             .select('role, content, metadata, created_at')\
             .eq('user_id', user_id)\
             .order('created_at', desc=True)\
-            .limit(MEMORY_CONTEXT_WINDOW)\
-            .execute()
+            .limit(MEMORY_CONTEXT_WINDOW))
 
         if not result.data:
             return ""

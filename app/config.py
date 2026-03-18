@@ -35,6 +35,7 @@ if SECRET_KEY == "your-secret-key-change-in-production":
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour
 PENDING_CONTEXT_TTL = 1800  # 30 minutes (เพิ่มจาก 5 นาที เพื่อให้ user มีเวลาตอบ)
+CONVERSATION_STATE_TTL = int(os.getenv("CONVERSATION_STATE_TTL", "1800"))  # 30 min — conversation state expiry
 MAX_CACHE_SIZE = 5000  # Maximum cache entries (เพิ่มจาก 1000 เป็น 5000)
 
 # Rate limiting per user

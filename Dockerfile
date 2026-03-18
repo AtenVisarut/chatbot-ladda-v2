@@ -20,5 +20,5 @@ COPY . .
 # Expose port
 EXPOSE 8080
 
-# Run the application
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Run the application with gunicorn (multi-worker for concurrency)
+CMD gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8080} --timeout 120 --graceful-timeout 30
