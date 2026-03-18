@@ -89,7 +89,7 @@ USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 # ============================================================================#
 LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
 LLM_MODEL_INTENT = os.getenv("LLM_MODEL_INTENT", "gpt-4o")
-LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o")
+LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o-mini")
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
