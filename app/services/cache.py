@@ -339,22 +339,27 @@ async def save_conversation_state(user_id: str, state: Dict[str, Any]):
 
 
 async def get_conversation_state(user_id: str) -> Optional[Dict[str, Any]]:
-    """Get conversation state from L1 Memory → L0 Redis. Returns None if expired."""
+    """Get conversation state from L0 Redis → L1 Memory fallback.
+
+    IMPORTANT: Redis is checked FIRST because gunicorn multi-worker means
+    each worker has its own L1 memory cache. Worker A may save state but
+    Worker B still has stale L1 data. Redis is the cross-worker source of truth.
+    """
     try:
         full_key = f"conv_state:{user_id}"
 
-        # L1: Check memory cache first
-        state = _memory_cache.get(full_key)
-        if state is not None:
-            return state
-
-        # L0: Redis fallback
+        # L0: Redis first (cross-worker source of truth)
         if is_redis_available():
             state = redis_get(full_key)
             if state is not None:
-                # Backfill L1
+                # Backfill L1 for subsequent reads within same worker
                 _memory_cache.set(full_key, state, CONVERSATION_STATE_TTL)
                 return state
+
+        # L1: Memory fallback (only when Redis unavailable)
+        state = _memory_cache.get(full_key)
+        if state is not None:
+            return state
 
         return None
 

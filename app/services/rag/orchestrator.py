@@ -339,7 +339,10 @@ class AgenticRAG:
                         alias.lower() in query.lower() for alias in product_aliases
                     )
                     # Check if current msg mentions a DIFFERENT product explicitly
-                    new_product_in_query = extract_product_name_from_question(query)
+                    # IMPORTANT: Use exact match (all_detected_products from line ~135)
+                    # NOT extract_product_name_from_question which includes fuzzy matching
+                    # that causes false positives (e.g. "ทุเรียน" fuzzy→"รีโนเวท")
+                    new_product_in_query = all_detected_products[0] if all_detected_products else None
                     has_new_different_product = (
                         new_product_in_query
                         and new_product_in_query != hints['product_name']
@@ -367,8 +370,9 @@ class AgenticRAG:
                             'ใช้ยังไง', 'ใช้เท่าไหร่', 'ผสมกี่', 'ฉีดกี่', 'พ่นกี่',
                             'ผสมเท่าไหร่', 'อัตราเท่าไหร่', 'ใช้กี่', 'ราดกี่',
                             'ใช้ช่วงไหน', 'ใช้ตอนไหน', 'ใช้ได้กี่', 'ได้ผลไหม',
+                            'ได้ช่วงไหน', 'ช่วงไหนได้', 'ใช้ได้ไหม', 'ใช้กับ',
                         ]
-                        _is_usage_followup = len(query.strip()) < 30 and any(p in query for p in _FOLLOWUP_USAGE)
+                        _is_usage_followup = len(query.strip()) < 40 and any(p in query for p in _FOLLOWUP_USAGE)
 
                         if not _has_reference and not _is_usage_followup:
                             _has_specific_entity = bool(
