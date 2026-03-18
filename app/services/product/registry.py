@@ -93,7 +93,7 @@ _FALLBACK_PRODUCTS = {
     # NOTE: auto-variants already handle consonant swaps (ค↔ก,ท↔ต,ซ↔ส,ห↔ฮ,พ↔ป,บ↔ป,ฟ↔ฝ),
     #       diacritics stripping, hyphen removal, and number spacing.
     #       Aliases here cover: English names, short forms, nicknames, unusual typos.
-    "กะรัต": ["กะรัต", "กะรัต 35", "กะหรัต", "การัต", "karat"],
+    "กะรัต": ["กะรัต", "กะรัต 35", "กะหรัต", "การัต", "กระรัต", "karat"],
     "ก็อปกัน": ["ก็อปกัน", "กอปกัน", "ท็อปกัน", "ทอปกัน", "ก๊อปกัน", "topgun", "top gun"],
     "คาริสมา": ["คาริสมา", "คาริสม่า", "คาริส", "charisma", "คริสม่า"],
     "ซิมเมอร์": ["ซิมเมอร์", "ซิมเมอ", "simmer", "ชิมเมอร์"],
