@@ -150,7 +150,9 @@ class AgenticRAG:
                             _has_dp = any(kw in query for kw in _dp_kw)
                             _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
                             _is_app = _plant_in_q_s and any(v in query for v in _uv)
-                            _new_topic = (_plant_in_q_s and not _is_app) or _has_dp
+                            # ถ้าไม่มีชื่อสินค้าและไม่มีชื่อพืช → subjectless follow-up → ไม่ถือเป็น new topic
+                            _subjectless = not detected_product and not _plant_in_q_s
+                            _new_topic = (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless)
                             if not _new_topic:
                                 detected_product = conv_state['active_product']
                                 logger.info(f"  - Product from conversation state: {detected_product}")
