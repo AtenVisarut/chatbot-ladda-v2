@@ -368,7 +368,15 @@ class ResponseGeneratorAgent:
             _ex_pest = query_analysis.entities.get('pest_name', '')
 
             def _exempt_from_crop_filter(d):
-                """Keep doc if its pest columns match queried disease/pest."""
+                """Keep doc if pest columns match AND crop is compatible.
+                Tightened: if applicable_crops is specified but doesn't include
+                the queried plant, do NOT exempt even if disease/pest matches.
+                This prevents wrong-crop context (e.g. 'ทรงพุ่ม' for rice).
+                """
+                # Check crop compatibility first — if crop is specified but doesn't match, reject
+                _crops = str(d.metadata.get('applicable_crops') or '')
+                if _crops.strip() and plant_type_filter and not _plant_matches_crops(plant_type_filter, _crops):
+                    return False
                 _pt = _get_pest_text_from_meta(d.metadata)
                 if _ex_disease and _any_disease_variant_matches(
                         generate_thai_disease_variants(_ex_disease), _pt):

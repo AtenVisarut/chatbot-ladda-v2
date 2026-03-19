@@ -272,6 +272,19 @@ class AgenticRAG:
                     logger.info(f"  - Pre-extracted plant: '{detected_plant}'")
 
                 # --- Pre-LLM Entity Extraction: Pest name ---
+                # Compound words: "ยาเพลี้ย", "ยาหนอน" → extract pest name
+                _PEST_COMPOUND_WORD_MAP = {
+                    'ยาเพลี้ย': 'เพลี้ย', 'ยาหนอน': 'หนอน', 'ยาแมลง': 'แมลง',
+                    'ยาฆ่าเพลี้ย': 'เพลี้ย', 'ยาฆ่าหนอน': 'หนอน', 'ยาฆ่าแมลง': 'แมลง',
+                    'สารกำจัดเพลี้ย': 'เพลี้ย', 'สารกำจัดหนอน': 'หนอน', 'สารกำจัดแมลง': 'แมลง',
+                    'กำจัดเพลี้ย': 'เพลี้ย', 'กำจัดหนอน': 'หนอน', 'กำจัดแมลง': 'แมลง',
+                }
+                for _compound, _pest in _PEST_COMPOUND_WORD_MAP.items():
+                    if _compound in query:
+                        hints['pest_name'] = _pest
+                        logger.info(f"  - Pre-extracted pest (compound): '{_compound}' → '{_pest}'")
+                        break
+
                 _PEST_PATTERNS_STAGE0 = [
                     # Specific before generic (longest-first matching)
                     'เพลี้ยกระโดดสีน้ำตาล', 'เพลี้ยจักจั่นข้าวโพด', 'เพลี้ยกระโดดข้าวโพด',
@@ -285,11 +298,13 @@ class AgenticRAG:
                     'ไรสี่ขา', 'ไรแดง', 'ไรขาว', 'ไรแมง', 'ตัวไร',
                     'ทริปส์', 'จักจั่น', 'มด', 'ปลวก',
                 ]
-                for pattern in _PEST_PATTERNS_STAGE0:
-                    if diacritics_match(query, pattern):
-                        hints['pest_name'] = pattern  # canonical pattern
-                        logger.info(f"  - Pre-extracted pest: '{pattern}'")
-                        break
+                # Only check pattern list if compound word didn't match
+                if 'pest_name' not in hints:
+                    for pattern in _PEST_PATTERNS_STAGE0:
+                        if diacritics_match(query, pattern):
+                            hints['pest_name'] = pattern  # canonical pattern
+                            logger.info(f"  - Pre-extracted pest: '{pattern}'")
+                            break
 
                 # --- Weed Synonym Injection ---
                 # "หญ้า" doesn't match product embeddings that use "วัชพืช"

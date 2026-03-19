@@ -237,11 +237,19 @@ class RetrievalAgent:
             return []
 
         try:
-            # Try ilike search on product_name
+            # Step 1: Exact match first (prevents bundle false positive,
+            # e.g. "ไฮซีส" should NOT match "ชุด กล่องม่วง (แอสไปร์ + ไฮซีส)")
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
                 .select('*') \
-                .ilike('product_name', f'%{product_name}%') \
+                .eq('product_name', product_name) \
                 .limit(5))
+
+            # Step 2: Fallback to ilike if exact match finds nothing
+            if not result.data:
+                result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
+                    .select('*') \
+                    .ilike('product_name', f'%{product_name}%') \
+                    .limit(5))
 
             if not result.data:
                 return []
@@ -705,12 +713,13 @@ class RetrievalAgent:
             # Triggered when vector search missed products that DO target the queried pest
             pest_name = query_analysis.entities.get('pest_name', '')
             if pest_name and query_analysis.intent in (IntentType.PEST_CONTROL, IntentType.PRODUCT_RECOMMENDATION):
-                # Check if ANY retrieved doc mentions pest_name in insecticides
-                _has_pest_in_docs = any(
-                    pest_name.lower() in (d.metadata.get('insecticides') or '').lower()
-                    for d in all_docs
+                # Count how many retrieved docs mention pest_name in insecticides
+                _pest_match_count = sum(
+                    1 for d in all_docs
+                    if pest_name.lower() in (d.metadata.get('insecticides') or '').lower()
                 )
-                if not _has_pest_in_docs:
+                if _pest_match_count < 3:
+                    logger.info(f"  - Stage 1.96: pest_match_count={_pest_match_count} < 3, triggering fallback for '{pest_name}'")
                     pest_fallback_docs = await self._pest_column_fallback_search(query_analysis, all_docs)
                     if pest_fallback_docs:
                         pest_fallback_ids = {d.id for d in pest_fallback_docs}
@@ -818,7 +827,7 @@ class RetrievalAgent:
                         continue  # Don't penalize the queried product itself
                     cat = str(doc.metadata.get('category') or '').lower()
                     if cat and not any(ec.lower() in cat for ec in expected_categories):
-                        penalty = -0.50
+                        penalty = -0.75
                         doc.rerank_score = max(0.0, doc.rerank_score + penalty)
                         logger.info(f"  - Category mismatch penalty {penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
                 reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
@@ -1070,8 +1079,15 @@ class RetrievalAgent:
 
             # Convert to RetrievedDocument with filtering
             docs = []
+            _original_query_lower = query_analysis.original_query.lower() if query_analysis.original_query else ''
             for item in result.data:
                 similarity = float(item.get('similarity', 0))
+
+                # Name-match boost: user ถามชื่อสินค้าตรง → boost score +0.25
+                # ป้องกัน "แจ๊ส" → ได้ "เกรค" (vector similarity สูงเพราะ insecticide คล้ายกัน)
+                _pname = str(item.get('product_name', '')).lower()
+                if _original_query_lower and _pname and _pname in _original_query_lower:
+                    similarity = min(1.0, similarity + 0.25)
 
                 # Filter by threshold
                 if similarity < self.vector_threshold:

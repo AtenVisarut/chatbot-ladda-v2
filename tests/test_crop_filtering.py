@@ -772,7 +772,9 @@ class TestCropFilterDiseaseExemption:
 
     @pytest.mark.asyncio
     async def test_crop_filter_keeps_disease_matching_doc(self):
-        """Disease-matching doc should survive crop pre-filter even if crops don't match."""
+        """Disease-matching doc should survive crop pre-filter ONLY if crop is compatible.
+        Fix 7: tightened exemption — crop mismatch now overrides disease match.
+        Generic products (empty applicable_crops) are still exempt."""
         mock_openai = AsyncMock()
         choice = MagicMock()
         choice.message.content = "ลัดดาแนะนำสินค้าค่ะ"
@@ -786,8 +788,8 @@ class TestCropFilterDiseaseExemption:
             # This product matches crop (ทุเรียน) but NOT disease
             _make_disease_doc("คาริสมา", "ทุเรียน, มันฝรั่ง",
                               fungicides="ราสนิม, ใบจุด"),
-            # This product matches disease (ราสีชมพู) but NOT crop
-            _make_disease_doc("ซัลเฟอร์โปร", "มะม่วง, มะพร้าว",
+            # This product matches disease (ราสีชมพู) AND has generic crop (empty)
+            _make_disease_doc("ซัลเฟอร์โปร", "",
                               fungicides="ราสีชมพู, ราแป้ง"),
         ]
 
@@ -815,7 +817,56 @@ class TestCropFilterDiseaseExemption:
         messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
         all_content = " ".join(m.get("content", "") for m in messages)
 
-        # ซัลเฟอร์โปร should survive crop filter (disease exempt) AND pass disease filter
+        # ซัลเฟอร์โปร should survive: disease match + generic crop (empty applicable_crops)
         assert "ซัลเฟอร์โปร" in all_content
         # คาริสมา should be removed by disease pre-filter (doesn't target ราสีชมพู)
         assert "คาริสมา" not in all_content
+
+    async def test_crop_filter_rejects_disease_match_with_wrong_crop(self):
+        """Fix 7: Disease-matching doc with explicit wrong crop should be filtered out."""
+        mock_openai = AsyncMock()
+        choice = MagicMock()
+        choice.message.content = "ลัดดาแนะนำสินค้าค่ะ"
+        mock_openai.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[choice])
+        )
+
+        agent = ResponseGeneratorAgent(openai_client=mock_openai)
+
+        docs = [
+            # Matches crop (ทุเรียน) AND disease (ราสีชมพู) — should be kept
+            _make_disease_doc("สินค้าดี", "ทุเรียน, มะม่วง",
+                              fungicides="ราสีชมพู, ราแป้ง"),
+            # Matches disease (ราสีชมพู) but crop is มะม่วง only — should be filtered
+            _make_disease_doc("สินค้าผิดพืช", "มะม่วง, มะพร้าว",
+                              fungicides="ราสีชมพู, ราแป้ง"),
+        ]
+
+        qa = QueryAnalysis(
+            original_query="ราสีชมพูในทุเรียนใช้ยาอะไร",
+            intent=IntentType.DISEASE_TREATMENT,
+            confidence=0.95,
+            entities={"plant_type": "ทุเรียน", "disease_name": "ราสีชมพู"},
+            expanded_queries=["ราสีชมพู ทุเรียน"],
+            required_sources=["products"],
+        )
+        retrieval = RetrievalResult(
+            documents=docs, total_retrieved=2, total_after_rerank=2,
+            avg_similarity=0.50, avg_rerank_score=0.70, sources_used=["products"],
+        )
+        grounding = GroundingResult(
+            is_grounded=True, confidence=0.80, citations=[],
+            ungrounded_claims=[], suggested_answer="", relevant_products=[],
+        )
+
+        result = await agent.generate(qa, retrieval, grounding)
+        assert result is not None
+
+        call_args = mock_openai.chat.completions.create.call_args
+        messages = call_args.kwargs.get('messages') or call_args[1].get('messages', [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+
+        # สินค้าดี: crop match + disease match → should be in LLM context
+        assert "สินค้าดี" in all_content
+        # สินค้าผิดพืช: disease match but wrong crop → should be filtered out
+        assert "สินค้าผิดพืช" not in all_content
