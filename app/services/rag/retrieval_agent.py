@@ -740,7 +740,7 @@ class RetrievalAgent:
             if skip_rerank:
                 logger.info("  - Skipping LLM rerank (direct lookup found product)")
 
-            if self.openai_client and len(unique_docs) >= MIN_RELEVANT_DOCS and not skip_rerank:
+            if self.openai_client and len(unique_docs) > MIN_RELEVANT_DOCS and not skip_rerank:
                 reranked_docs = await self._rerank_with_llm(
                     query_analysis.original_query,
                     unique_docs,
