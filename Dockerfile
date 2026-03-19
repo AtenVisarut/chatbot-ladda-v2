@@ -21,4 +21,5 @@ COPY . .
 EXPOSE 8080
 
 # Run the application with gunicorn (multi-worker for concurrency)
-CMD gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8080} --timeout 120 --graceful-timeout 30
+# WEB_CONCURRENCY env var controls workers (default 8, adjustable from Railway without redeploy)
+CMD gunicorn app.main:app -w ${WEB_CONCURRENCY:-8} -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8080} --timeout 120 --graceful-timeout 30
