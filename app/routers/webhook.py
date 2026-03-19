@@ -173,15 +173,14 @@ async def _process_webhook_events(events: list):
             if not reply_token or not user_id:
                 continue
 
-            # Check rate limit + ensure user exists (parallel)
-            from app.services.user_service import ensure_user_exists
-            rate_ok, _ = await asyncio.gather(
-                check_user_rate_limit(user_id),
-                ensure_user_exists(user_id)
-            )
-            if not rate_ok:
+            # Check rate limit
+            if not await check_user_rate_limit(user_id):
                 await reply_line(reply_token, "ขออภัยค่ะ คุณส่งข้อความเร็วเกินไป กรุณารอสักครู่นะคะ ⏳")
                 continue
+
+            # Ensure user exists in user_ladda(LINE,FACE)
+            from app.services.user_service import ensure_user_exists
+            await ensure_user_exists(user_id)
 
             # 1. Handle Follow Event (Welcome Message)
             if event_type == "follow":
@@ -420,15 +419,15 @@ async def _process_webhook_events(events: list):
                                 if len(parts) > 0:
                                     pest_type = parts[0].strip()
 
-                            # Track analytics (fire-and-forget — don't block response)
+                            # Track analytics
                             if analytics_tracker:
-                                asyncio.create_task(analytics_tracker.track_image_analysis(
+                                await analytics_tracker.track_image_analysis(
                                     user_id=user_id,
                                     disease_name=detection_result.disease_name,
                                     pest_type=pest_type,
                                     confidence=detection_result.confidence,
                                     response_time_ms=0.0
-                                ))
+                                )
 
                             if should_recommend:
                                 # 3. Get product recommendations with matching score
@@ -441,11 +440,11 @@ async def _process_webhook_events(events: list):
                                 # Track product recommendations
                                 if analytics_tracker and recommendations:
                                     product_names = [p.product_name for p in recommendations]
-                                    asyncio.create_task(analytics_tracker.track_product_recommendation(
+                                    await analytics_tracker.track_product_recommendation(
                                         user_id=user_id,
                                         disease_name=detection_result.disease_name,
                                         products=product_names
-                                    ))
+                                    )
 
                                 # 4. Send combined results (diagnosis + products)
                                 # First send diagnosis
@@ -524,15 +523,7 @@ async def _process_webhook_events(events: list):
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
-                            # Push fallback if reply_token likely expired (>25s)
-                            if time.time() - start_time > 25:
-                                logger.warning(f"Reply token likely expired ({time.time() - start_time:.1f}s) — using push")
-                                await push_line(user_id, answer)
-                            else:
-                                try:
-                                    await reply_line(reply_token, answer)
-                                except Exception:
-                                    await push_line(user_id, answer)
+                            await reply_line(reply_token, answer)
                         else:
                             logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:
@@ -554,15 +545,7 @@ async def _process_webhook_events(events: list):
                         # Q&A Chat - Vector Search from products, diseases, knowledge
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
-                            # Push fallback if reply_token likely expired (>25s)
-                            if time.time() - start_time > 25:
-                                logger.warning(f"Reply token likely expired ({time.time() - start_time:.1f}s) — using push")
-                                await push_line(user_id, answer)
-                            else:
-                                try:
-                                    await reply_line(reply_token, answer)
-                                except Exception:
-                                    await push_line(user_id, answer)
+                            await reply_line(reply_token, answer)
                         else:
                             logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:

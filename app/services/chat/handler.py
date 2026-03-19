@@ -1383,10 +1383,11 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
     try:
         _start_time = time.time()
 
-        # 1+2. Add user message to memory + get context (parallel)
-        _mem_task = asyncio.create_task(add_to_memory(user_id, "user", message))
+        # 1. Add user message to memory
+        await add_to_memory(user_id, "user", message)
+
+        # 2. Get enhanced conversation context (includes summary + products)
         context = await get_enhanced_context(user_id, current_query=message)
-        await _mem_task
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         #    For short ambiguous messages, only route if conversation context involves products

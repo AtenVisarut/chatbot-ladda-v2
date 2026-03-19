@@ -16,15 +16,11 @@ Usage:
     print(f"Citations: {len(response.citations)}")
 """
 
-import asyncio
-import hashlib
-import json
 import logging
 import time
 from typing import Optional
 
 from app.dependencies import openai_client, supabase_client
-from app.services.redis_cache import redis_get, redis_set
 from app.services.rag import (
     IntentType,
     QueryAnalysis,
@@ -101,27 +97,6 @@ class AgenticRAG:
 
         try:
             logger.info(f"AgenticRAG.process: '{query[:50]}...'")
-
-            # =================================================================
-            # Cache Check: return cached RAG response if available
-            # =================================================================
-            _q_normalized = query.strip().lower()
-            _cache_key = f"rag:{hashlib.md5(_q_normalized.encode()).hexdigest()}"
-            try:
-                _cached = await asyncio.to_thread(redis_get, _cache_key)
-                if _cached and isinstance(_cached, dict) and "answer" in _cached:
-                    logger.info(f"RAG cache HIT for '{query[:40]}...' (key={_cache_key[-8:]})")
-                    return AgenticRAGResponse(
-                        answer=_cached["answer"],
-                        confidence=_cached.get("confidence", 0.8),
-                        citations=[],
-                        intent=IntentType(_cached["intent"]) if _cached.get("intent") else IntentType.UNKNOWN,
-                        is_grounded=_cached.get("is_grounded", True),
-                        sources_used=_cached.get("sources_used", []),
-                        processing_time_ms=(time.time() - start_time) * 1000
-                    )
-            except Exception as e:
-                logger.debug(f"RAG cache check error (non-fatal): {e}")
 
             # =================================================================
             # Stage 0: Pre-detect hints using keyword functions
@@ -539,26 +514,6 @@ class AgenticRAG:
             logger.info(f"  - Answer length: {len(response.answer) if response.answer else 0}")
             logger.info(f"  - Confidence: {response.confidence:.2f}")
             logger.info(f"  - Grounded: {response.is_grounded}")
-
-            # Cache response (fire-and-forget) — skip low confidence / error / greeting
-            _skip_cache = (
-                response.confidence < 0.3
-                or not response.answer
-                or response.intent == IntentType.GREETING
-            )
-            if not _skip_cache:
-                try:
-                    _cache_val = {
-                        "answer": response.answer,
-                        "confidence": response.confidence,
-                        "intent": response.intent.value if response.intent else "unknown",
-                        "is_grounded": response.is_grounded,
-                        "sources_used": response.sources_used[:5] if response.sources_used else [],
-                    }
-                    asyncio.create_task(asyncio.to_thread(redis_set, _cache_key, _cache_val, 1800))
-                    logger.info(f"RAG cache SAVE (key={_cache_key[-8:]}, TTL=1800s)")
-                except Exception as e:
-                    logger.debug(f"RAG cache save error (non-fatal): {e}")
 
             return response
 
