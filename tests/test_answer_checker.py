@@ -7,6 +7,7 @@ and _check_answer_relevance() integration.
 import pytest
 from unittest.mock import MagicMock
 from app.services.rag import IntentType, QueryAnalysis
+from app.services.rag.response_generator_agent import ResponseGeneratorAgent
 
 
 def _make_query_analysis(intent, entities=None, query="test"):
@@ -37,12 +38,18 @@ def _make_doc(category="Fungicide", product_name="TestProduct"):
     return doc
 
 
+@pytest.fixture
+def agent():
+    """Shared fixture: creates ResponseGeneratorAgent without __init__."""
+    return ResponseGeneratorAgent.__new__(ResponseGeneratorAgent)
+
+
 class TestShouldCheckAnswer:
     """Test risk detection: when should the checker be triggered?"""
 
-    def setup_method(self):
-        from app.services.rag.response_generator_agent import ResponseGeneratorAgent
-        self.agent = ResponseGeneratorAgent.__new__(ResponseGeneratorAgent)
+    @pytest.fixture(autouse=True)
+    def _setup(self, agent):
+        self.agent = agent
 
     def test_skip_greeting(self):
         """Greeting should never trigger checker."""
@@ -124,9 +131,9 @@ class TestShouldCheckAnswer:
 class TestHardQueries:
     """Test with realistic difficult query scenarios."""
 
-    def setup_method(self):
-        from app.services.rag.response_generator_agent import ResponseGeneratorAgent
-        self.agent = ResponseGeneratorAgent.__new__(ResponseGeneratorAgent)
+    @pytest.fixture(autouse=True)
+    def _setup(self, agent):
+        self.agent = agent
 
     def test_nutrient_query_fungicide_answer(self):
         """บำรุงใบทุเรียน + Fungicide doc → MUST trigger checker."""
@@ -172,9 +179,9 @@ class TestHardQueries:
 class TestVeryHardQueries:
     """คำถามยากมากที่เกษตรกรจริงถาม — edge cases, ambiguity, slang."""
 
-    def setup_method(self):
-        from app.services.rag.response_generator_agent import ResponseGeneratorAgent
-        self.agent = ResponseGeneratorAgent.__new__(ResponseGeneratorAgent)
+    @pytest.fixture(autouse=True)
+    def _setup(self, agent):
+        self.agent = agent
 
     # =====================================================================
     # กลุ่ม 1: Ambiguous — คำถามกำกวม ตีความได้หลายทาง

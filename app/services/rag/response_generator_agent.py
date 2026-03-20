@@ -21,7 +21,7 @@ from app.services.rag import (
     IntentType
 )
 from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
-from app.services.rag.retrieval_agent import _plant_matches_crops
+from app.services.rag.retrieval_agent import _plant_matches_crops, RetrievalAgent
 from app.config import (
     LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN,
     LLM_MODEL_ANSWER_CHECKER, LLM_TEMP_ANSWER_CHECKER, LLM_TOKENS_ANSWER_CHECKER,
@@ -844,6 +844,11 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         'weed': IntentType.WEED_CONTROL,
     }
 
+    _ANSWER_CHECK_SKIP_INTENTS = {
+        IntentType.GREETING, IntentType.PRODUCT_INQUIRY,
+        IntentType.USAGE_INSTRUCTION, IntentType.UNKNOWN,
+    }
+
     def _should_check_answer(self, query_analysis: QueryAnalysis, retrieval_result) -> bool:
         """Determine if the answer needs LLM relevance checking.
         Returns True only for risky cases (~20% of queries) to minimize latency.
@@ -851,13 +856,10 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         if not retrieval_result or not retrieval_result.documents:
             return False
 
-        # Skip for greeting, product_inquiry (specific product asked), usage_instruction
-        _SKIP_INTENTS = {IntentType.GREETING, IntentType.PRODUCT_INQUIRY, IntentType.USAGE_INSTRUCTION, IntentType.UNKNOWN}
-        if query_analysis.intent in _SKIP_INTENTS:
+        if query_analysis.intent in self._ANSWER_CHECK_SKIP_INTENTS:
             return False
 
         # Risk 1: Category mismatch — intent expects X but top doc is Y
-        from app.services.rag.retrieval_agent import RetrievalAgent
         top_doc = retrieval_result.documents[0]
         top_cat = str(top_doc.metadata.get('category') or top_doc.metadata.get('product_category') or '').lower()
         intent_cats = RetrievalAgent.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent, [])
@@ -880,16 +882,17 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 
         return False
 
+    _PROBLEM_TYPE_DESCRIPTIONS = {
+        'nutrient': 'ธาตุอาหาร/บำรุง (ต้องได้ Biostimulant/PGR/Fertilizer)',
+        'disease': 'โรคพืช (ต้องได้ Fungicide)',
+        'insect': 'แมลง/ศัตรูพืช (ต้องได้ Insecticide)',
+        'weed': 'วัชพืช (ต้องได้ Herbicide)',
+    }
+
     async def _check_answer_relevance(self, query: str, answer: str, intent: IntentType, problem_type: str = None) -> dict:
         """LLM-based answer relevance check. Returns {"relevant": bool, "reason": str}."""
         try:
-            problem_map = {
-                'nutrient': 'ธาตุอาหาร/บำรุง (ต้องได้ Biostimulant/PGR/Fertilizer)',
-                'disease': 'โรคพืช (ต้องได้ Fungicide)',
-                'insect': 'แมลง/ศัตรูพืช (ต้องได้ Insecticide)',
-                'weed': 'วัชพืช (ต้องได้ Herbicide)',
-            }
-            problem_desc = problem_map.get(problem_type, intent.value)
+            problem_desc = self._PROBLEM_TYPE_DESCRIPTIONS.get(problem_type, intent.value)
 
             prompt = f"""ตรวจสอบว่าคำตอบตรงกับคำถามหรือไม่
 
@@ -923,6 +926,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             )
 
             result_text = response.choices[0].message.content.strip()
+            # Strip markdown code fences if LLM wraps JSON in them
             if result_text.startswith("```"):
                 result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
                 result_text = re.sub(r'\n?```$', '', result_text)

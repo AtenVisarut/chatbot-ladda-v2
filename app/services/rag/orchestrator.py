@@ -108,7 +108,7 @@ class AgenticRAG:
             try:
                 from app.services.chat.handler import (
                     extract_product_name_from_question, extract_all_product_names_from_question,
-                    detect_problem_type,
+                    detect_problem_types,
                     ICP_PRODUCT_NAMES, extract_plant_type_from_question,
                     DISEASE_KEYWORDS, INSECT_KEYWORDS,
                     resolve_farmer_slang
@@ -243,13 +243,9 @@ class AgenticRAG:
                 if detected_product:
                     hints['product_name'] = detected_product
                     hints['_product_from_query'] = product_from_query
-                detected_problem = detect_problem_type(query)
-                if detected_problem != 'unknown':
-                    hints['problem_type'] = detected_problem
-
-                # --- Compound Intent Detection ---
-                from app.services.chat.handler import detect_problem_types
                 detected_problems = detect_problem_types(query)
+                if detected_problems:
+                    hints['problem_type'] = detected_problems[0]
                 if len(detected_problems) > 1:
                     hints['problem_types'] = detected_problems
                     logger.info(f"  - Compound intent: {detected_problems}")
@@ -360,12 +356,10 @@ class AgenticRAG:
                     'substitution': ['ใช้แทน', 'แทนกันได้ไหม', 'ทดแทน', 'เหมือนกันไหม'],
                 }
                 for _pattern_type, _patterns in _QUERY_INTENT_PATTERNS.items():
-                    for _pat in _patterns:
-                        if _pat in query:
-                            hints['query_intent'] = _pattern_type
-                            logger.info(f"  - Query intent pattern: '{_pat}' → {_pattern_type}")
-                            break
-                    if hints.get('query_intent'):
+                    matched_pat = next((_pat for _pat in _patterns if _pat in query), None)
+                    if matched_pat:
+                        hints['query_intent'] = _pattern_type
+                        logger.info(f"  - Query intent pattern: '{matched_pat}' → {_pattern_type}")
                         break
 
                 # --- Number/Unit Extraction ---
