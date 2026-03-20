@@ -93,8 +93,12 @@ class QueryUnderstandingAgent:
         if hints.get('pest_name'):
             hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
         if hints.get('problem_type') and hints['problem_type'] != 'unknown':
-            problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร', 'weed': 'วัชพืช'}
-            hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
+            problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร/บำรุง', 'weed': 'วัชพืช'}
+            if hints['problem_type'] == 'nutrient':
+                # Nutrient must be CONSTRAINT — LLM often misclassifies "บำรุง" as product_recommendation
+                hint_section += f"\n[CONSTRAINT] ประเภทปัญหา: ธาตุอาหาร/บำรุง — intent ต้องเป็น nutrient_supplement (ห้ามใช้ product_recommendation)"
+            else:
+                hint_section += f"\n[HINT] ระบบตรวจพบประเภทปัญหา: {problem_map.get(hints['problem_type'], hints['problem_type'])}"
         if hints.get('resolved_slang'):
             hint_section += f"\n[HINT] ภาษาชาวบ้าน: {hints['resolved_slang']}"
         if hints.get('possible_diseases'):

@@ -108,8 +108,9 @@ Thumbs.db
 *.csv
 *.xlsx
 Data ICPL product for iDA.csv
-test_*.py
-*_test.py
+# test files at root only (not in tests/ directory)
+/test_*.py
+/*_test.py
 
 # Exclude documentation and analysis files
 *.md

@@ -247,6 +247,13 @@ class AgenticRAG:
                 if detected_problem != 'unknown':
                     hints['problem_type'] = detected_problem
 
+                # --- Compound Intent Detection ---
+                from app.services.chat.handler import detect_problem_types
+                detected_problems = detect_problem_types(query)
+                if len(detected_problems) > 1:
+                    hints['problem_types'] = detected_problems
+                    logger.info(f"  - Compound intent: {detected_problems}")
+
                 # --- Pre-LLM Entity Extraction: Disease ---
                 from app.services.disease.constants import DISEASE_PATTERNS_SORTED, get_canonical
                 for pattern in DISEASE_PATTERNS_SORTED:
@@ -344,6 +351,35 @@ class AgenticRAG:
                     if nutrient_synonyms:
                         hints['nutrient_synonyms'] = list(nutrient_synonyms)
                         logger.info(f"  - Nutrient synonyms injected: {hints['nutrient_synonyms']}")
+
+                # --- Query Intent Pattern Detection ---
+                _QUERY_INTENT_PATTERNS = {
+                    'mixing': ['ผสมกันได้ไหม', 'ผสมกัน', 'ผสมร่วม', 'ใช้ร่วมกัน', 'ใช้ด้วยกัน', 'ฉีดพร้อมกัน', 'ผสมได้มั้ย', 'ผสมได้ไหม'],
+                    'safety_period': ['เก็บเกี่ยวได้กี่วัน', 'หลังฉีดกี่วัน', 'ระยะปลอดภัย', 'เว้นกี่วัน', 'กี่วันถึงเก็บ', 'หยุดพ่นกี่วัน'],
+                    'comparison': ['เปรียบเทียบ', 'ต่างกันยังไง', 'ต่างกันอย่างไร', 'ตัวไหนดีกว่า', 'เทียบกับ'],
+                    'substitution': ['ใช้แทน', 'แทนกันได้ไหม', 'ทดแทน', 'เหมือนกันไหม'],
+                }
+                for _pattern_type, _patterns in _QUERY_INTENT_PATTERNS.items():
+                    for _pat in _patterns:
+                        if _pat in query:
+                            hints['query_intent'] = _pattern_type
+                            logger.info(f"  - Query intent pattern: '{_pat}' → {_pattern_type}")
+                            break
+                    if hints.get('query_intent'):
+                        break
+
+                # --- Number/Unit Extraction ---
+                _NUM_UNIT_PATTERNS = [
+                    (r'(\d+)\s*วัน', 'growth_stage_days'),
+                    (r'(\d+)\s*ลิตร', 'sprayer_volume_liters'),
+                    (r'(\d+)\s*ไร่', 'area_rai'),
+                    (r'(\d+)\s*ซีซี', 'dosage_cc'),
+                ]
+                for _pattern, _entity_key in _NUM_UNIT_PATTERNS:
+                    _match = re.search(_pattern, query)
+                    if _match:
+                        hints[_entity_key] = int(_match.group(1))
+                        logger.info(f"  - Extracted {_entity_key}: {_match.group(1)}")
 
                 # --- Validate: drop product when query is about a new topic ---
                 # Case 1: Disease/pest entity detected + product not literally in query
@@ -463,6 +499,10 @@ class AgenticRAG:
             # Inject possible_diseases from symptom mapping into entities for downstream use
             if hints.get('possible_diseases'):
                 query_analysis.entities['possible_diseases'] = hints['possible_diseases']
+
+            # Inject problem_type from Stage 0 for downstream category filtering
+            if hints.get('problem_type') and hints['problem_type'] != 'unknown':
+                query_analysis.entities['problem_type'] = hints['problem_type']
 
             # Handle greeting intent directly
             if query_analysis.intent == IntentType.GREETING:

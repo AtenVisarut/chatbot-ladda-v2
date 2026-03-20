@@ -241,16 +241,24 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
     Returns: ชื่อพืช หรือ None ถ้าไม่พบ
     """
     # รายชื่อพืชที่รองรับ
+    # Longer compound names first to prevent partial match (e.g. มะม่วงหิมพานต์ before มะม่วง)
     plants = [
+        "มะม่วงหิมพานต์", "ปาล์มน้ำมัน", "ข้าวเหนียว",  # compound names first
         "ทุเรียน", "ข้าว", "ข้าวโพด", "มันสำปะหลัง", "อ้อย", "ยางพารา", "ปาล์ม",
         "มะม่วง", "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "พริก", "มะเขือเทศ",
-        "ถั่ว", "กล้วย", "มะพร้าว", "ส้ม", "มะนาว", "ฝรั่ง", "ชมพู่",
-        "สับปะรด", "หอมแดง", "กระเทียม", "ผัก", "ไม้ผล"
+        "ถั่ว", "กล้วย", "มะพร้าว", "ส้มโอ", "ส้ม", "มะนาว", "ฝรั่ง", "ชมพู่",
+        "สับปะรด", "หอมแดง", "กระเทียม", "ผัก", "ไม้ผล",
+        "มะละกอ", "แตงโม", "แตงกวา", "ฟักทอง", "องุ่น", "ลองกอง", "กาแฟ",
     ]
 
     # Farmer typos/abbreviations → canonical plant name
     _PLANT_TYPOS = {
-        "ทุเรีย": "ทุเรียน",   # common: ขาด น
+        "ทุเรีย": "ทุเรียน",           # common: ขาด น
+        "มันสัม": "มันสำปะหลัง",       # abbreviation
+        "มันสัมปะหลัง": "มันสำปะหลัง", # diacritics variant
+        "ยาง": "ยางพารา",              # short form
+        "ข้าวนา": "ข้าว",              # regional term
+        "ลิ้นจี": "ลิ้นจี่",           # missing trailing mark
     }
 
     question_lower = question.lower()
@@ -337,6 +345,21 @@ FARMER_SLANG_MAP = {
     "ดอกกระถิน": {"hint": "โรคเมล็ดด่าง/ดอกกระถิน (false smut) ในข้าว", "problem_type": "disease", "search_terms": ["เมล็ดด่าง", "ดอกกระถิน", "false smut"]},
     "ไฟทิป": {"hint": "โรคไฟท็อปทอร่า (Phytophthora) - โรครากเน่า/โคนเน่า", "problem_type": "disease", "search_terms": ["ไฟท็อปธอร่า", "Phytophthora", "รากเน่า", "โคนเน่า"]},
     "ไฟทอป": {"hint": "โรคไฟท็อปทอร่า (Phytophthora) - โรครากเน่า/โคนเน่า", "problem_type": "disease", "search_terms": ["ไฟท็อปธอร่า", "Phytophthora", "รากเน่า", "โคนเน่า"]},
+    # --- เพิ่ม 2026-03-19: ศัพท์เกษตรกรเพิ่มเติม ---
+    "ใบหงิก": {"hint": "ใบหงิกม้วน อาจจากเพลี้ย ไรแดง หรือไวรัส", "problem_type": "insect", "search_terms": ["เพลี้ย", "ไรแดง"]},
+    "ยอดไหม้": {"hint": "ยอดแห้ง/ไหม้ อาจจากไฟท็อปธอร่าหรือแอนแทรคโนส", "problem_type": "disease", "search_terms": ["ไฟท็อปธอร่า", "แอนแทรคโนส"]},
+    "ใบซีด": {"hint": "ใบซีดเหลือง อาจจากขาดธาตุเหล็กหรือไนโตรเจน", "problem_type": "nutrient", "search_terms": ["ธาตุอาหาร", "ขาดธาตุ"]},
+    "ยาล้าง": {"hint": "สารเคมีล้างทำลายเชื้อ (clean-up spray)", "search_terms": ["สารป้องกัน", "ล้างทำลาย"]},
+    "ราขาว": {"hint": "โรคราแป้ง (Powdery Mildew) เชื้อราสีขาว", "problem_type": "disease", "search_terms": ["ราแป้ง"]},
+    "ผลแตก": {"hint": "ผลแตก อาจจากการรับน้ำไม่สม่ำเสมอหรือขาดแคลเซียม", "problem_type": "nutrient", "search_terms": ["แคลเซียม", "ผลแตก"]},
+    "ยอดเน่า": {"hint": "ยอดเน่าจากเชื้อรา Phytophthora", "problem_type": "disease", "search_terms": ["ไฟท็อปธอร่า", "ยอดเน่า"]},
+    "ตายยอด": {"hint": "ตายยอดจากเชื้อราหรือแมลงเจาะ", "problem_type": "disease", "search_terms": ["ตายยอด", "เชื้อรา"]},
+    "ลูกดก": {"hint": "ต้องการเพิ่มผลผลิต ใช้สารบำรุง/PGR", "problem_type": "nutrient", "search_terms": ["เพิ่มผลผลิต", "ฮอร์โมน", "PGR"]},
+    "ยาหมัก": {"hint": "สารหมัก/จุลินทรีย์ ไม่ใช่สารเคมี", "search_terms": ["จุลินทรีย์", "ชีวภัณฑ์"]},
+    "ยาเม็ด": {"hint": "สารเคมีชนิดเม็ด (granular/WG) ต่างจากน้ำ (EC/SC)", "search_terms": ["เม็ด", "WG", "WP"]},
+    "รากเน่า": {"hint": "โรครากเน่าจากเชื้อราในดิน", "problem_type": "disease", "search_terms": ["รากเน่า", "ไฟท็อปธอร่า", "ฟิวซาเรียม"]},
+    "ราเทา": {"hint": "โรคราเทา (Gray Mold/Botrytis)", "problem_type": "disease", "search_terms": ["ราเทา"]},
+    "ราเขียว": {"hint": "โรคราเขียว (Trichoderma/Penicillium)", "problem_type": "disease", "search_terms": ["ราเขียว"]},
 }
 
 
@@ -377,46 +400,30 @@ def resolve_farmer_slang(query: str) -> dict:
     return result
 
 
-def detect_problem_type(message: str) -> str:
+def detect_problem_types(message: str) -> list:
     """
-    ตรวจจับประเภทปัญหา
-    Returns: 'disease', 'insect', 'nutrient', 'weed', หรือ 'unknown'
-
-    Priority: nutrient > disease > insect > weed > unknown
-    (เพราะคำถามเรื่องบำรุงมักมีคำว่า "ใบเหลือง" ซึ่งอาจซ้ำกับ disease)
+    ตรวจจับประเภทปัญหาทั้งหมดในข้อความ (รองรับ compound intent)
+    Returns: list เช่น ['disease', 'insect'] หรือ ['weed'] — เรียงตาม keyword count มากสุดก่อน
     """
     from app.utils.text_processing import diacritics_match
     message_lower = message.lower()
 
-    # นับ keywords แต่ละประเภท (diacritics-tolerant)
-    nutrient_count = sum(1 for kw in NUTRIENT_KEYWORDS if diacritics_match(message_lower, kw))
-    disease_count = sum(1 for kw in DISEASE_KEYWORDS if diacritics_match(message_lower, kw))
-    insect_count = sum(1 for kw in INSECT_KEYWORDS if diacritics_match(message_lower, kw))
-    weed_count = sum(1 for kw in WEED_KEYWORDS if diacritics_match(message_lower, kw))
-
-    # หา max count
     counts = {
-        'nutrient': nutrient_count,
-        'disease': disease_count,
-        'insect': insect_count,
-        'weed': weed_count
+        'nutrient': sum(1 for kw in NUTRIENT_KEYWORDS if diacritics_match(message_lower, kw)),
+        'disease': sum(1 for kw in DISEASE_KEYWORDS if diacritics_match(message_lower, kw)),
+        'insect': sum(1 for kw in INSECT_KEYWORDS if diacritics_match(message_lower, kw)),
+        'weed': sum(1 for kw in WEED_KEYWORDS if diacritics_match(message_lower, kw)),
     }
+    return [t for t, c in sorted(counts.items(), key=lambda x: -x[1]) if c > 0]
 
-    max_count = max(counts.values())
-    if max_count == 0:
-        return 'unknown'
 
-    # Return ตาม priority: nutrient > disease > insect > weed
-    if counts['nutrient'] == max_count:
-        return 'nutrient'
-    elif counts['disease'] == max_count:
-        return 'disease'
-    elif counts['insect'] == max_count:
-        return 'insect'
-    elif counts['weed'] == max_count:
-        return 'weed'
-    else:
-        return 'unknown'
+def detect_problem_type(message: str) -> str:
+    """
+    ตรวจจับประเภทปัญหา (backward-compatible wrapper)
+    Returns: 'disease', 'insect', 'nutrient', 'weed', หรือ 'unknown'
+    """
+    types = detect_problem_types(message)
+    return types[0] if types else 'unknown'
 
 
 # =============================================================================

@@ -93,6 +93,7 @@ LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
+LLM_MODEL_ANSWER_CHECKER = os.getenv("LLM_MODEL_ANSWER_CHECKER", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 AGENTIC_RAG_CONFIG = {
@@ -119,6 +120,8 @@ LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสิน
 LLM_TOKENS_RERANKING = 100
 LLM_TEMP_RESPONSE_GEN = 0.2          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
 LLM_TOKENS_RESPONSE_GEN = 600
+LLM_TEMP_ANSWER_CHECKER = 0.1        # Agent 5: ตรวจคำตอบก่อนส่ง (conditional, เฉพาะกรณีเสี่ยง)
+LLM_TOKENS_ANSWER_CHECKER = 100
 # --- Handler (chat/handler.py) ---
 LLM_TEMP_HANDLER_RAG = 0.1           # ตอบคำถามสินค้าจาก vector search (Q&A)
 LLM_TOKENS_HANDLER_RAG = 600

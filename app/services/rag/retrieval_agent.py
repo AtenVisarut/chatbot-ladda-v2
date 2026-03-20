@@ -79,14 +79,26 @@ _PLANT_BROADER_CATEGORIES = {
     'ข้าวโพด': ['พืชไร่'],
     'อ้อย': ['พืชไร่'],
     'มันสำปะหลัง': ['พืชไร่'],
+    # เพิ่ม 2026-03-19: พืชใหม่
+    'ส้มโอ': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'มะละกอ': ['ไม้ผล'],
+    'แตงโม': ['พืชผัก'],
+    'แตงกวา': ['พืชผัก'],
+    'ฟักทอง': ['พืชผัก'],
+    'องุ่น': ['ไม้ผล'],
+    'ลองกอง': ['ไม้ยืนต้น', 'ไม้ผล'],
+    'มะม่วงหิมพานต์': ['ไม้ยืนต้น'],
+    'ข้าวเหนียว': ['พืชไร่'],
 }
 
 
 # Thai substring disambiguation: prevent "ข้าว" matching "ข้าวโพด", etc.
 # Map: short plant name → list of longer plant names that contain it as prefix
 _PLANT_FALSE_POSITIVES = {
-    'ข้าว': ['ข้าวโพด', 'ข้าวฟ่าง'],
-    'ส้ม': ['ส้มโอ'],  # ส้ม ≠ ส้มโอ (different crops)
+    'ข้าว': ['ข้าวโพด', 'ข้าวฟ่าง', 'ข้าวเหนียว'],
+    'ส้ม': ['ส้มโอ'],
+    'กล้วย': ['กล้วยไม้'],
+    'มะม่วง': ['มะม่วงหิมพานต์'],
 }
 
 
@@ -228,6 +240,9 @@ class RetrievalAgent:
             return ["Fungicide", "fungicide", "ป้องกันโรค"]
         if any(kw in query for kw in ['วัชพืช','หญ้า','ยาฆ่าหญ้า','กำจัดหญ้า']):
             return ["Herbicide", "herbicide", "กำจัดวัชพืช"]
+        # Nutrient/Biostimulant keyword fallback — prevents Fungicide for "บำรุง" queries
+        if any(kw in query for kw in ['บำรุง','เร่งดอก','เร่งผล','ติดดอก','ติดผล','ธาตุอาหาร','ขาดธาตุ','ต้นโทรม','ลูกดก','ปุ๋ย']):
+            return ["Biostimulants", "biostimulants", "PGR", "pgr", "Fertilizer", "fertilizer", "บำรุง", "ฮอร์โมน"]
 
         return None
 
@@ -744,10 +759,10 @@ class RetrievalAgent:
             logger.info(f"  - After dedup: {len(unique_docs)}")
 
             # Stage 3: Re-ranking with LLM
-            # Skip rerank when direct lookup already found the product (saves ~0.5-1s)
-            skip_rerank = bool(direct_lookup_ids)
+            # Skip rerank when direct lookup found product OR ≤3 docs (saves ~0.5-1s)
+            skip_rerank = bool(direct_lookup_ids) or len(unique_docs) <= 3
             if skip_rerank:
-                logger.info("  - Skipping LLM rerank (direct lookup found product)")
+                logger.info(f"  - Skipping LLM rerank (direct_lookup={bool(direct_lookup_ids)}, docs={len(unique_docs)})")
 
             if self.openai_client and len(unique_docs) >= MIN_RELEVANT_DOCS and not skip_rerank:
                 reranked_docs = await self._rerank_with_llm(
@@ -822,14 +837,19 @@ class RetrievalAgent:
                         break
 
             if expected_categories:
+                # Adaptive penalty: stronger when enough correct-category docs exist
+                _correct_cat_count = sum(
+                    1 for d in reranked_docs
+                    if any(ec.lower() in str(d.metadata.get('category') or '').lower() for ec in expected_categories)
+                )
+                _cat_penalty = -0.90 if _correct_cat_count >= 3 else -0.75
                 for doc in reranked_docs:
                     if doc.id in direct_lookup_ids:
                         continue  # Don't penalize the queried product itself
                     cat = str(doc.metadata.get('category') or '').lower()
                     if cat and not any(ec.lower() in cat for ec in expected_categories):
-                        penalty = -0.75
-                        doc.rerank_score = max(0.0, doc.rerank_score + penalty)
-                        logger.info(f"  - Category mismatch penalty {penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
+                        doc.rerank_score = max(0.0, doc.rerank_score + _cat_penalty)
+                        logger.info(f"  - Category mismatch penalty {_cat_penalty} for {doc.title} (category: {cat}, expected: {expected_categories[0]})")
                 reranked_docs = sorted(reranked_docs, key=lambda d: d.rerank_score, reverse=True)
 
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
