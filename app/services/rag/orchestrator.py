@@ -148,7 +148,8 @@ class AgenticRAG:
                             _plant_in_q_s = extract_plant_type_from_question(query)
                             _dp_kw = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
                             _has_dp = any(kw in query for kw in _dp_kw)
-                            _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
+                            _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด',
+                                   'บำรุง', 'เร่ง', 'พัฒนา', 'เสริม', 'กระตุ้น']
                             _is_app = _plant_in_q_s and any(v in query for v in _uv)
                             # ถ้าไม่มีชื่อสินค้าและไม่มีชื่อพืช → subjectless follow-up → ไม่ถือเป็น new topic
                             _subjectless = not detected_product and not _plant_in_q_s
@@ -186,7 +187,8 @@ class AgenticRAG:
                     _has_disease_pest_kw = any(kw in query for kw in _disease_pest_keywords)
                     # Applicability pattern: plant + usage verb = asking "can this product be used on [plant]?"
                     # e.g. "ใช้ในทุเรียนได้มั้ย", "ฉีดมะม่วงได้ไหม" → NOT a new topic
-                    _usage_verbs = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด']
+                    _usage_verbs = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด',
+                                    'บำรุง', 'เร่ง', 'พัฒนา', 'เสริม', 'กระตุ้น']
                     _is_applicability = _plant_in_query and any(v in query for v in _usage_verbs)
                     _has_new_topic = (_plant_in_query and not _is_applicability) or _has_disease_pest_kw
                     if _has_new_topic:

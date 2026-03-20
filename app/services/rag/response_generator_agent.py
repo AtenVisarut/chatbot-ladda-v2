@@ -431,12 +431,18 @@ class ResponseGeneratorAgent:
                 d for d in docs_to_use
                 if any(nc in str(d.metadata.get('category') or d.metadata.get('product_category') or '').lower()
                        for nc in _NUTRIENT_CATS)
+                or bool(d.metadata.get('biostimulant'))    # product HAS biostimulant data
+                or bool(d.metadata.get('pgr_hormones'))    # product HAS PGR data
             ]
             if _nutrient_docs:
                 _removed_cat = len(docs_to_use) - len(_nutrient_docs)
                 if _removed_cat > 0:
                     docs_to_use = _nutrient_docs
                     logger.info(f"  - Nutrient category pre-filter: kept {len(_nutrient_docs)}, removed {_removed_cat} non-nutrient docs")
+            else:
+                # No nutrient/biostimulant products found → block Fungicide recommendation
+                logger.warning("  - Nutrient filter: 0 nutrient docs found, blocking wrong-category recommendation")
+                return "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าประเภทบำรุง/เร่งดอก/เร่งผลในระบบที่ตรงกับคำถาม แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda โดยตรงค่ะ"
 
         # =====================================================================
         # Disease/Pest pre-filter: keep only docs whose pest columns match

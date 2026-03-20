@@ -360,6 +360,7 @@ FARMER_SLANG_MAP = {
     "รากเน่า": {"hint": "โรครากเน่าจากเชื้อราในดิน", "problem_type": "disease", "search_terms": ["รากเน่า", "ไฟท็อปธอร่า", "ฟิวซาเรียม"]},
     "ราเทา": {"hint": "โรคราเทา (Gray Mold/Botrytis)", "problem_type": "disease", "search_terms": ["ราเทา"]},
     "ราเขียว": {"hint": "โรคราเขียว (Trichoderma/Penicillium)", "problem_type": "disease", "search_terms": ["ราเขียว"]},
+    "ข้าวดีด": {"hint": "ข้าวดีด/ข้าวกระดก — ข้าวที่เมล็ดลีบไม่สมบูรณ์ อาจจากโรคหรือแมลง", "problem_type": "disease", "search_terms": ["เมล็ดลีบ", "เมล็ดด่าง", "ข้าวดีด"]},
 }
 
 
