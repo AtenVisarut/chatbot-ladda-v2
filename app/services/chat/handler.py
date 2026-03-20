@@ -1337,9 +1337,11 @@ def _is_cacheable_message(message: str) -> bool:
 
 
 def _make_response_cache_key(message: str) -> str:
-    """Create cache key from normalized message."""
+    """Create cache key from normalized message + plant type (prevent cross-crop collision)."""
     normalized = re.sub(r'\s+', ' ', message.strip().lower())
-    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+    plant = extract_plant_type_from_question(message) or ""
+    key_str = f"{normalized}|{plant}"
+    return hashlib.md5(key_str.encode('utf-8')).hexdigest()
 
 
 async def _save_conv_state_from_answer(
@@ -1391,11 +1393,11 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
     try:
         _start_time = time.time()
 
-        # 1. Add user message to memory
-        await add_to_memory(user_id, "user", message)
-
-        # 2. Get enhanced conversation context (includes summary + products)
+        # 1+2. Add message to memory + get context in parallel (saves ~100-200ms)
+        import asyncio as _asyncio
+        _mem_task = _asyncio.create_task(add_to_memory(user_id, "user", message))
         context = await get_enhanced_context(user_id, current_query=message)
+        await _mem_task  # ensure memory write completes
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         #    For short ambiguous messages, only route if conversation context involves products
