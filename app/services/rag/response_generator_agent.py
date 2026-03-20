@@ -21,11 +21,8 @@ from app.services.rag import (
     IntentType
 )
 from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
-from app.services.rag.retrieval_agent import _plant_matches_crops, RetrievalAgent
-from app.config import (
-    LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN,
-    LLM_MODEL_ANSWER_CHECKER, LLM_TEMP_ANSWER_CHECKER, LLM_TOKENS_ANSWER_CHECKER,
-)
+from app.services.rag.retrieval_agent import _plant_matches_crops
+from app.config import LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN
 from app.prompts import (
     PRODUCT_QA_PROMPT,
     GREETINGS,
@@ -440,9 +437,8 @@ class ResponseGeneratorAgent:
                     docs_to_use = _nutrient_docs
                     logger.info(f"  - Nutrient category pre-filter: kept {len(_nutrient_docs)}, removed {_removed_cat} non-nutrient docs")
             else:
-                # No nutrient/biostimulant products found → block Fungicide recommendation
-                logger.warning("  - Nutrient filter: 0 nutrient docs found, blocking wrong-category recommendation")
-                return "ขออภัยค่ะ ตอนนี้ยังไม่มีสินค้าประเภทบำรุง/เร่งดอก/เร่งผลในระบบที่ตรงกับคำถาม แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda โดยตรงค่ะ"
+                # No nutrient products found — let LLM answer with constraint (don't return early → causes silent)
+                logger.warning("  - Nutrient filter: 0 nutrient docs, will let LLM answer with nutrient constraint")
 
         # =====================================================================
         # Disease/Pest pre-filter: keep only docs whose pest columns match
@@ -614,6 +610,29 @@ class ResponseGeneratorAgent:
 
 """
 
+        # Nutrient query constraint: tell LLM to focus on biostimulant/PGR data, not recommend Fungicide
+        nutrient_constraint_note = ""
+        if _is_nutrient_query and not _product_from_query:
+            _has_nutrient_data = any(
+                bool(d.metadata.get('biostimulant')) or bool(d.metadata.get('pgr_hormones'))
+                for d in docs_to_use
+            )
+            if _has_nutrient_data:
+                nutrient_constraint_note = """
+[คำเตือนสำคัญ — คำถามเรื่องบำรุง/เร่งดอก/เร่งผล]
+→ ห้ามแนะนำสินค้าในฐานะยาป้องกันโรค(Fungicide) หรือยาแมลง(Insecticide)
+→ ให้แนะนำเฉพาะสินค้าที่มีข้อมูล "สารกระตุ้นชีวภาพ" หรือ "ฮอร์โมนพืช" เท่านั้น
+→ ถ้าสินค้ามีคุณสมบัติทั้งป้องกันโรคและบำรุง ให้เน้นเฉพาะด้านบำรุง/เร่ง ที่ตรงกับคำถาม
+"""
+            else:
+                nutrient_constraint_note = """
+[คำเตือนสำคัญ — คำถามเรื่องบำรุง/เร่งดอก/เร่งผล]
+→ ข้อมูลสินค้าที่พบไม่ได้ระบุว่าใช้บำรุง/เร่งดอก/เร่งผลโดยตรง
+→ ให้ตอบว่า: "สำหรับการบำรุง/เร่งดอก/เร่งผล น้องลัดดาแนะนำปรึกษาเจ้าหน้าที่ ICP Ladda โดยตรงเพื่อคำแนะนำที่เหมาะสมค่ะ"
+→ ห้ามแนะนำ Fungicide/Insecticide สำหรับคำถามบำรุง
+"""
+            logger.info(f"  - Nutrient constraint injected into prompt (has_data={_has_nutrient_data})")
+
         # Validate disease-product match: check if queried disease is in any product's target_pest
         disease_mismatch_note = ""
         disease_match_note = ""
@@ -781,7 +800,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท
@@ -822,124 +841,10 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
             # Post-processing: validate product names in response
             answer = self._validate_product_names(answer, docs_to_use, query_analysis)
 
-            # Post-processing: conditional answer relevance check (Agent 5)
-            if self._should_check_answer(query_analysis, retrieval_result):
-                check = await self._check_answer_relevance(
-                    query_analysis.original_query, answer,
-                    query_analysis.intent, query_analysis.entities.get('problem_type')
-                )
-                if not check.get("relevant", True):
-                    reason = check.get("reason", "unknown")
-                    logger.warning(f"  ⚠️ Answer checker REJECTED: {reason}")
-                    answer = "ขออภัยค่ะ ตอนนี้ยังไม่มีข้อมูลที่ตรงกับคำถามในระบบ แนะนำปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
-                else:
-                    logger.info(f"  ✅ Answer checker PASSED")
-
             return answer
         except Exception as e:
             logger.error(f"LLM response generation failed: {e}")
             return self._build_fallback_answer(retrieval_result, grounding_result)
-
-    # =====================================================================
-    # Agent 5: Conditional Answer Checker — เช็คเฉพาะกรณีเสี่ยง
-    # =====================================================================
-    _PROBLEM_TYPE_TO_INTENT = {
-        'nutrient': IntentType.NUTRIENT_SUPPLEMENT,
-        'disease': IntentType.DISEASE_TREATMENT,
-        'insect': IntentType.PEST_CONTROL,
-        'weed': IntentType.WEED_CONTROL,
-    }
-
-    _ANSWER_CHECK_SKIP_INTENTS = {
-        IntentType.GREETING, IntentType.PRODUCT_INQUIRY,
-        IntentType.USAGE_INSTRUCTION, IntentType.UNKNOWN,
-    }
-
-    def _should_check_answer(self, query_analysis: QueryAnalysis, retrieval_result) -> bool:
-        """Determine if the answer needs LLM relevance checking.
-        Returns True only for risky cases (~20% of queries) to minimize latency.
-        """
-        if not retrieval_result or not retrieval_result.documents:
-            return False
-
-        if query_analysis.intent in self._ANSWER_CHECK_SKIP_INTENTS:
-            return False
-
-        # Risk 1: Category mismatch — intent expects X but top doc is Y
-        top_doc = retrieval_result.documents[0]
-        top_cat = str(top_doc.metadata.get('category') or top_doc.metadata.get('product_category') or '').lower()
-        intent_cats = RetrievalAgent.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent, [])
-        if intent_cats and top_cat and not any(ic.lower() in top_cat for ic in intent_cats):
-            logger.info(f"  - Answer checker triggered: category mismatch (intent={query_analysis.intent.value}, top_cat={top_cat})")
-            return True
-
-        # Risk 2: Low retrieval confidence
-        if retrieval_result.avg_similarity < 0.35:
-            logger.info(f"  - Answer checker triggered: low similarity ({retrieval_result.avg_similarity:.2f})")
-            return True
-
-        # Risk 3: Stage 0 problem_type conflicts with Agent 1 intent
-        problem_type = query_analysis.entities.get('problem_type')
-        if problem_type and problem_type != 'unknown':
-            expected_intent = self._PROBLEM_TYPE_TO_INTENT.get(problem_type)
-            if expected_intent and expected_intent != query_analysis.intent:
-                logger.info(f"  - Answer checker triggered: problem_type={problem_type} vs intent={query_analysis.intent.value}")
-                return True
-
-        return False
-
-    _PROBLEM_TYPE_DESCRIPTIONS = {
-        'nutrient': 'ธาตุอาหาร/บำรุง (ต้องได้ Biostimulant/PGR/Fertilizer)',
-        'disease': 'โรคพืช (ต้องได้ Fungicide)',
-        'insect': 'แมลง/ศัตรูพืช (ต้องได้ Insecticide)',
-        'weed': 'วัชพืช (ต้องได้ Herbicide)',
-    }
-
-    async def _check_answer_relevance(self, query: str, answer: str, intent: IntentType, problem_type: str = None) -> dict:
-        """LLM-based answer relevance check. Returns {"relevant": bool, "reason": str}."""
-        try:
-            problem_desc = self._PROBLEM_TYPE_DESCRIPTIONS.get(problem_type, intent.value)
-
-            prompt = f"""ตรวจสอบว่าคำตอบตรงกับคำถามหรือไม่
-
-คำถาม: "{query}"
-ประเภทปัญหา: {problem_desc}
-
-คำตอบ:
-{answer[:500]}
-
-ตอบเป็น JSON เท่านั้น:
-{{"relevant": true, "reason": "ตรงกับคำถาม"}}
-หรือ
-{{"relevant": false, "reason": "เหตุผลสั้นๆ"}}
-
-กฎตรวจสอบ:
-- ถ้าถามเรื่อง "บำรุง/เร่งดอก/เร่งผล/ธาตุอาหาร" แต่คำตอบแนะนำยาป้องกันโรค(Fungicide)/ยาแมลง(Insecticide) → relevant=false
-- ถ้าถามเรื่อง "โรคพืช" แต่คำตอบแนะนำยากำจัดวัชพืช(Herbicide)/ยาแมลง(Insecticide) → relevant=false
-- ถ้าถามเรื่อง "แมลง/ศัตรูพืช" แต่คำตอบแนะนำยาโรค(Fungicide)/ยาหญ้า(Herbicide) → relevant=false
-- ถ้าถามเรื่อง "วัชพืช/หญ้า" แต่คำตอบแนะนำยาโรค(Fungicide)/ยาแมลง(Insecticide) → relevant=false
-- ถ้าคำตอบตรงกับประเภทปัญหา → relevant=true
-- ถ้าคำตอบบอกว่า "ไม่มีข้อมูล" หรือ "ไม่พบสินค้า" → relevant=true (ตอบถูกว่าไม่มี)"""
-
-            response = await self.openai_client.chat.completions.create(
-                model=LLM_MODEL_ANSWER_CHECKER,
-                messages=[
-                    {"role": "system", "content": "ตอบเป็น JSON เท่านั้น ไม่มี markdown"},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=LLM_TEMP_ANSWER_CHECKER,
-                max_completion_tokens=LLM_TOKENS_ANSWER_CHECKER,
-            )
-
-            result_text = response.choices[0].message.content.strip()
-            # Strip markdown code fences if LLM wraps JSON in them
-            if result_text.startswith("```"):
-                result_text = re.sub(r'^```(?:json)?\n?', '', result_text)
-                result_text = re.sub(r'\n?```$', '', result_text)
-            return json.loads(result_text)
-        except Exception as e:
-            logger.warning(f"Answer checker failed (non-critical): {e}")
-            return {"relevant": True, "reason": "checker error — pass through"}
 
     # Non-product terms that may appear in quotes (weed species, disease, pest, crop names)
     _NON_PRODUCT_KEYWORDS = {
