@@ -403,7 +403,7 @@ class RetrievalAgent:
                     continue  # Skip duplicates
 
                 selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
-                doc = self._build_doc_from_row(item, similarity=0.55, content_extra=selling_extra)
+                doc = self._build_doc_from_row(item, similarity=0.35, content_extra=selling_extra)
                 docs.append(doc)
 
             if docs:
@@ -519,7 +519,7 @@ class RetrievalAgent:
                 if pest_name.lower() not in ins_text:
                     continue
                 selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
-                doc = self._build_doc_from_row(item, similarity=0.55, content_extra=selling_extra)
+                doc = self._build_doc_from_row(item, similarity=0.35, content_extra=selling_extra)
                 docs.append(doc)
 
             if docs:
@@ -855,9 +855,13 @@ class RetrievalAgent:
             # Stage 3.6: Boost Skyrocket/Expand score, penalize Standard
             if not direct_lookup_ids:  # Only when not asking about specific product
                 strategy_bonus = {'Skyrocket': 0.12, 'Expand': 0.12, 'Natural': 0.0, 'Standard': 0.0}
+                _BUNDLE_KW_36 = ['ชุด', 'กล่อง', 'รวง']
                 for doc in reranked_docs:
                     sg = doc.metadata.get('strategy', '')
                     bonus = strategy_bonus.get(sg, 0.0)
+                    # Bundle products get half bonus (they match too broadly)
+                    if bonus != 0 and any(bk in doc.title for bk in _BUNDLE_KW_36):
+                        bonus = bonus * 0.5
                     if bonus != 0:
                         doc.rerank_score = min(1.0, max(0.0, doc.rerank_score + bonus))
                 # Re-sort by boosted rerank_score
@@ -943,10 +947,15 @@ class RetrievalAgent:
                         current_pos = reranked_docs.index(best_priority)
                     except ValueError:
                         current_pos = -1
-                    if current_pos > 0:
+                    # Skip promotion for bundle products (they match too many queries)
+                    _BUNDLE_KW = ['ชุด', 'กล่อง', 'รวง']
+                    _is_bundle = any(bk in best_priority.title for bk in _BUNDLE_KW)
+                    if current_pos > 0 and not _is_bundle:
                         reranked_docs.remove(best_priority)
                         reranked_docs.insert(0, best_priority)
                         logger.info(f"  - Promoted {best_priority.title} ({best_priority.metadata.get('strategy')}) from pos {current_pos + 1} to 1")
+                    elif _is_bundle:
+                        logger.info(f"  - Skip bundle promotion: {best_priority.title}")
 
             # Stage 3.8: Ensure disease-matching product is in top 3
             # If query is about disease but no top-3 doc has the disease in pest columns,
