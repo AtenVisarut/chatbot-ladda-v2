@@ -16,6 +16,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.dependencies import supabase_client, handoff_manager
+from app.config import MEMORY_TABLE
 from app.services.memory import add_to_memory
 from app.services.user_service import refresh_display_name, get_facebook_profile
 from app.utils.line.helpers import push_line
@@ -97,7 +98,7 @@ async def get_conversations(request: Request):
             datetime.now(timezone.utc) - timedelta(days=7)
         ).isoformat()
         msg_result = await aexecute(
-            supabase_client.table("conversation_memory")
+            supabase_client.table(MEMORY_TABLE)
             .select("user_id, content, role, created_at")
             .gte("created_at", cutoff)
             .order("created_at", desc=True)
@@ -195,7 +196,7 @@ async def get_conversation_messages(
 
     try:
         result = await aexecute(
-            supabase_client.table("conversation_memory")
+            supabase_client.table(MEMORY_TABLE)
             .select("role, content, metadata, created_at")
             .eq("user_id", user_id)
             .order("created_at", desc=True)

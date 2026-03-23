@@ -230,65 +230,6 @@ def extract_search_keywords(disease_name: str) -> List[str]:
     return keywords
 
 
-async def get_recommended_products_from_diseases(disease_name: str) -> List[Dict]:
-    """
-    ดึงรายชื่อสินค้าแนะนำจาก diseases.recommended_products
-    แล้ว fetch ข้อมูลสินค้าเต็มจาก products table
-
-    Args:
-        disease_name: ชื่อโรค (ภาษาไทยหรืออังกฤษ)
-
-    Returns:
-        รายการสินค้าที่แนะนำสำหรับโรคนี้
-    """
-    if not supabase_client:
-        return []
-
-    try:
-        # 1. ค้นหาโรคจาก diseases table
-        disease_name_lower = disease_name.lower()
-
-        # Try matching by name_th or name_en
-        result = await aexecute(supabase_client.table('diseases').select(
-            'name_th, name_en, recommended_products'
-        ).or_(
-            f"name_th.ilike.%{disease_name}%,name_en.ilike.%{disease_name}%"
-        ).limit(1))
-
-        if not result.data:
-            logger.info(f"   ไม่พบโรค '{disease_name}' ใน diseases table")
-            return []
-
-        disease = result.data[0]
-        recommended_names = disease.get('recommended_products', [])
-
-        if not recommended_names:
-            logger.info(f"   โรค '{disease.get('name_th')}' ไม่มี recommended_products")
-            return []
-
-        logger.info(f"   โรค '{disease.get('name_th')}' แนะนำ: {recommended_names}")
-
-        # 2. Fetch products by names
-        products = []
-        for product_name in recommended_names:
-            try:
-                prod_result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('*').ilike(
-                    'product_name', f"%{product_name}%"
-                ).limit(1))
-
-                if prod_result.data:
-                    products.append(prod_result.data[0])
-                else:
-                    logger.warning(f"   ⚠️ ไม่พบสินค้า '{product_name}' ใน products table")
-            except Exception as e:
-                logger.error(f"   Error fetching product '{product_name}': {e}")
-
-        return products
-
-    except Exception as e:
-        logger.error(f"Error getting recommended products from diseases: {e}")
-        return []
-
 
 async def query_products_by_target_pest(disease_name: str, required_category: str = None) -> List[Dict]:
     """

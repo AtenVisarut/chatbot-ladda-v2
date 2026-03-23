@@ -78,6 +78,11 @@ PRODUCT_TABLE = os.getenv("PRODUCT_TABLE", "products3")
 PRODUCT_RPC = os.getenv("PRODUCT_RPC", "hybrid_search_products3")
 
 # ============================================================================#
+# MEMORY TABLE — แยก conversation memory ระหว่าง project
+# ============================================================================#
+MEMORY_TABLE = os.getenv("MEMORY_TABLE", "memory_chatladda")
+
+# ============================================================================#
 # AGENTIC RAG CONFIGURATION
 # ============================================================================#
 # Set to "1" to enable Agentic RAG pipeline for Q&A

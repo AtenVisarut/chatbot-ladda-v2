@@ -10,11 +10,6 @@ from app.services.memory import add_to_memory, get_conversation_context, get_rec
 from app.services.cache import get_from_cache, set_to_cache, save_conversation_state, clear_conversation_state
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product.recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
-try:
-    from app.services.disease.search import search_diseases_by_text, build_context_from_diseases
-except ImportError:
-    search_diseases_by_text = None
-    build_context_from_diseases = None
 from app.config import (
     USE_AGENTIC_RAG,
     LLM_MODEL_GENERAL_CHAT,
@@ -721,14 +716,6 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
             logger.warning(f"Product not found: {product_not_found_msg}")
             all_context_parts.append(f"หมายเหตุ: {product_not_found_msg}")
 
-        # 2. ค้นหาจาก diseases (เสริม - ถ้าเป็นคำถามเกี่ยวกับโรค)
-        if is_agri_q and problem_type == 'disease':
-            diseases = await search_diseases_by_text(question, top_k=2)
-            if diseases:
-                disease_context = build_context_from_diseases(diseases)
-                all_context_parts.append(f"ข้อมูลโรค:\n{disease_context}")
-                logger.info(f"Added {len(diseases)} diseases to context")
-
         # รวม context ทั้งหมด
         combined_context = "\n\n".join(all_context_parts) if all_context_parts else "(ไม่พบข้อมูลในฐานข้อมูล)"
 
@@ -929,106 +916,6 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
 
     except Exception as e:
         logger.error(f"Error in Q&A vector search: {e}", exc_info=True)
-        return "ขออภัยค่ะ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้งนะคะ"
-
-
-async def answer_agriculture_question(question: str, context: str = "") -> str:
-    """
-    ตอบคำถามเกี่ยวกับการเกษตร/พืช/โรคพืช
-    1. ค้นหาจากตาราง diseases ก่อน (vector search)
-    2. ถ้าไม่พบ → ใช้ความรู้ทั่วไป + อ้างอิงกรมวิชาการเกษตร
-    """
-    try:
-        logger.info(f"🌾 Agriculture question: {question[:50]}...")
-
-        # 1. ค้นหาจากตาราง diseases
-        diseases = await search_diseases_by_text(question, top_k=5)
-
-        if diseases:
-            # พบข้อมูลในฐานข้อมูล → สร้าง context จากโรคที่พบ
-            disease_context = build_context_from_diseases(diseases)
-            logger.info(f"✓ Found {len(diseases)} related diseases in database")
-
-            prompt = f"""คุณคือ "น้องลัดดา" ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
-
-คำถาม: {question}
-
-บริบทการสนทนา:
-{context if context else "(เริ่มสนทนาใหม่)"}
-
-ข้อมูลโรค/ปัญหาที่เกี่ยวข้องจากฐานข้อมูล:
-{disease_context}
-
-รูปแบบการตอบ (สำคัญมาก!):
-
-ตอบเป็นขั้นตอนชัดเจน ใช้ emoji นำหน้าหัวข้อ:
-
-🦠 สาเหตุ/ปัญหา
-อธิบายสาเหตุหรือปัญหาสั้นๆ
-━━━━━━━━━━━━━━━
-🌿 อาการที่พบ
-อธิบายอาการที่พบ
-━━━━━━━━━━━━━━━
-💊 ผลิตภัณฑ์แนะนำ
-1. ชื่อสินค้า (สารสำคัญ)
-   - อัตราใช้: XX ซีซี/น้ำ XX ลิตร
-   - วิธีใช้: ฉีดพ่น/ราด...
-
-2. ทางเลือกอื่น (ถ้ามี)
-   - อัตราใช้: ...
-
-📋 วิธีการใช้
-อธิบายขั้นตอน
-
-💡 ข้อแนะนำเพิ่มเติม
-คำแนะนำอื่นๆ
-
-หลักการ:
-- ใช้ emoji นำหน้าหัวข้อ เช่น 🦠 🌿 💊 📋 ⚖️ 📅 ⚠️ 💡
-- ใช้ ━━━━━━━━━━━━━━━ คั่นระหว่างส่วนหลักๆ
-- แยกบรรทัดให้ชัดเจน อ่านง่าย
-- ใช้ - สำหรับรายละเอียดย่อย
-- ตอบเฉพาะหัวข้อที่เกี่ยวข้อง (ไม่ต้องใส่ทุกหัวข้อ)
-- ห้ามใช้ ** หรือ ##
-
-ตอบ:"""
-        else:
-            # ไม่พบในฐานข้อมูล → ตอบกลับว่ากำลังตรวจสอบ
-            logger.info("⏭️ No data — no diseases found in database, replying with NO_DATA_REPLY")
-            return NO_DATA_REPLY
-
-        if not openai_client:
-            return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
-
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": """คุณคือน้องลัดดา ผู้เชี่ยวชาญด้านการเกษตรของ ICP Ladda
-
-⛔ กฎเหล็ก - ห้ามตอบมั่วเด็ดขาด:
-- ตอบเฉพาะข้อมูลที่มีในฐานข้อมูลที่ให้มาเท่านั้น
-- ถ้าข้อมูลไม่ครบ → บอกว่า "ไม่มีข้อมูลเรื่องนี้ในฐานข้อมูล"
-- ห้ามเดา ห้ามสมมติ ห้ามแต่งข้อมูลขึ้นมาเอง
-
-รูปแบบการตอบ:
-- ตอบเป็นขั้นตอน ใช้ emoji นำหน้าหัวข้อ เช่น 🦠 🌿 💊 📋 ⚖️ 📅 ⚠️ 💡
-- ใช้ ━━━━━━━━━━━━━━━ คั่นระหว่างส่วนหลักๆ
-- ใช้เลขลำดับ 1. 2. 3. สำหรับรายการสินค้า
-- ใช้ - สำหรับรายละเอียดย่อย (อัตราใช้, วิธีใช้)
-- แยกบรรทัดให้อ่านง่าย
-- ห้ามใช้ ** หรือ ##
-- ถ้าคำถามไม่ชัดเจน ให้ถามกลับสั้นๆ"""},
-                {"role": "user", "content": prompt}
-            ],
-            max_completion_tokens=LLM_TOKENS_HANDLER_USAGE,
-            temperature=LLM_TEMP_HANDLER_USAGE
-        )
-
-        answer = post_process_answer(response.choices[0].message.content)
-        return answer
-
-    except Exception as e:
-        logger.error(f"Error answering agriculture question: {e}", exc_info=True)
         return "ขออภัยค่ะ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้งนะคะ"
 
 

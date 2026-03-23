@@ -1284,67 +1284,6 @@ class RetrievalAgent:
             logger.error(f"Symptom keyword fallback search error: {e}")
             return []
 
-    async def _search_diseases(self, query: str, top_k: int) -> List[RetrievedDocument]:
-        """Search diseases table with vector similarity"""
-        if not self.supabase or not self.openai_client:
-            return []
-
-        try:
-            # Generate embedding
-            embedding = await self._generate_embedding(query)
-            if not embedding:
-                return []
-
-            # Call hybrid search diseases
-            result = await aexecute(self.supabase.rpc(
-                'hybrid_search_diseases',
-                {
-                    'query_embedding': embedding,
-                    'search_query': query,
-                    'vector_weight': 0.6,
-                    'keyword_weight': 0.4,
-                    'match_threshold': self.vector_threshold,
-                    'match_count': top_k
-                }
-            ))
-
-            if not result.data:
-                return []
-
-            # Convert to RetrievedDocument
-            docs = []
-            for item in result.data:
-                symptoms = item.get('symptoms', [])
-                if isinstance(symptoms, list):
-                    symptoms_text = ', '.join(str(s) for s in symptoms[:3])
-                else:
-                    symptoms_text = str(symptoms)[:200]
-
-                doc = RetrievedDocument(
-                    id=str(item.get('id', '')),
-                    title=f"{item.get('name_th', '')} ({item.get('name_en', '')})",
-                    content=f"โรค: {item.get('name_th', '')}\n"
-                           f"สาเหตุ: {item.get('pathogen', '')}\n"
-                           f"อาการ: {symptoms_text}",
-                    source="diseases",
-                    similarity_score=float(item.get('similarity', 0)),
-                    metadata={
-                        'name_th': item.get('name_th'),
-                        'name_en': item.get('name_en'),
-                        'category': item.get('category'),
-                        'pathogen': item.get('pathogen'),
-                        'symptoms': symptoms,
-                    }
-                )
-                docs.append(doc)
-
-            logger.info(f"    Disease search: {len(docs)} docs for '{query[:30]}...'")
-            return docs
-
-        except Exception as e:
-            logger.error(f"Disease search error: {e}")
-            return []
-
     async def _generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for search query (with LRU cache)"""
         # Check cache first
