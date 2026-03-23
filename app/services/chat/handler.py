@@ -29,6 +29,9 @@ from app.config import (
 )
 from app.prompts import GENERAL_CHAT_PROMPT, ERROR_GENERIC, ERROR_AI_UNAVAILABLE, GREETINGS, GREETING_KEYWORDS
 
+# ข้อความตอบกลับเมื่อไม่พบข้อมูล (แทนการเงียบ)
+NO_DATA_REPLY = "ขณะนี้ ไอ ซี พี ลัดดา กำลังตรวจสอบข้อมูลให้คุณลูกค้าค่ะ\n\nแอดมินแจ้งให้ทราบอีกครั้งนะคะ ต้องขออภัยในความล่าช้าด้วยค่ะ 🙏🙏"
+
 logger = logging.getLogger(__name__)
 
 # Import AgenticRAG (lazy import to avoid circular dependencies)
@@ -863,10 +866,10 @@ async def answer_qa_with_vector_search(question: str, context: str = "") -> str:
         if not openai_client:
             return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
 
-        # ถ้าไม่พบข้อมูลในฐานข้อมูล → silent (admin will handle)
+        # ถ้าไม่พบข้อมูลในฐานข้อมูล → ตอบกลับว่ากำลังตรวจสอบ
         if not product_docs:
-            logger.info("⏭️ No data — no product_docs found, skipping reply (admin will handle)")
-            return None
+            logger.info("⏭️ No data — no product_docs found, replying with NO_DATA_REPLY")
+            return NO_DATA_REPLY
 
         # =================================================================
         # สร้างรายชื่อสินค้าที่อนุญาตให้แนะนำ (จาก product_docs เท่านั้น)
@@ -990,9 +993,9 @@ async def answer_agriculture_question(question: str, context: str = "") -> str:
 
 ตอบ:"""
         else:
-            # ไม่พบในฐานข้อมูล → silent (admin will handle)
-            logger.info("⏭️ No data — no diseases found in database, skipping reply (admin will handle)")
-            return None
+            # ไม่พบในฐานข้อมูล → ตอบกลับว่ากำลังตรวจสอบ
+            logger.info("⏭️ No data — no diseases found in database, replying with NO_DATA_REPLY")
+            return NO_DATA_REPLY
 
         if not openai_client:
             return "ขออภัยค่ะ ระบบ AI ไม่พร้อมใช้งานในขณะนี้"
@@ -1430,8 +1433,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                 ]
                 if len(usage_answer) < 150 and any(p in usage_answer for p in _NO_DATA_USAGE):
-                    logger.info(f"⏭️ No data — usage answer is short ({len(usage_answer)} chars) + no-data phrase, skipping reply")
-                    return None
+                    logger.info(f"⏭️ No data — usage answer is short ({len(usage_answer)} chars) + no-data phrase, replying with NO_DATA_REPLY")
+                    return NO_DATA_REPLY
                 # Add assistant response to memory WITH product metadata
                 # (fix: เดิมไม่ save metadata → get_recommended_products() หา product ไม่เจอ)
                 usage_metadata = {}
@@ -1488,8 +1491,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                 ]
                 if any(p in cached_answer for p in _CACHE_NO_DATA):
-                    logger.info(f"⏭️ Cache hit contains no-data phrase, skipping reply (admin will handle): '{message[:40]}'")
-                    return None
+                    logger.info(f"⏭️ Cache hit contains no-data phrase, replying with NO_DATA_REPLY: '{message[:40]}'")
+                    return NO_DATA_REPLY
                 logger.info(f"✓ Response cache hit: '{message[:40]}'")
                 await add_to_memory(user_id, "assistant", cached_answer)
                 return cached_answer
@@ -1524,10 +1527,10 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         logger.info(f"AgenticRAG response: confidence={rag_response.confidence:.2f}, grounded={rag_response.is_grounded}")
                         logger.info(f"AgenticRAG answer preview: {answer[:200]}...")
 
-                        # Silent no-data: ถ้า not grounded + confidence 0 → ไม่ตอบ ให้ admin จัดการ
+                        # No data: ถ้า not grounded + confidence 0 → ตอบกลับว่ากำลังตรวจสอบ
                         if not rag_response.is_grounded and rag_response.confidence == 0.0:
-                            logger.info(f"⏭️ No data — skipping reply (admin will handle)")
-                            return None
+                            logger.info(f"⏭️ No data — replying with NO_DATA_REPLY")
+                            return NO_DATA_REPLY
 
                         # Silent no-data: ถ้า LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบเลย ให้ admin จัดการ
                         _NO_DATA_PHRASES = [
@@ -1536,8 +1539,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
                         ]
                         if len(answer) < 150 and any(p in answer for p in _NO_DATA_PHRASES):
-                            logger.info(f"⏭️ No data — answer is short ({len(answer)} chars) + no-data phrase, skipping reply")
-                            return None
+                            logger.info(f"⏭️ No data — answer is short ({len(answer)} chars) + no-data phrase, replying with NO_DATA_REPLY")
+                            return NO_DATA_REPLY
 
                         # Track analytics if product recommendation
                         if is_prod_q:
@@ -1607,19 +1610,19 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             logger.info("Using legacy answer_qa_with_vector_search")
             answer = await answer_qa_with_vector_search(message, context)
 
-            # Silent no-data: legacy path returned None → ไม่ตอบ ให้ admin จัดการ
+            # No data: legacy path returned None → ตอบกลับว่ากำลังตรวจสอบ
             if answer is None:
-                return None
+                return NO_DATA_REPLY
 
-            # Silent no-data: LLM ตอบ "ไม่มีข้อมูล" → ไม่ตอบ
+            # No data: LLM ตอบ "ไม่มีข้อมูล" → ตอบกลับว่ากำลังตรวจสอบ
             _NO_DATA_PHRASES_LEGACY = [
                 "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                 "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
                 "ไม่พบในระบบ", "ไม่พบในฐานข้อมูล",
             ]
             if len(answer) < 150 and any(p in answer for p in _NO_DATA_PHRASES_LEGACY):
-                logger.info(f"⏭️ No data — legacy answer is short ({len(answer)} chars) + no-data phrase, skipping reply")
-                return None
+                logger.info(f"⏭️ No data — legacy answer is short ({len(answer)} chars) + no-data phrase, replying with NO_DATA_REPLY")
+                return NO_DATA_REPLY
 
             # Track analytics if product recommendation
             if is_prod_q:
