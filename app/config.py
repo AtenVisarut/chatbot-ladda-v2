@@ -65,6 +65,7 @@ USE_REDIS_CACHE = bool(REDIS_URL or UPSTASH_REDIS_REST_URL)
 MAX_MEMORY_MESSAGES = 50  # Keep last 50 messages for context (ปรับจาก 100 เพื่อ performance)
 MEMORY_CONTEXT_WINDOW = 10  # Use last 10 messages for context
 MEMORY_CONTENT_PREVIEW = 800  # Characters to show in context preview (เพิ่มจาก 300 เพื่อให้ชื่อสินค้าไม่ถูกตัด)
+MEMORY_SESSION_TIMEOUT_HOURS = int(os.getenv("MEMORY_SESSION_TIMEOUT_HOURS", "6"))  # ถ้า user หายไปเกิน 6 ชม. → ไม่ส่ง context เก่าให้ LLM
 
 # RAG-based Disease Detection
 # Set to "1" to use RAG + Vector Search (faster, cheaper)

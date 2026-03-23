@@ -2,7 +2,8 @@ import logging
 import asyncio
 import re
 from app.dependencies import supabase_client
-from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW, MEMORY_TABLE
+from datetime import datetime, timezone, timedelta
+from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW, MEMORY_TABLE, MEMORY_SESSION_TIMEOUT_HOURS
 from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,18 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
 
         if not result.data:
             return ""
+
+        # Session timeout check
+        latest_created = result.data[0].get("created_at", "")
+        if latest_created and MEMORY_SESSION_TIMEOUT_HOURS > 0:
+            try:
+                last_time = datetime.fromisoformat(latest_created.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                if (now - last_time) > timedelta(hours=MEMORY_SESSION_TIMEOUT_HOURS):
+                    logger.info(f"⏭️ Session timeout — skipping old context for get_conversation_context")
+                    return ""
+            except Exception:
+                pass
 
         # Reverse to get chronological order
         messages = list(reversed(result.data))
@@ -633,6 +646,20 @@ async def get_enhanced_context(user_id: str, current_query: str = "") -> str:
 
         if not result.data:
             return ""
+
+        # --- Session timeout: ถ้าข้อความล่าสุดเก่ากว่า N ชม. → ไม่ส่ง context เก่า ---
+        latest_msg = result.data[0]  # newest (desc order)
+        latest_created = latest_msg.get("created_at", "")
+        if latest_created and MEMORY_SESSION_TIMEOUT_HOURS > 0:
+            try:
+                last_time = datetime.fromisoformat(latest_created.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                gap = now - last_time
+                if gap > timedelta(hours=MEMORY_SESSION_TIMEOUT_HOURS):
+                    logger.info(f"⏭️ Session timeout: last message was {gap.total_seconds()/3600:.1f}h ago (>{MEMORY_SESSION_TIMEOUT_HOURS}h) — skipping old context")
+                    return ""
+            except Exception:
+                pass  # parse error — proceed normally
 
         # Chronological order (oldest first)
         messages = list(reversed(result.data))
