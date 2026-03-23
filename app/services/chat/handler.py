@@ -1444,7 +1444,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                 if product_names:
                                     asyncio.create_task(analytics_tracker.track_product_recommendation(
                                         user_id=user_id,
-                                        disease_name="AgenticRAG",
+                                        source="AgenticRAG",
                                         products=product_names[:5]
                                     ))
                                     logger.info(f"Tracked {len(product_names)} products from AgenticRAG")
@@ -1526,7 +1526,7 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                     if product_names:
                         asyncio.create_task(analytics_tracker.track_product_recommendation(
                             user_id=user_id,
-                            disease_name="Q&A",
+                            source="Q&A",
                             products=product_names[:5]
                         ))
                         logger.info(f"Tracked {len(product_names)} products from Q&A")

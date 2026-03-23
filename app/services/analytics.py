@@ -27,34 +27,6 @@ class AnalyticsTracker:
         self.supabase = supabase_client
         logger.info("✓ Analytics tracker initialized (Supabase)")
     
-    async def track_image_analysis(
-        self, 
-        user_id: str, 
-        disease_name: str, 
-        pest_type: str = None,
-        confidence: str = None,
-        severity: str = None,
-        response_time_ms: float = 0
-    ):
-        """บันทึกการวิเคราะห์รูปภาพ"""
-        try:
-            data = {
-                "user_id": user_id,
-                "event_type": "image_analysis",
-                "disease_name": disease_name,
-                "pest_type": pest_type,
-                "confidence": confidence,
-                "severity": severity,
-                "response_time_ms": response_time_ms,
-                "created_at": datetime.now().isoformat()
-            }
-            
-            await aexecute(self.supabase.table('analytics_events').insert(data))
-            logger.debug(f"✓ Tracked image analysis: {disease_name}")
-            
-        except Exception as e:
-            logger.error(f"Failed to track image analysis: {e}")
-    
     async def track_question(
         self, 
         user_id: str, 
@@ -80,9 +52,9 @@ class AnalyticsTracker:
             logger.error(f"Failed to track question: {e}")
     
     async def track_product_recommendation(
-        self, 
+        self,
         user_id: str,
-        disease_name: str,
+        source: str,
         products: List[str]
     ):
         """บันทึกการแนะนำผลิตภัณฑ์"""
@@ -91,7 +63,7 @@ class AnalyticsTracker:
                 data = {
                     "user_id": user_id,
                     "event_type": "product_recommendation",
-                    "disease_name": disease_name,
+                    "source": source,
                     "product_name": product_name,
                     "created_at": datetime.now().isoformat()
                 }
@@ -103,40 +75,11 @@ class AnalyticsTracker:
         except Exception as e:
             logger.error(f"Failed to track product recommendations: {e}")
 
-    async def track_registration(
+    async def track_error(
         self,
         user_id: str,
-        success: bool = True
-    ):
-        """บันทึกการลงทะเบียน"""
-        try:
-            data = {
-                "user_id": user_id,
-                "event_type": "registration",
-                "created_at": datetime.now().isoformat()
-            }
-            
-            # Add success status if needed, or just track the event
-            # Based on schema error, let's keep it minimal to ensure it works
-            # If 'success' column exists, we can add it, but let's stick to core fields
-            # The error was about 'method', so removing that is the priority.
-            # Let's also remove 'success' to be safe unless we know it exists, 
-            # but usually event_type is enough for counting.
-            # However, looking at other methods, they use specific fields.
-            # Let's try to keep it simple.
-            
-            await aexecute(self.supabase.table('analytics_events').insert(data))
-            logger.debug(f"✓ Tracked registration for {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to track registration: {e}")
-    
-    async def track_error(
-        self, 
-        user_id: str,
-        error_type: str, 
-        error_message: str,
-        stack_trace: str = None
+        error_type: str,
+        error_message: str
     ):
         """บันทึก error"""
         try:
@@ -145,7 +88,6 @@ class AnalyticsTracker:
                 "event_type": "error",
                 "error_type": error_type,
                 "error_message": error_message[:500],
-                "stack_trace": stack_trace[:1000] if stack_trace else None,
                 "created_at": datetime.now().isoformat()
             }
             

@@ -442,7 +442,7 @@ async def _process_webhook_events(events: list):
                                     product_names = [p.product_name for p in recommendations]
                                     await analytics_tracker.track_product_recommendation(
                                         user_id=user_id,
-                                        disease_name=detection_result.disease_name,
+                                        source="ImageDiagnosis",
                                         products=product_names
                                     )
 
