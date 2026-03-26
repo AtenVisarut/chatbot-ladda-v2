@@ -63,21 +63,6 @@ class HandoffManager:
             logger.error(f"Failed to create handoff: {e}")
             return None
 
-    async def has_active_handoff(self, user_id: str) -> bool:
-        """เช็คว่า user มี handoff ที่ยังไม่ resolve"""
-        try:
-            result = await aexecute(
-                self.supabase.table("admin_handoffs")
-                .select("id")
-                .eq("user_id", user_id)
-                .in_("status", ["pending", "active"])
-                .limit(1)
-            )
-            return bool(result.data)
-        except Exception as e:
-            logger.error(f"Failed to check active handoff: {e}")
-            return False
-
     async def get_handoffs(
         self, status: Optional[str] = None, limit: int = 50
     ) -> List[dict]:
@@ -143,23 +128,6 @@ class HandoffManager:
             return True
         except Exception as e:
             logger.error(f"Failed to resolve handoff: {e}")
-            return False
-
-    async def resolve_by_user(self, user_id: str) -> bool:
-        """Resolve all handoffs for a user"""
-        try:
-            await aexecute(self.supabase.table("admin_handoffs").update(
-                {
-                    "status": "resolved",
-                    "resolved_at": datetime.now(timezone.utc).isoformat(),
-                }
-            ).eq("user_id", user_id).in_(
-                "status", ["pending", "active"]
-            ))
-            logger.info(f"All handoffs resolved for user {user_id[:8]}...")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to resolve handoffs by user: {e}")
             return False
 
     async def get_handoff_for_user(self, user_id: str) -> Optional[dict]:

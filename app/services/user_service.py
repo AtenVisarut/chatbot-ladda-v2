@@ -114,25 +114,6 @@ async def get_facebook_profile(psid: str, skip_cache: bool = False) -> Optional[
         return None
 
 
-async def get_user(user_id: str) -> Optional[Dict]:
-    """Get user from user_ladda(LINE,FACE) table"""
-    try:
-        if not supabase_client:
-            return None
-
-        result = await aexecute(supabase_client.table(TABLE)\
-            .select('*')\
-            .eq('line_user_id', user_id))
-
-        if result.data and len(result.data) > 0:
-            return result.data[0]
-        return None
-
-    except Exception as e:
-        logger.error(f"Error getting user {user_id}: {e}")
-        return None
-
-
 async def register_user_ladda(user_id: str, display_name: Optional[str] = None) -> bool:
     """
     Register or update user in user_ladda(LINE,FACE) table.

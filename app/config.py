@@ -67,11 +67,6 @@ MEMORY_CONTEXT_WINDOW = 10  # Use last 10 messages for context
 MEMORY_CONTENT_PREVIEW = 800  # Characters to show in context preview (เพิ่มจาก 300 เพื่อให้ชื่อสินค้าไม่ถูกตัด)
 MEMORY_SESSION_TIMEOUT_HOURS = int(os.getenv("MEMORY_SESSION_TIMEOUT_HOURS", "6"))  # ถ้า user หายไปเกิน 6 ชม. → ไม่ส่ง context เก่าให้ LLM
 
-# RAG-based Disease Detection
-# Set to "1" to use RAG + Vector Search (faster, cheaper)
-# Set to "0" to use original hardcoded database (default for rollback)
-USE_RAG_DETECTION = os.getenv("USE_RAG_DETECTION", "0") == "1"
-
 # ============================================================================#
 # PRODUCT TABLE — switch between products2 (backup) and products3 (new Excel)
 # ============================================================================#
@@ -94,12 +89,9 @@ USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 # LLM MODEL NAMES (centralized — change once, applies everywhere)
 # ============================================================================#
 LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
-LLM_MODEL_INTENT = os.getenv("LLM_MODEL_INTENT", "gpt-4o")
 LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o-mini")
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
-LLM_MODEL_KNOWLEDGE = os.getenv("LLM_MODEL_KNOWLEDGE", "gpt-4o")
-LLM_MODEL_ANSWER_CHECKER = os.getenv("LLM_MODEL_ANSWER_CHECKER", "gpt-4o-mini")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 AGENTIC_RAG_CONFIG = {
@@ -126,19 +118,11 @@ LLM_TEMP_RERANKING = 0               # Agent 2: re-rank ลำดับสิน
 LLM_TOKENS_RERANKING = 100
 LLM_TEMP_RESPONSE_GEN = 0.2          # Agent 3: สร้างคำตอบจาก RAG pipeline (response_generator_agent.py)
 LLM_TOKENS_RESPONSE_GEN = 600
-LLM_TEMP_ANSWER_CHECKER = 0.1        # Agent 5: ตรวจคำตอบก่อนส่ง (conditional, เฉพาะกรณีเสี่ยง)
-LLM_TOKENS_ANSWER_CHECKER = 100
 # --- Handler (chat/handler.py) ---
 LLM_TEMP_HANDLER_RAG = 0.1           # ตอบคำถามสินค้าจาก vector search (Q&A)
 LLM_TOKENS_HANDLER_RAG = 600
-LLM_TEMP_HANDLER_USAGE = 0.2         # ตอบคำถามวิธีใช้/การเกษตร
-LLM_TOKENS_HANDLER_USAGE = 800
 LLM_TEMP_GENERAL_CHAT = 0.3          # General chat คุยทั่วไป (ไม่เกี่ยวเกษตร)
 LLM_TOKENS_GENERAL_CHAT = 250
-
-# --- Knowledge Base (knowledge_base.py) ---
-LLM_TEMP_KNOWLEDGE = 0.5             # ตอบจาก knowledge table (RAG)
-LLM_TOKENS_KNOWLEDGE = 400
 
 # --- Product Recommendation (product/recommendation.py) ---
 LLM_TEMP_PRODUCT_FORMAT = 0.1        # Format คำตอบแนะนำสินค้า

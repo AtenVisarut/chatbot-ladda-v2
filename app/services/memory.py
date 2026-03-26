@@ -147,33 +147,6 @@ async def clear_memory(user_id: str):
     except Exception as e:
         logger.error(f"Failed to clear memory: {e}")
 
-async def get_memory_stats(user_id: str) -> dict:
-    """Get memory statistics for user"""
-    try:
-        if not supabase_client:
-            return {"total": 0, "user_messages": 0, "assistant_messages": 0}
-
-        result = await aexecute(supabase_client.table(MEMORY_TABLE)\
-            .select('role')\
-            .eq('user_id', user_id))
-
-        if not result.data:
-            return {"total": 0, "user_messages": 0, "assistant_messages": 0}
-
-        user_count = sum(1 for msg in result.data if msg['role'] == 'user')
-        assistant_count = sum(1 for msg in result.data if msg['role'] == 'assistant')
-
-        return {
-            "total": len(result.data),
-            "user_messages": user_count,
-            "assistant_messages": assistant_count
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get memory stats: {e}")
-        return {"total": 0, "user_messages": 0, "assistant_messages": 0}
-
-
 async def save_recommended_products(user_id: str, products: list, disease_name: str = ""):
     """
     เก็บข้อมูลสินค้าที่แนะนำใน memory พร้อม metadata

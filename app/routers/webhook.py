@@ -419,16 +419,6 @@ async def _process_webhook_events(events: list):
                                 if len(parts) > 0:
                                     pest_type = parts[0].strip()
 
-                            # Track analytics
-                            if analytics_tracker:
-                                await analytics_tracker.track_image_analysis(
-                                    user_id=user_id,
-                                    disease_name=detection_result.disease_name,
-                                    pest_type=pest_type,
-                                    confidence=detection_result.confidence,
-                                    response_time_ms=0.0
-                                )
-
                             if should_recommend:
                                 # 3. Get product recommendations with matching score
                                 recommendations = await retrieve_products_with_matching_score(

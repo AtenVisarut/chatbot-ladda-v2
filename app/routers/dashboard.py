@@ -37,7 +37,7 @@ async def get_dashboard_data(request: Request, days: int = 1):
 async def get_system_health(request: Request):
     if not analytics_tracker:
         raise HTTPException(status_code=503, detail="Analytics service not available")
-    return await analytics_tracker.get_system_health()
+    return await analytics_tracker.get_health_status()
 
 
 @router.get("/api/analytics/alerts")

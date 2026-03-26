@@ -6,18 +6,16 @@ import time
 from typing import List, Dict, Optional, Tuple
 from app.dependencies import openai_client, supabase_client
 from app.utils.async_db import aexecute
-from app.services.memory import add_to_memory, get_conversation_context, get_recommended_products, get_enhanced_context
+from app.services.memory import add_to_memory, get_recommended_products, get_enhanced_context
 from app.services.cache import get_from_cache, set_to_cache, save_conversation_state, clear_conversation_state
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
-from app.services.product.recommendation import recommend_products_by_intent, hybrid_search_products, filter_products_by_category
+from app.services.product.recommendation import hybrid_search_products, filter_products_by_category
 from app.config import (
     USE_AGENTIC_RAG,
     LLM_MODEL_GENERAL_CHAT,
     EMBEDDING_MODEL,
     LLM_TEMP_HANDLER_RAG,
     LLM_TOKENS_HANDLER_RAG,
-    LLM_TEMP_HANDLER_USAGE,
-    LLM_TOKENS_HANDLER_USAGE,
     LLM_TEMP_GENERAL_CHAT,
     LLM_TOKENS_GENERAL_CHAT,
     PRODUCT_TABLE,
@@ -187,11 +185,6 @@ def extract_product_name_from_question(question: str) -> Optional[str]:
 def extract_all_product_names_from_question(question: str) -> list:
     """ดึงชื่อสินค้าทั้งหมดจากคำถาม (สำหรับเปรียบเทียบหลายตัว)"""
     return ProductRegistry.get_instance().extract_all_product_names(question)
-
-
-def fuzzy_match_product_name(text: str, threshold: float = 0.65) -> Optional[str]:
-    """Fuzzy matching สำหรับชื่อสินค้าที่พิมพ์ผิด — delegate ไปยัง ProductRegistry"""
-    return ProductRegistry.get_instance().fuzzy_match(text, threshold)
 
 
 def detect_unknown_product_in_question(question: str) -> Optional[str]:
