@@ -210,20 +210,30 @@ async def ensure_user_exists(user_id: str) -> bool:
     Ensure user exists in user_ladda(LINE,FACE) table.
     Fetches LINE/Facebook profile for display_name.
     Uses in-memory cache to skip DB for known users.
+    For FB users with fallback names, retries fetching real name.
     """
     if user_id in _known_users:
+        # FB users with fallback name → retry fetching real name
+        if user_id.startswith("fb:"):
+            try:
+                if supabase_client:
+                    result = await aexecute(supabase_client.table(TABLE)
+                        .select('display_name')
+                        .eq('line_user_id', user_id))
+                    if result.data and result.data[0].get('display_name', '').startswith('FB User'):
+                        await refresh_display_name(user_id)
+            except Exception:
+                pass
         return True
 
     try:
         display_name = None
         if user_id.startswith("fb:"):
-            # Facebook user — fetch profile via Graph API
             psid = user_id.replace("fb:", "", 1)
             profile = await get_facebook_profile(psid)
             if profile:
                 display_name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
         else:
-            # LINE user — fetch profile via LINE API
             profile = await get_line_profile(user_id)
             if profile:
                 display_name = profile.get("displayName")
