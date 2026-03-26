@@ -20,6 +20,20 @@ def verify_line_signature(body: bytes, signature: str) -> bool:
     expected_signature = base64.b64encode(hash_digest).decode('utf-8')
     return hmac.compare_digest(signature, expected_signature)
 
+async def show_loading(user_id: str, seconds: int = 20) -> None:
+    """Show loading animation to user (LINE Chat Action API)"""
+    try:
+        url = "https://api.line.me/v2/bot/chat/loading/start"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"
+        }
+        payload = {"chatId": user_id, "loadingSeconds": min(seconds, 60)}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(url, json=payload, headers=headers)
+    except Exception as e:
+        logger.debug(f"Loading animation failed (non-critical): {e}")
+
 async def get_image_content_from_line(message_id: str) -> bytes:
     url = f"https://api-data.line.me/v2/bot/message/{message_id}/content"
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}"}

@@ -48,7 +48,8 @@ from app.utils.line.helpers import (
     verify_line_signature,
     get_image_content_from_line,
     reply_line,
-    push_line
+    push_line,
+    show_loading
 )
 from app.utils.rate_limiter import check_user_rate_limit
 from app.config import MAX_CONCURRENT_TASKS, MAX_QUEUE_DEPTH
@@ -277,6 +278,7 @@ async def _process_webhook_events(events: list):
                     from app.config import ENABLE_IMAGE_DIAGNOSIS
                     if not ENABLE_IMAGE_DIAGNOSIS:
                         await delete_pending_context(user_id)
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
@@ -510,7 +512,8 @@ async def _process_webhook_events(events: list):
                         # Clear unknown context and fall through to normal conversation
                         await delete_pending_context(user_id)
 
-                        # Q&A Chat - Vector Search from products, diseases, knowledge
+                        # Q&A Chat
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
@@ -518,7 +521,6 @@ async def _process_webhook_events(events: list):
                             logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
                             if handoff_manager:
                                 await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
-                            # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
 
                 else:
                     # Normal text message handling
@@ -532,7 +534,8 @@ async def _process_webhook_events(events: list):
                         await reply_line(reply_token, help_flex)
 
                     else:
-                        # Q&A Chat - Vector Search from products, diseases, knowledge
+                        # Q&A Chat
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
