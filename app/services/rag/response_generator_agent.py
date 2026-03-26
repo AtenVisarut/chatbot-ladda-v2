@@ -80,13 +80,12 @@ class ResponseGeneratorAgent:
         """
         try:
             logger.info(f"ResponseGeneratorAgent: Generating response")
+            logger.info(f"  - Grounded: {grounding_result.is_grounded}")
+            logger.info(f"  - Confidence: {grounding_result.confidence:.2f}")
 
-            # Handle special intents (before accessing grounding_result which may be None)
+            # Handle special intents
             if query_analysis.intent == IntentType.GREETING:
                 return self._generate_greeting_response(query_analysis)
-
-            logger.info(f"  - Grounded: {grounding_result.is_grounded if grounding_result else 'N/A'}")
-            logger.info(f"  - Confidence: {grounding_result.confidence:.2f if grounding_result else 0}")
 
             # Track final confidence/grounded (may be overridden if disease/crop match triggers)
             final_confidence = grounding_result.confidence

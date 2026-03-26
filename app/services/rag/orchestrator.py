@@ -488,70 +488,9 @@ class AgenticRAG:
                 logger.warning("Could not import hint functions from chat.py")
 
             # =================================================================
-            # Stage 1: Query Understanding (skip when Stage 0 has clear info)
+            # Stage 1: Query Understanding
             # =================================================================
-            _skip_agent1 = False
-            _inferred_intent = None
-            _inferred_sources = ["products"]
-
-            # Determine if Stage 0 already has enough info to skip Agent 1
-            _has_product = bool(hints.get('product_name'))
-            _has_plant = bool(hints.get('plant_type'))
-            _has_disease = bool(hints.get('disease_name'))
-            _has_pest = bool(hints.get('pest_name'))
-            _has_problem = bool(hints.get('problem_type') and hints['problem_type'] != 'unknown')
-
-            # Usage keywords — user asking how to use / dosage
-            _USAGE_KW = ['ใช้ยังไง', 'ใช้เท่าไหร่', 'ใช้อย่างไร', 'อัตราเท่าไหร่',
-                         'ผสมเท่าไหร่', 'ฉีดยังไง', 'พ่นยังไง', 'วิธีใช้', 'อัตราใช้',
-                         'ใช้กี่', 'ผสมกี่', 'ฉีดกี่', 'พ่นกี่']
-            _is_usage_q = any(kw in query for kw in _USAGE_KW)
-
-            # Recommendation keywords
-            _REC_KW = ['ใช้อะไรดี', 'ใช้ยาอะไร', 'ใช้ตัวไหน', 'แนะนำ', 'มีอะไรบ้าง',
-                       'ยาอะไร', 'สารอะไร', 'ตัวไหนดี']
-            _is_rec_q = any(kw in query for kw in _REC_KW)
-
-            # Case 1: product_name + usage question → USAGE_INSTRUCTION
-            if _has_product and _is_usage_q:
-                _skip_agent1 = True
-                _inferred_intent = IntentType.USAGE_INSTRUCTION
-            # Case 2: product_name only (no usage/rec keywords) → PRODUCT_INFO
-            elif _has_product and not _is_rec_q:
-                _skip_agent1 = True
-                _inferred_intent = IntentType.PRODUCT_INFO
-            # Case 3: pest + plant → PRODUCT_RECOMMENDATION (pest control)
-            elif _has_pest and _has_plant:
-                _skip_agent1 = True
-                _inferred_intent = IntentType.PRODUCT_RECOMMENDATION
-            # Case 4: disease + plant → PRODUCT_RECOMMENDATION (disease treatment)
-            elif _has_disease and _has_plant:
-                _skip_agent1 = True
-                _inferred_intent = IntentType.PRODUCT_RECOMMENDATION
-            # Case 5: problem_type + plant + recommendation keywords
-            elif _has_problem and _has_plant and _is_rec_q:
-                _skip_agent1 = True
-                _inferred_intent = IntentType.PRODUCT_RECOMMENDATION
-
-            if _skip_agent1:
-                logger.info(f"  - Skip Agent 1: Stage 0 sufficient (intent={_inferred_intent.value}, product={hints.get('product_name', '-')}, plant={hints.get('plant_type', '-')})")
-                # Build QueryAnalysis from Stage 0 hints
-                query_analysis = QueryAnalysis(
-                    intent=_inferred_intent,
-                    confidence=0.90,
-                    entities={
-                        'product_name': hints.get('product_name', ''),
-                        'plant_type': hints.get('plant_type', ''),
-                        'disease_name': hints.get('disease_name', ''),
-                        'pest_name': hints.get('pest_name', ''),
-                    },
-                    expanded_queries=[query],
-                    required_sources=_inferred_sources,
-                    original_query=query,
-                )
-            else:
-                logger.info("  - Using Agent 1: Stage 0 insufficient, calling LLM")
-                query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
+            query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
 
             # Inject possible_diseases from symptom mapping into entities for downstream use
             if hints.get('possible_diseases'):
