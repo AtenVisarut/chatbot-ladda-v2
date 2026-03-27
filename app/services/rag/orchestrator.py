@@ -16,6 +16,7 @@ Usage:
     print(f"Citations: {len(response.citations)}")
 """
 
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -488,8 +489,17 @@ class AgenticRAG:
                 logger.warning("Could not import hint functions from chat.py")
 
             # =================================================================
-            # Stage 1: Query Understanding
+            # Stage 1: Query Understanding + Pre-fetch embedding (parallel)
             # =================================================================
+            # Start embedding the original query NOW while Agent 1 thinks
+            # This saves ~1-2s because embedding doesn't need Agent 1's result
+            prefetch_task = None
+            if self.retrieval_agent and self.retrieval_agent.openai_client:
+                prefetch_task = asyncio.create_task(
+                    self.retrieval_agent._search_products(query, 10, None)
+                )
+                logger.info("  - Started parallel pre-fetch embedding for original query")
+
             query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
 
             # Inject possible_diseases from symptom mapping into entities for downstream use
@@ -502,6 +512,8 @@ class AgenticRAG:
 
             # Handle greeting intent directly
             if query_analysis.intent == IntentType.GREETING:
+                if prefetch_task:
+                    prefetch_task.cancel()
                 response = await self.response_agent.generate(
                     query_analysis=query_analysis,
                     retrieval_result=None,
@@ -515,6 +527,8 @@ class AgenticRAG:
             product_keywords = ["ใช้สาร", "ใช้ยา", "ใช้อะไร", "รักษา", "กำจัด", "ฉีด", "พ่น", "ผสม", "อัตรา"]
             has_product_keywords = any(kw in query for kw in product_keywords)
             if query_analysis.intent == IntentType.UNKNOWN and query_analysis.confidence < 0.3 and not has_product_keywords:
+                if prefetch_task:
+                    prefetch_task.cancel()
                 logger.info("Low confidence unknown intent, routing to general chat")
                 return AgenticRAGResponse(
                     answer=None,  # Signal to use general chat
@@ -530,12 +544,23 @@ class AgenticRAG:
                 logger.info("Unknown intent but has product keywords, forcing retrieval")
                 query_analysis.required_sources = ["products"]
 
+            # Collect pre-fetched results (completed during Agent 1)
+            prefetch_docs = []
+            if prefetch_task:
+                try:
+                    prefetch_docs = await prefetch_task
+                    if prefetch_docs:
+                        logger.info(f"  - Pre-fetch completed: {len(prefetch_docs)} docs found during Agent 1")
+                except Exception:
+                    pass  # Pre-fetch failed, retrieval will handle it
+
             # =================================================================
-            # Stage 2: Retrieval
+            # Stage 2: Retrieval (with pre-fetched docs injected)
             # =================================================================
             retrieval_result = await self.retrieval_agent.retrieve(
                 query_analysis=query_analysis,
-                top_k=self.config.get('RETRIEVAL_TOP_K', 10)
+                top_k=self.config.get('RETRIEVAL_TOP_K', 10),
+                prefetch_docs=prefetch_docs
             )
 
             # =================================================================

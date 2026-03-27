@@ -571,7 +571,8 @@ class RetrievalAgent:
     async def retrieve(
         self,
         query_analysis: QueryAnalysis,
-        top_k: int = DEFAULT_TOP_K
+        top_k: int = DEFAULT_TOP_K,
+        prefetch_docs: list = None
     ) -> RetrievalResult:
         """
         Perform retrieval based on query analysis
@@ -593,6 +594,10 @@ class RetrievalAgent:
 
             # Stage 0: Direct product lookup if entity has product_name(s)
             all_docs = []
+            # Inject pre-fetched docs from parallel embedding (started during Agent 1)
+            if prefetch_docs:
+                all_docs.extend(prefetch_docs)
+                logger.info(f"  - Injected {len(prefetch_docs)} pre-fetched docs")
             direct_lookup_ids = set()
             symptom_fallback_ids = set()
             pest_fallback_ids = set()
@@ -1091,7 +1096,7 @@ class RetrievalAgent:
                 return []
 
             # Determine category filter based on intent (English values matching products table)
-            category_filter = self.INTENT_CATEGORY_MAP.get(query_analysis.intent)
+            category_filter = self.INTENT_CATEGORY_MAP.get(query_analysis.intent) if query_analysis else None
 
             # Try hybrid search (note: hybrid_search_products doesn't support match_threshold or category_filter)
             rpc_params = {
@@ -1109,7 +1114,7 @@ class RetrievalAgent:
 
             # Convert to RetrievedDocument with filtering
             docs = []
-            _original_query_lower = query_analysis.original_query.lower() if query_analysis.original_query else ''
+            _original_query_lower = query_analysis.original_query.lower() if query_analysis and query_analysis.original_query else query.lower()
             for item in result.data:
                 similarity = float(item.get('similarity', 0))
 
