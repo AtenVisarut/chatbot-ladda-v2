@@ -147,14 +147,18 @@ class AgenticRAG:
                         conv_state = await get_conversation_state(user_id)
                         if conv_state and conv_state.get('active_product'):
                             _plant_in_q_s = extract_plant_type_from_question(query)
-                            _dp_kw = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว']
+                            _dp_kw = ['โรค', 'เพลี้ย', 'หนอน', 'ด้วง', 'แมลง', 'เชื้อ', 'ราแป้ง', 'ราน้ำ', 'ราสี', 'ราสนิม', 'ราดำ', 'ไรแดง', 'ไรขาว',
+                                     'ยับยั้ง', 'หญ้า', 'วัชพืช', 'ปุ๋ย', 'ฮอร์โมน', 'สารควบคุม', 'แตกใบอ่อน', 'ใบอ่อน']
                             _has_dp = any(kw in query for kw in _dp_kw)
+                            # "ใช้ยาอะไร" / "ใช้ตัวไหน" = ถามหาสินค้าใหม่ → new topic
+                            _ask_new_product = ['ยาอะไร', 'ใช้ยาอะไร', 'ใช้ตัวไหน', 'ใช้อะไรดี', 'แนะนำตัวไหน']
+                            _is_asking_new = any(kw in query for kw in _ask_new_product)
                             _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด',
                                    'บำรุง', 'เร่ง', 'พัฒนา', 'เสริม', 'กระตุ้น']
                             _is_app = _plant_in_q_s and any(v in query for v in _uv)
                             # ถ้าไม่มีชื่อสินค้าและไม่มีชื่อพืช → subjectless follow-up → ไม่ถือเป็น new topic
                             _subjectless = not detected_product and not _plant_in_q_s
-                            _new_topic = (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless)
+                            _new_topic = (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless) or _is_asking_new
                             if not _new_topic:
                                 detected_product = conv_state['active_product']
                                 logger.info(f"  - Product from conversation state: {detected_product}")
