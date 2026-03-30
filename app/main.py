@@ -26,7 +26,7 @@ from app.services.product.registry import ProductRegistry
 from app.utils.rate_limiter import cleanup_rate_limit_data
 
 # Routers
-from app.routers import health, admin, dashboard, webhook, facebook_webhook, admin_chat
+from app.routers import health, admin, dashboard, webhook, facebook_webhook, admin_chat, ws
 
 # Configure logging
 logging.basicConfig(
@@ -137,6 +137,7 @@ app.include_router(dashboard.router)
 app.include_router(webhook.router)
 app.include_router(facebook_webhook.router)
 app.include_router(admin_chat.router)
+app.include_router(ws.router)
 
 
 if __name__ == "__main__":

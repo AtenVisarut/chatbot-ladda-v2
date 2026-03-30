@@ -247,6 +247,13 @@ async def _process_webhook_events(events: list):
                 text = event["message"]["text"].strip()
                 logger.info(f"Received text from {user_id}: {text}")
 
+                # WebSocket: notify admin dashboard of new message
+                try:
+                    from app.routers.ws import emit_new_message
+                    asyncio.create_task(emit_new_message(user_id, display_name or user_id, "LINE", text))
+                except Exception:
+                    pass
+
                 # Check if this is a response to image questions
                 # Check pending context from DB
                 ctx = await get_pending_context(user_id)
