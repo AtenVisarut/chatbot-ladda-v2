@@ -1,8 +1,13 @@
 """
-Semantic Cache — In-Memory with 3-Layer Protection
+Semantic Cache — Upstash Redis + In-Memory with 3-Layer Protection
 ค้นหา cached response ด้วย cosine similarity แทน exact match
 ป้องกัน false match ด้วย: similarity ≥ threshold + plant_type ตรง + TTL
+
+Storage:
+- L0: Upstash Redis (persistent, shared across workers)
+- L1: In-Memory (fast fallback)
 """
+import json
 import logging
 import math
 import time
@@ -18,8 +23,21 @@ from app.config import (
 
 logger = logging.getLogger(__name__)
 
+# L1: In-Memory cache (per-worker, fast)
 _semantic_cache: List[Dict] = []
 _lock = threading.Lock()
+
+# L0: Redis key prefix
+_REDIS_KEY = "semantic_cache:entries"
+
+
+def _get_redis():
+    """Get Redis client if available."""
+    try:
+        from app.services.redis_cache import redis_client
+        return redis_client
+    except Exception:
+        return None
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -30,6 +48,41 @@ def _cosine_similarity(a: List[float], b: List[float]) -> float:
     if mag_a == 0 or mag_b == 0:
         return 0.0
     return dot / (mag_a * mag_b)
+
+
+def _search_entries(entries: List[Dict], query_embedding: List[float],
+                    plant_type: str, threshold: float) -> Optional[Dict]:
+    """Search through entries with 3-layer protection."""
+    now = time.time()
+    best_match = None
+    best_sim = 0.0
+
+    for entry in entries:
+        # Layer 3: TTL check
+        if now - entry.get("created_at", 0) > SEMANTIC_CACHE_TTL:
+            continue
+
+        # Layer 2: plant_type check
+        entry_plant = entry.get("plant_type", "")
+        if plant_type and entry_plant and plant_type != entry_plant:
+            continue
+        if plant_type and not entry_plant:
+            continue
+
+        # Layer 1: similarity check
+        sim = _cosine_similarity(query_embedding, entry["embedding"])
+        if sim >= threshold and sim > best_sim:
+            best_sim = sim
+            best_match = entry
+
+    if best_match:
+        return {
+            "response": best_match["response"],
+            "similarity": best_sim,
+            "query_text": best_match["query_text"],
+            "plant_type": best_match.get("plant_type", ""),
+        }
+    return None
 
 
 async def search_semantic_cache(
@@ -44,39 +97,33 @@ async def search_semantic_cache(
     if threshold is None:
         threshold = SEMANTIC_CACHE_THRESHOLD
 
-    now = time.time()
-    best_match = None
-    best_sim = 0.0
-
+    # Try L1 (in-memory) first — fastest
     with _lock:
-        for entry in _semantic_cache:
-            # Layer 3: TTL check
-            if now - entry["created_at"] > SEMANTIC_CACHE_TTL:
-                continue
+        result = _search_entries(_semantic_cache, query_embedding, plant_type, threshold)
 
-            # Layer 2: plant_type check
-            entry_plant = entry.get("plant_type", "")
-            if plant_type and entry_plant and plant_type != entry_plant:
-                continue
-            if plant_type and not entry_plant:
-                continue
+    if result:
+        logger.info(f"✓ Semantic cache hit L1 (sim={result['similarity']:.3f}, plant={plant_type or 'none'})")
+        return result
 
-            # Layer 1: similarity check
-            sim = _cosine_similarity(query_embedding, entry["embedding"])
-            if sim >= threshold and sim > best_sim:
-                best_sim = sim
-                best_match = entry
+    # Try L0 (Redis) — persistent, shared across workers
+    redis = _get_redis()
+    if redis:
+        try:
+            raw = redis.get(_REDIS_KEY)
+            if raw:
+                entries = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+                result = _search_entries(entries, query_embedding, plant_type, threshold)
+                if result:
+                    # Promote to L1 for faster access next time
+                    with _lock:
+                        _semantic_cache.clear()
+                        _semantic_cache.extend(entries)
+                    logger.info(f"✓ Semantic cache hit L0/Redis (sim={result['similarity']:.3f}, plant={plant_type or 'none'})")
+                    return result
+        except Exception as e:
+            logger.warning(f"Semantic cache Redis read failed: {e}")
 
-    if best_match:
-        logger.info(f"✓ Semantic cache hit (sim={best_sim:.3f}, plant={plant_type or 'none'})")
-        return {
-            "response": best_match["response"],
-            "similarity": best_sim,
-            "query_text": best_match["query_text"],
-            "plant_type": best_match.get("plant_type", ""),
-        }
-
-    logger.info(f"⏭️ Semantic cache miss (best_sim={best_sim:.3f} < {threshold}, plant={plant_type or 'none'})")
+    logger.info(f"⏭️ Semantic cache miss (plant={plant_type or 'none'})")
     return None
 
 
@@ -86,7 +133,7 @@ async def store_semantic_cache(
     response: str,
     plant_type: str = "",
 ) -> None:
-    """เก็บ response + embedding ไว้ใน in-memory cache."""
+    """เก็บ response + embedding ไว้ใน L1 (memory) + L0 (Redis)."""
     if not SEMANTIC_CACHE_ENABLED or not query_embedding:
         return
 
@@ -103,20 +150,35 @@ async def store_semantic_cache(
         now = time.time()
         _semantic_cache[:] = [
             e for e in _semantic_cache
-            if now - e["created_at"] <= SEMANTIC_CACHE_TTL
+            if now - e.get("created_at", 0) <= SEMANTIC_CACHE_TTL
         ]
 
         # Evict oldest if full
         if len(_semantic_cache) >= SEMANTIC_CACHE_MAX_ENTRIES:
-            _semantic_cache.sort(key=lambda e: e["created_at"])
+            _semantic_cache.sort(key=lambda e: e.get("created_at", 0))
             del _semantic_cache[:max(1, len(_semantic_cache) // 5)]
 
         _semantic_cache.append(entry)
+        entries_snapshot = list(_semantic_cache)
 
-    logger.info(f"✓ Semantic cache stored (plant={plant_type or 'none'}, entries={len(_semantic_cache)})")
+    # Persist to Redis (fire-and-forget)
+    redis = _get_redis()
+    if redis:
+        try:
+            redis.set(_REDIS_KEY, json.dumps(entries_snapshot), ex=SEMANTIC_CACHE_TTL)
+        except Exception as e:
+            logger.warning(f"Semantic cache Redis write failed: {e}")
+
+    logger.info(f"✓ Semantic cache stored (plant={plant_type or 'none'}, entries={len(entries_snapshot)})")
 
 
 def clear_semantic_cache() -> None:
-    """ล้าง semantic cache ทั้งหมด (สำหรับ test)."""
+    """ล้าง semantic cache ทั้งหมด (L1 + L0)."""
     with _lock:
         _semantic_cache.clear()
+    redis = _get_redis()
+    if redis:
+        try:
+            redis.delete(_REDIS_KEY)
+        except Exception:
+            pass
