@@ -49,6 +49,23 @@ def _get_cached_embedding(text: str):
     return None
 
 
+async def _generate_embedding_standalone(text: str, openai_client) -> list:
+    """Generate embedding without RetrievalAgent instance (for semantic cache)."""
+    cached = _get_cached_embedding(text)
+    if cached is not None:
+        return cached
+    try:
+        from app.config import EMBEDDING_MODEL
+        response = await openai_client.embeddings.create(
+            model=EMBEDDING_MODEL, input=text, encoding_format="float"
+        )
+        embedding = response.data[0].embedding
+        _set_cached_embedding(text, embedding)
+        return embedding
+    except Exception:
+        return []
+
+
 def _set_cached_embedding(text: str, embedding: list):
     """Store embedding in cache, evict oldest if full"""
     key = hashlib.md5(text.encode()).hexdigest()
