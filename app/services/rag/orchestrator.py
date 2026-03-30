@@ -117,6 +117,8 @@ class AgenticRAG:
                 from app.utils.text_processing import generate_thai_disease_variants, resolve_symptom_to_pathogens, diacritics_match
                 import re
 
+                _skip_context_product = False  # flag: ถ้า new_topic detected → ไม่ดึง product จาก context
+
                 # --- Farmer Slang Resolution ---
                 slang_result = resolve_farmer_slang(query)
                 if slang_result["matched_slangs"]:
@@ -151,24 +153,30 @@ class AgenticRAG:
                                      'ยับยั้ง', 'หญ้า', 'วัชพืช', 'ปุ๋ย', 'ฮอร์โมน', 'สารควบคุม', 'แตกใบอ่อน', 'ใบอ่อน']
                             _has_dp = any(kw in query for kw in _dp_kw)
                             # "ใช้ยาอะไร" / "ใช้ตัวไหน" = ถามหาสินค้าใหม่ → new topic
-                            _ask_new_product = ['ยาอะไร', 'ใช้ยาอะไร', 'ใช้ตัวไหน', 'ใช้อะไรดี', 'แนะนำตัวไหน']
+                            _ask_new_product = ['ยาอะไร', 'ใช้ยาอะไร', 'ใช้ตัวไหน', 'ใช้อะไรดี',
+                                               'แนะนำตัวไหน', 'ใช้อะไร', 'มียาอะไร', 'แนะนำยา']
                             _is_asking_new = any(kw in query for kw in _ask_new_product)
                             _uv = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด',
                                    'บำรุง', 'เร่ง', 'พัฒนา', 'เสริม', 'กระตุ้น']
                             _is_app = _plant_in_q_s and any(v in query for v in _uv)
                             # ถ้าไม่มีชื่อสินค้าและไม่มีชื่อพืช → subjectless follow-up → ไม่ถือเป็น new topic
                             _subjectless = not detected_product and not _plant_in_q_s
-                            _new_topic = (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless) or _is_asking_new
+                            # ถ้าพืชใน query ต่างจากพืชใน state → new topic ทันที
+                            _state_plant = conv_state.get('active_plant', '')
+                            _different_plant = _plant_in_q_s and _state_plant and _plant_in_q_s != _state_plant
+                            _new_topic = _different_plant or (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless) or _is_asking_new
                             if not _new_topic:
                                 detected_product = conv_state['active_product']
                                 logger.info(f"  - Product from conversation state: {detected_product}")
                             else:
-                                logger.info(f"  - State has '{conv_state['active_product']}' but query has new topic, skipping")
+                                _skip_context_product = True
+                                logger.info(f"  - State has '{conv_state['active_product']}' but query has new topic (plant:{_plant_in_q_s} vs state:{_state_plant}), skipping")
                     except Exception as e:
                         logger.warning(f"  - Conversation state read failed (non-critical): {e}")
 
                 # If no product in current query, try extracting from context (follow-up questions)
-                if not detected_product and context:
+                # Skip if new_topic was detected — ป้องกันดึง product เก่าจาก context
+                if not detected_product and context and not _skip_context_product:
                     # Split context into active topic vs past sections
                     _active_section = ""
                     _past_section = ""
