@@ -3,7 +3,7 @@ import asyncio
 import re
 from app.dependencies import supabase_client
 from datetime import datetime, timezone, timedelta
-from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW, MEMORY_TABLE, MEMORY_SESSION_TIMEOUT_HOURS
+from app.config import MAX_MEMORY_MESSAGES, MEMORY_CONTEXT_WINDOW, MEMORY_CONTENT_PREVIEW, MEMORY_TABLE, MEMORY_SESSION_TIMEOUT_HOURS, MEMORY_TTL_DAYS
 from app.utils.async_db import aexecute
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,9 @@ async def get_conversation_context(user_id: str, limit: int = MEMORY_CONTEXT_WIN
         return ""
 
 async def cleanup_old_memory(user_id: str):
-    """Keep only last N messages per user (per-user lock prevents race conditions)"""
+    """Keep only last N messages per user + ลบ messages เก่ากว่า MEMORY_TTL_DAYS"""
     lock = _get_cleanup_lock(user_id)
     if lock.locked():
-        # Another cleanup is already running for this user — skip
         return
 
     async with lock:
@@ -108,7 +107,17 @@ async def cleanup_old_memory(user_id: str):
             if not supabase_client:
                 return
 
-            # Get all message IDs for this user, ordered by created_at desc
+            # 1. ลบ messages เก่ากว่า TTL (7 วัน)
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=MEMORY_TTL_DAYS)).isoformat()
+            ttl_result = await aexecute(supabase_client.table(MEMORY_TABLE)\
+                .delete()\
+                .eq('user_id', user_id)\
+                .lt('created_at', cutoff))
+            ttl_deleted = len(ttl_result.data) if ttl_result.data else 0
+            if ttl_deleted > 0:
+                logger.info(f"✓ TTL cleanup: deleted {ttl_deleted} messages older than {MEMORY_TTL_DAYS} days for user {user_id[:8]}...")
+
+            # 2. Keep only last MAX_MEMORY_MESSAGES
             result = await aexecute(supabase_client.table(MEMORY_TABLE)\
                 .select('id')\
                 .eq('user_id', user_id)\
@@ -117,11 +126,9 @@ async def cleanup_old_memory(user_id: str):
             if not result.data or len(result.data) <= MAX_MEMORY_MESSAGES:
                 return
 
-            # Get IDs to delete (keep only last MAX_MEMORY_MESSAGES)
             ids_to_delete = [msg['id'] for msg in result.data[MAX_MEMORY_MESSAGES:]]
 
             if ids_to_delete:
-                # Delete old messages
                 await aexecute(supabase_client.table(MEMORY_TABLE)\
                     .delete()\
                     .in_('id', ids_to_delete))
