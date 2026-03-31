@@ -1263,7 +1263,17 @@ async def _save_conv_state_from_answer(
                 state["active_plant"] = plant_in_q
             state["active_intent"] = intent or "unknown"
 
-        # Only save if we have meaningful state
+        # ALWAYS save state — even if no product found.
+        # This prevents stale old state (e.g., นาแดน 6 จี) from persisting
+        # when bot recommends new products that registry doesn't know yet.
+        # If answer looks like a product recommendation but we found nothing,
+        # clear active_product to avoid stale follow-ups.
+        _looks_like_recommendation = bool(re.search(r'\d+\.\s+\S+', answer)) and len(answer) > 200
+        if not state.get("active_product") and _looks_like_recommendation:
+            logger.info("⚠️ Answer looks like product recommendation but no products extracted — clearing stale state")
+            await clear_conversation_state(user_id)
+            return
+
         if state.get("active_product") or state.get("active_plant") or state.get("active_disease"):
             await save_conversation_state(user_id, state)
 
@@ -1275,6 +1285,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
         _start_time = time.time()
+
+        # 0. Auto-refresh ProductRegistry if stale (keeps in sync with DB after new products added)
+        try:
+            await ProductRegistry.get_instance().refresh_if_stale(supabase_client)
+        except Exception:
+            pass  # non-critical — fallback data still works
 
         # 1+2. Add message to memory + get context in parallel (saves ~100-200ms)
         import asyncio as _asyncio
@@ -1482,6 +1498,18 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                         mentioned_products = [
                             p for p in ICP_PRODUCT_NAMES.keys() if p in answer
                         ]
+                        # Fallback: if registry didn't find products but RAG retrieved docs have them
+                        if not mentioned_products and rag_response:
+                            _rr = getattr(rag_response, 'retrieval_result', None)
+                            if _rr and hasattr(_rr, 'documents'):
+                                _rag_products = []
+                                for _doc in _rr.documents:
+                                    _pn = _doc.metadata.get('product_name') if hasattr(_doc, 'metadata') else None
+                                    if _pn and _pn not in _rag_products:
+                                        _rag_products.append(_pn)
+                                if _rag_products:
+                                    mentioned_products = _rag_products[:5]
+                                    logger.info(f"  - Products from RAG docs (registry miss): {mentioned_products}")
                         if mentioned_products:
                             rag_metadata["type"] = "product_recommendation"
                             # Enrich from DB so follow-up questions have full data (package_size etc.)

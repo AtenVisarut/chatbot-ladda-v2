@@ -162,6 +162,8 @@ class ProductRegistry:
 
     _instance: Optional['ProductRegistry'] = None
 
+    _AUTO_REFRESH_INTERVAL = 900  # 15 minutes — auto-reload from DB
+
     def __init__(self):
         self._products: Dict[str, List[str]] = {}       # canonical → [aliases]
         self._canonical_list: List[str] = []             # flat list for LLM prompt
@@ -240,6 +242,25 @@ class ProductRegistry:
 
         self._build_index(products)
         return self._loaded
+
+    async def refresh_if_stale(self, supabase_client) -> bool:
+        """
+        Auto-refresh from DB if more than _AUTO_REFRESH_INTERVAL seconds since last load.
+        Call this periodically (e.g., before each message) to keep registry in sync with DB.
+        Returns True if a refresh was performed.
+        """
+        if not self._loaded:
+            return await self.load_from_db(supabase_client)
+        elapsed = time.time() - self._load_time
+        if elapsed < self._AUTO_REFRESH_INTERVAL:
+            return False
+        logger.info(f"ProductRegistry: auto-refreshing ({elapsed:.0f}s since last load)")
+        prev_count = len(self._canonical_list)
+        await self.load_from_db(supabase_client)
+        new_count = len(self._canonical_list)
+        if new_count != prev_count:
+            logger.info(f"ProductRegistry: refreshed {prev_count} → {new_count} products")
+        return True
 
     def load_from_dict(self, products_dict: Dict[str, List[str]]) -> None:
         """Load from a dict directly (for testing or fallback)."""
