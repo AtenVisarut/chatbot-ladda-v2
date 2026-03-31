@@ -9,6 +9,9 @@ from supabase import create_client, Client
 from openai import OpenAI
 import time
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from app.utils.embedding_text import build_embedding_text
+
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -52,18 +55,8 @@ def generate_embeddings_for_products():
     
     for idx, product in enumerate(products, 1):
         try:
-            # Build text for embedding
-            text_parts = [
-                f"ชื่อสินค้า: {product['product_name']}",
-                f"สารสำคัญ: {product.get('active_ingredient', '')}",
-                f"สารกำจัดเชื้อรา: {product.get('fungicides', '')}",
-                f"สารกำจัดแมลง: {product.get('insecticides', '')}",
-                f"สารกำจัดวัชพืช: {product.get('herbicides', '')}",
-                f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
-                f"กลุ่มสาร: {product.get('product_group', '')}",
-                f"ข้อควรระวัง: {product.get('caution_notes', '')}",
-            ]
-            text = " | ".join([p for p in text_parts if p])
+            # Build text for embedding (shared function)
+            text = build_embedding_text(product)
             
             print(f"[{idx}/{len(products)}] {product['product_name']}")
             

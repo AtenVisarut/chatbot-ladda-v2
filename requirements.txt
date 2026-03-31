@@ -42,3 +42,7 @@ jinja2==3.1.4
 
 # WSGI server (multi-worker support)
 gunicorn==22.0.0
+
+# Google Sheets sync (scripts/sync_sheets_to_supabase.py)
+gspread>=6.0.0
+google-auth>=2.0.0
