@@ -45,7 +45,7 @@ class AnalyticsTracker:
                 "created_at": datetime.now().isoformat()
             }
             
-            await aexecute(self.supabase.table('analytics_events').insert(data))
+            await aexecute(self.supabase.table('ladda_analyst_event').insert(data))
             logger.debug(f"✓ Tracked question")
             
         except Exception as e:
@@ -68,7 +68,7 @@ class AnalyticsTracker:
                     "created_at": datetime.now().isoformat()
                 }
                 
-                await aexecute(self.supabase.table('analytics_events').insert(data))
+                await aexecute(self.supabase.table('ladda_analyst_event').insert(data))
             
             logger.debug(f"✓ Tracked {len(products)} product recommendations")
             
@@ -91,7 +91,7 @@ class AnalyticsTracker:
                 "created_at": datetime.now().isoformat()
             }
             
-            await aexecute(self.supabase.table('analytics_events').insert(data))
+            await aexecute(self.supabase.table('ladda_analyst_event').insert(data))
             logger.debug(f"✓ Tracked error: {error_type}")
             
         except Exception as e:
@@ -105,7 +105,7 @@ class AnalyticsTracker:
             start_date = end_date - timedelta(days=days)
             
             # Get all events in date range
-            result = await aexecute(self.supabase.table('analytics_events')\
+            result = await aexecute(self.supabase.table('ladda_analyst_event')\
                 .select('*')\
                 .gte('created_at', start_date.isoformat())\
                 .lte('created_at', end_date.isoformat()))

@@ -83,7 +83,7 @@ async def _stats_loop(ws: WebSocket):
             # Quick stats
             from app.utils.async_db import aexecute
             events = await aexecute(
-                supabase_client.table('analytics_events')
+                supabase_client.table('ladda_analyst_event')
                 .select('id', count='exact')
             )
             users = await aexecute(
