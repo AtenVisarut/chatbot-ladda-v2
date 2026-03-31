@@ -24,13 +24,13 @@ FB_APP_SECRET = os.getenv("FB_APP_SECRET", "")
 
 # Admin Authentication
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ladda")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ladda123")
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 
-if ADMIN_PASSWORD == "ladda123":
-    _cfg_logger.warning("ADMIN_PASSWORD is using default value! Set env var in production.")
-if SECRET_KEY == "your-secret-key-change-in-production":
-    _cfg_logger.warning("SECRET_KEY is using default value! Set env var in production.")
+if not ADMIN_PASSWORD or len(ADMIN_PASSWORD) < 8:
+    _cfg_logger.critical("ADMIN_PASSWORD not set or too short (min 8 chars)! Set env var.")
+if not SECRET_KEY or len(SECRET_KEY) < 16:
+    _cfg_logger.critical("SECRET_KEY not set or too short (min 16 chars)! Set env var.")
 
 # Cache configuration
 CACHE_TTL = 3600  # 1 hour

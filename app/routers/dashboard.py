@@ -35,6 +35,8 @@ async def get_dashboard_data(request: Request, days: int = 1):
 @router.get("/api/analytics/health")
 @limiter.limit("60/minute")
 async def get_system_health(request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     if not analytics_tracker:
         raise HTTPException(status_code=503, detail="Analytics service not available")
     return await analytics_tracker.get_health_status()
@@ -43,6 +45,8 @@ async def get_system_health(request: Request):
 @router.get("/api/analytics/alerts")
 @limiter.limit("60/minute")
 async def get_alerts(request: Request):
+    if not request.session.get("user"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     if not alert_manager:
         raise HTTPException(status_code=503, detail="Alert service not available")
     return await alert_manager.get_active_alerts()
