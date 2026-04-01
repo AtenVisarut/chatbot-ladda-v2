@@ -1236,6 +1236,7 @@ async def _save_conv_state_from_answer(
 
         # Extract products mentioned in the answer
         mentioned_products = [p for p in ICP_PRODUCT_NAMES.keys() if p in answer]
+        mentioned_products.sort(key=lambda p: answer.index(p))  # sort by position in answer (first recommended = most important)
         if mentioned_products:
             state["active_product"] = mentioned_products[0]
             state["active_products"] = mentioned_products[:5]

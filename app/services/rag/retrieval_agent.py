@@ -1364,9 +1364,29 @@ class RetrievalAgent:
             return docs
 
         try:
+            # Guarantee Skyrocket/Expand in rerank window (category must match intent)
+            rerank_pool = list(docs[:15])
+            _rerank_ids = {d.id for d in rerank_pool}
+            _priority_strategies = {'Skyrocket', 'Expand'}
+            _has_priority = any(
+                d.metadata.get('strategy') in _priority_strategies for d in rerank_pool
+            )
+            if not _has_priority:
+                # Find best Skyrocket/Expand from remaining docs that matches expected category
+                _expected_cat = self.INTENT_CATEGORY_MAP.get(intent, '').lower()
+                for d in docs[15:]:
+                    _strat = d.metadata.get('strategy', '')
+                    _cat = (d.metadata.get('category') or '').lower()
+                    if _strat in _priority_strategies and d.id not in _rerank_ids:
+                        # Must match category OR no category filter (e.g. product_recommendation)
+                        if not _expected_cat or _expected_cat in _cat:
+                            rerank_pool[-1] = d  # Replace last (lowest score)
+                            logger.info(f"  - Injected {_strat} product '{d.title}' into rerank window (category: {_cat})")
+                            break
+
             # Prepare document summaries
             doc_texts = []
-            for i, doc in enumerate(docs[:15], 1):  # Limit to top 15
+            for i, doc in enumerate(rerank_pool, 1):
                 text = f"[{i}] {doc.title}"
                 if doc.metadata.get('product_name'):
                     text += f" | สินค้า: {doc.metadata['product_name']}"
@@ -1434,7 +1454,7 @@ class RetrievalAgent:
             for n in numbers:
                 try:
                     num = int(n)
-                    if 0 < num <= len(docs):
+                    if 0 < num <= len(rerank_pool):
                         ranking_indices.append(num - 1)
                 except ValueError:
                     pass
@@ -1442,18 +1462,20 @@ class RetrievalAgent:
             # Build reranked list with scores
             reranked = []
             seen_indices = set()
+            _reranked_ids = set()
             total_ranked = max(len(ranking_indices), 1)  # prevent division by zero
             for rank, idx in enumerate(ranking_indices):
-                if idx not in seen_indices and idx < len(docs):
-                    doc = docs[idx]
+                if idx not in seen_indices and idx < len(rerank_pool):
+                    doc = rerank_pool[idx]
                     # Assign rerank score based on position (higher = better)
                     doc.rerank_score = 1.0 - (rank / total_ranked)
                     reranked.append(doc)
                     seen_indices.add(idx)
+                    _reranked_ids.add(doc.id)
 
-            # Add remaining docs with lower scores
+            # Add remaining docs with lower scores (from full docs list)
             for i, doc in enumerate(docs):
-                if i not in seen_indices:
+                if doc.id not in _reranked_ids:
                     doc.rerank_score = 0.3  # Default low score
                     reranked.append(doc)
 

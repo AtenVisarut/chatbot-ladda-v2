@@ -289,6 +289,30 @@ class ResponseGeneratorAgent:
         # Keep all products (including Standard) — just sort by strategy priority
         docs_to_use = retrieval_result.documents[:7]
 
+        # Guarantee Skyrocket/Expand in top 7 (must match query category)
+        _priority_strategies = {'Skyrocket', 'Expand'}
+        _has_priority = any(
+            d.metadata.get('strategy') in _priority_strategies for d in docs_to_use
+        )
+        if not _has_priority and len(docs_to_use) >= 7:
+            # Determine expected category from intent
+            _INTENT_TO_CAT = {
+                'disease_treatment': 'fungicide', 'pest_control': 'insecticide',
+                'weed_control': 'herbicide',
+            }
+            _intent_val = query_analysis.intent.value if hasattr(query_analysis.intent, 'value') else str(query_analysis.intent)
+            _expected_cat = _INTENT_TO_CAT.get(_intent_val, '')
+            # Search beyond top 7 for matching Skyrocket/Expand
+            _top_ids = {d.id for d in docs_to_use}
+            for d in retrieval_result.documents[7:]:
+                _strat = d.metadata.get('strategy', '')
+                _cat = (d.metadata.get('category') or '').lower()
+                if _strat in _priority_strategies and d.id not in _top_ids:
+                    if not _expected_cat or _expected_cat in _cat:
+                        docs_to_use[-1] = d  # Replace lowest-ranked
+                        logger.info(f"  - Guaranteed {_strat} slot: injected '{d.title}' into top 7 (category: {_cat})")
+                        break
+
         # Sort by strategy priority: Skyrocket=Expand > Natural=Standard=Cosmic-star
         # ensures Skyrocket/Expand appear first in product context sent to LLM
         # Cosmic-star = Biostimulants/Fertilizer group — equal priority, not pushed down
