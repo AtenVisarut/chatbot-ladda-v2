@@ -1375,14 +1375,32 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             await clear_conversation_state(user_id)
             return greeting_answer
 
-        # 5b. Response cache — return cached answer for identical questions
+        # 5b. Response cache + embedding generation in parallel
+        # Previously serial: cache check → embedding → semantic cache (~1.5s)
+        # Now parallel: cache check + embedding run together (~0.5s)
         _cache_eligible = _is_cacheable_message(message) and not _is_usage
         _response_cache_key = _make_response_cache_key(message) if _cache_eligible else None
         _query_embedding_for_semantic = None  # reuse later for semantic cache store
-        if _response_cache_key:
-            cached_answer = await get_from_cache("response", _response_cache_key)
+
+        if _cache_eligible:
+            import asyncio as _asyncio
+            from app.services.rag.retrieval_agent import _get_cached_embedding, _generate_embedding_standalone
+
+            # Start cache check + embedding generation in parallel
+            _cache_task = _asyncio.create_task(
+                get_from_cache("response", _response_cache_key)
+            ) if _response_cache_key else None
+
+            _query_embedding_for_semantic = _get_cached_embedding(message)
+            _emb_task = None
+            if not _query_embedding_for_semantic and openai_client:
+                _emb_task = _asyncio.create_task(
+                    _generate_embedding_standalone(message, openai_client)
+                )
+
+            # Await cache result first (faster — just a DB lookup)
+            cached_answer = await _cache_task if _cache_task else None
             if cached_answer:
-                # Silent no-data check on cached answers too
                 _CACHE_NO_DATA = [
                     "ไม่พบข้อมูล", "ไม่มีข้อมูล", "ไม่อยู่ในฐานข้อมูล",
                     "ไม่มีในระบบ", "ไม่พบสินค้า", "ยังไม่มีสินค้าในระบบ",
@@ -1390,20 +1408,21 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 ]
                 if any(p in cached_answer for p in _CACHE_NO_DATA):
                     logger.info(f"⏭️ Cache hit contains no-data phrase, replying with NO_DATA_REPLY: '{message[:40]}'")
+                    if _emb_task: _emb_task.cancel()
                     return NO_DATA_REPLY
                 logger.info(f"✓ Response cache hit: '{message[:40]}'")
                 await add_to_memory(user_id, "assistant", cached_answer)
+                if _emb_task: _emb_task.cancel()
                 return cached_answer
 
-        # 5b2. Semantic cache — return cached answer for similar questions
-        if _cache_eligible:
-            try:
-                from app.services.semantic_cache import search_semantic_cache
-                from app.services.rag.retrieval_agent import _get_cached_embedding, _generate_embedding_standalone
-                _query_embedding_for_semantic = _get_cached_embedding(message)
-                if not _query_embedding_for_semantic and openai_client:
-                    _query_embedding_for_semantic = await _generate_embedding_standalone(message, openai_client)
-                if _query_embedding_for_semantic:
+            # Await embedding (was running in parallel with cache check)
+            if _emb_task:
+                _query_embedding_for_semantic = await _emb_task
+
+            # 5b2. Semantic cache — use the embedding we already have
+            if _query_embedding_for_semantic:
+                try:
+                    from app.services.semantic_cache import search_semantic_cache
                     _plant_for_cache = extract_plant_type_from_question(message) or ""
                     _sem_hit = await search_semantic_cache(_query_embedding_for_semantic, _plant_for_cache)
                     if _sem_hit:
@@ -1412,8 +1431,8 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                             logger.info(f"✓ Semantic cache hit (sim={_sem_hit['similarity']:.3f}): '{message[:40]}'")
                             await add_to_memory(user_id, "assistant", _sem_answer)
                             return _sem_answer
-            except Exception as e:
-                logger.warning(f"Semantic cache check failed (non-critical): {e}")
+                except Exception as e:
+                    logger.warning(f"Semantic cache check failed (non-critical): {e}")
 
         # 5c. Classify intent
         is_agri_q = is_agriculture_question(message) or keywords["pests"] or keywords["crops"]
