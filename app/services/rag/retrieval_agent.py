@@ -185,7 +185,7 @@ class RetrievalAgent:
         IntentType.DISEASE_TREATMENT: ["Fungicide", "fungicide", "ป้องกันโรค"],
         IntentType.PEST_CONTROL: ["Insecticide", "insecticide", "กำจัดแมลง"],
         IntentType.WEED_CONTROL: ["Herbicide", "herbicide", "กำจัดวัชพืช"],
-        IntentType.NUTRIENT_SUPPLEMENT: ["Biostimulants", "biostimulants", "PGR", "pgr", "บำรุง", "ฮอร์โมน"],
+        IntentType.NUTRIENT_SUPPLEMENT: ["Biostimulants", "biostimulants", "PGR", "pgr", "Fertilizer", "fertilizer", "บำรุง", "ฮอร์โมน", "ปุ๋ย"],
     }
 
     def __init__(
