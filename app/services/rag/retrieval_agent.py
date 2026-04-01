@@ -32,6 +32,15 @@ DEFAULT_RERANK_THRESHOLD = 0.50
 DEFAULT_TOP_K = 10
 MIN_RELEVANT_DOCS = 3
 
+# Columns used by _build_doc_from_row — excludes embedding (1536 floats), row_hash, timestamps
+_PRODUCT_COLUMNS = (
+    "id, product_name, common_name_th, active_ingredient, "
+    "fungicides, insecticides, herbicides, biostimulant, pgr_hormones, "
+    "applicable_crops, product_category, how_to_use, usage_rate, usage_period, "
+    "selling_point, action_characteristics, absorption_method, strategy, "
+    "package_size, phytotoxicity, caution_notes, aliases"
+)
+
 # ============================================================================
 # Embedding LRU Cache — avoids re-computing identical embeddings
 # ============================================================================
@@ -273,14 +282,14 @@ class RetrievalAgent:
             # Step 1: Exact match first (prevents bundle false positive,
             # e.g. "ไฮซีส" should NOT match "ชุด กล่องม่วง (แอสไปร์ + ไฮซีส)")
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .eq('product_name', product_name) \
                 .limit(5))
 
             # Step 2: Fallback to ilike if exact match finds nothing
             if not result.data:
                 result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                    .select('*') \
+                    .select(_PRODUCT_COLUMNS) \
                     .ilike('product_name', f'%{product_name}%') \
                     .limit(5))
 
@@ -325,7 +334,7 @@ class RetrievalAgent:
             or_filter = ",".join(or_conditions)
 
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .or_(or_filter) \
                 .limit(top_k))
 
@@ -402,7 +411,7 @@ class RetrievalAgent:
                     cat_filter = inferred[0]
 
             query_builder = self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .in_('strategy', ['Skyrocket', 'Expand']) \
                 .or_(or_filter) \
                 .limit(top_k)
@@ -463,7 +472,7 @@ class RetrievalAgent:
             existing_ids = {d.id for d in existing_docs}
 
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .ilike('product_category', '%Herbicide%') \
                 .or_(or_filter) \
                 .limit(top_k))
@@ -519,7 +528,7 @@ class RetrievalAgent:
             existing_ids = {d.id for d in existing_docs}
 
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .ilike('product_category', '%Insecticide%') \
                 .or_(or_filter) \
                 .limit(top_k))
@@ -1201,7 +1210,7 @@ class RetrievalAgent:
                 if len(variant) < 3:
                     continue
                 or_filter = build_pest_or_filter(variant)
-                result = await aexecute(self.supabase.table(PRODUCT_TABLE).select('*').or_(
+                result = await aexecute(self.supabase.table(PRODUCT_TABLE).select(_PRODUCT_COLUMNS).or_(
                     or_filter
                 ).limit(5))
 
@@ -1222,7 +1231,7 @@ class RetrievalAgent:
             return []
         try:
             result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
-                .select('*') \
+                .select(_PRODUCT_COLUMNS) \
                 .ilike('product_category', '%Fungicide%') \
                 .limit(top_k))
 
@@ -1287,7 +1296,7 @@ class RetrievalAgent:
                 or_conditions.extend(build_pest_or_conditions(s))
             or_filter = ",".join(or_conditions)
 
-            query_builder = self.supabase.table(PRODUCT_TABLE).select('*').or_(or_filter).limit(10)
+            query_builder = self.supabase.table(PRODUCT_TABLE).select(_PRODUCT_COLUMNS).or_(or_filter).limit(10)
 
             # Narrow by plant type if available
             plant_type = query_analysis.entities.get('plant_type', '')
