@@ -41,7 +41,7 @@ class AnalyticsTracker:
                 "event_type": "question",
                 "question_text": question[:200],  # จำกัดความยาว
                 "intent": intent,
-                "response_time_ms": response_time_ms,
+                "response_time_ms": int(round(response_time_ms)),
                 "created_at": datetime.now().isoformat()
             }
             
