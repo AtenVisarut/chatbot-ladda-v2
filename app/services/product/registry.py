@@ -198,7 +198,7 @@ class ProductRegistry:
                 raise RuntimeError("supabase_client is None")
 
             from app.config import PRODUCT_TABLE
-            result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('product_name, aliases'))
+            result = await aexecute(supabase_client.table(PRODUCT_TABLE).select('product_name, aliases, product_category'))
             if not result.data:
                 raise RuntimeError("No products returned from DB")
 
@@ -207,10 +207,13 @@ class ProductRegistry:
 
             # Build lookup: product_name → aliases string from DB
             db_aliases_map: Dict[str, str] = {}
+            db_category_map: Dict[str, str] = {}
             for row in result.data:
                 name = row.get('product_name')
                 if name and row.get('aliases'):
                     db_aliases_map[name] = row['aliases']
+                if name and row.get('product_category'):
+                    db_category_map[name] = row['product_category']
 
             for name in db_names:
                 auto_variants = _generate_thai_variants(name)
@@ -240,7 +243,7 @@ class ProductRegistry:
                 all_aliases = sorted(set(auto_variants + [a.lower() for a in aliases]))
                 products[name] = all_aliases
 
-        self._build_index(products)
+        self._build_index(products, db_category_map)
         return self._loaded
 
     async def refresh_if_stale(self, supabase_client) -> bool:
@@ -271,10 +274,11 @@ class ProductRegistry:
             products[name] = all_aliases
         self._build_index(products)
 
-    def _build_index(self, products: Dict[str, List[str]]) -> None:
+    def _build_index(self, products: Dict[str, List[str]], category_map: Dict[str, str] = None) -> None:
         """Build reverse-lookup indexes from products dict."""
         self._products = products
         self._canonical_list = sorted(products.keys())
+        self._category_map = category_map or {}
 
         # Build alias → canonical index (longest aliases first for greedy match)
         alias_index: Dict[str, str] = {}
@@ -407,6 +411,16 @@ class ProductRegistry:
         """Flat sorted list of canonical product names (for LLM prompt)."""
         self._ensure_loaded()
         return list(self._canonical_list)
+
+    def get_names_by_categories(self, categories: List[str]) -> List[str]:
+        """Get product names filtered by category (case-insensitive).
+        Returns sorted list of product names matching any of the given categories."""
+        self._ensure_loaded()
+        cats_lower = {c.lower() for c in categories}
+        return sorted(
+            name for name, cat in self._category_map.items()
+            if cat.lower() in cats_lower
+        )
 
     def get_aliases(self, name: str) -> List[str]:
         """Get aliases for a canonical product name."""

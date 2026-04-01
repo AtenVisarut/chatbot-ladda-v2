@@ -105,7 +105,21 @@ class QueryUnderstandingAgent:
             diseases_str = ", ".join(hints['possible_diseases'])
             hint_section += f"\n[HINT] อาการในคำถามอาจเกิดจากโรค: {diseases_str} — ให้ใช้โรคเหล่านี้ใน expanded_queries เพื่อค้นหาสินค้าที่เหมาะสม"
 
-        products_str = ", ".join(ProductRegistry.get_instance().get_canonical_list())
+        # Reduce product list based on problem_type hint (91 → ~20 names)
+        _registry = ProductRegistry.get_instance()
+        _problem_type = hints.get('problem_type', '')
+        _PROBLEM_TO_CATEGORIES = {
+            'disease': ['Fungicide'],
+            'insect': ['Insecticide'],
+            'weed': ['Herbicide'],
+            'nutrient': ['Biostimulants', 'PGR', 'Fertilizer'],
+        }
+        _hint_categories = _PROBLEM_TO_CATEGORIES.get(_problem_type, [])
+        if _hint_categories:
+            _filtered = _registry.get_names_by_categories(_hint_categories)
+            products_str = ", ".join(_filtered) if _filtered else ", ".join(_registry.get_canonical_list())
+        else:
+            products_str = ", ".join(_registry.get_canonical_list())
 
         prompt = f"""{context_section}วิเคราะห์คำถามของผู้ใช้และตอบเป็น JSON
 ถ้าคำถามเป็นข้อความสั้นหรือเป็นการถามต่อ (เช่น 'ใช้ช่วงไหน' 'ผสมกี่ลิตร' 'ใช้ยังไง' 'ใช้เท่าไหร่' 'ใช้กี่ไร่'):
