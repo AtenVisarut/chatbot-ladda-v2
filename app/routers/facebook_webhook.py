@@ -122,7 +122,7 @@ async def _process_fb_message(event: dict) -> None:
         if not text:
             # Could be image, sticker, etc. — Phase 2
             if message.get("attachments"):
-                await send_facebook_message(psid, "น้องลัดดายังไม่สามารถสแกนโรคพืชจากภาพได้ค่ะ ลัดดาจะรับได้เฉพาะข้อความเท่านั้นนะคะ ขอบคุณค่ะ")
+                await send_facebook_message(psid, "ขณะนี้ ไอ ซี พี ลัดดา กำลังตรวจสอบข้อมูลให้คุณลูกค้าค่ะ\n\nแอดมินแจ้งให้ทราบอีกครั้งนะคะ ต้องขออภัยในความล่าช้าด้วยค่ะ 🙏🙏")
             return
 
         logger.info(f"FB message from {psid}: {text}")

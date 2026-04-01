@@ -194,7 +194,7 @@ async def _process_webhook_events(events: list):
             if event_type == "message" and event.get("message", {}).get("type") == "image":
                 from app.config import ENABLE_IMAGE_DIAGNOSIS
                 if not ENABLE_IMAGE_DIAGNOSIS:
-                    await reply_line(reply_token, "น้องลัดดายังไม่สามารถสแกนโรคพืชจากภาพได้ค่ะ ลัดดาจะรับได้เฉพาะข้อความเท่านั้นนะคะ ขอบคุณค่ะ")
+                    await reply_line(reply_token, "ขณะนี้ ไอ ซี พี ลัดดา กำลังตรวจสอบข้อมูลให้คุณลูกค้าค่ะ\n\nแอดมินแจ้งให้ทราบอีกครั้งนะคะ ต้องขออภัยในความล่าช้าด้วยค่ะ 🙏🙏")
                     continue
 
                 message_id = event["message"]["id"]
