@@ -289,9 +289,10 @@ class ResponseGeneratorAgent:
         # Keep all products (including Standard) — just sort by strategy priority
         docs_to_use = retrieval_result.documents[:7]
 
-        # Sort by strategy priority: Skyrocket=Expand > Natural=Standard
+        # Sort by strategy priority: Skyrocket=Expand > Natural=Standard=Cosmic-star
         # ensures Skyrocket/Expand appear first in product context sent to LLM
-        _STRATEGY_ORDER = {'Skyrocket': 0, 'Expand': 0, 'Natural': 1, 'Standard': 1}
+        # Cosmic-star = Biostimulants/Fertilizer group — equal priority, not pushed down
+        _STRATEGY_ORDER = {'Skyrocket': 0, 'Expand': 0, 'Natural': 1, 'Standard': 1, 'Cosmic-star': 1}
         docs_to_use.sort(key=lambda d: _STRATEGY_ORDER.get(d.metadata.get('strategy', ''), 3))
 
         # Rescue: ensure disease-matching product is in docs_to_use
