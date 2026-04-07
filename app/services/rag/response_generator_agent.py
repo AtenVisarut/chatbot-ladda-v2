@@ -60,10 +60,13 @@ class ResponseGeneratorAgent:
     """
     Agent 4: Response Generation
     Creates the final user-facing response using LLM with verified product data
+    Primary: Claude Haiku via OpenRouter (fast + low hallucination)
+    Fallback: GPT-4o via OpenAI (if OpenRouter fails)
     """
 
-    def __init__(self, openai_client=None):
+    def __init__(self, openai_client=None, openrouter_client=None):
         self.openai_client = openai_client
+        self.openrouter_client = openrouter_client
 
     async def generate(
         self,
@@ -857,17 +860,37 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         system_prompt = PRODUCT_QA_PROMPT
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model=LLM_MODEL_RESPONSE_GEN,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
+            _messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+            _llm_params = dict(
+                messages=_messages,
                 temperature=LLM_TEMP_RESPONSE_GEN,
                 max_completion_tokens=LLM_TOKENS_RESPONSE_GEN
             )
-            if not response.choices:
-                logger.error("OpenAI returned empty choices list")
+
+            # Primary: Claude Haiku via OpenRouter (fast + low hallucination)
+            # Fallback: GPT-4o via OpenAI
+            response = None
+            if self.openrouter_client:
+                try:
+                    response = await self.openrouter_client.chat.completions.create(
+                        model=LLM_MODEL_RESPONSE_GEN, **_llm_params
+                    )
+                    logger.info(f"  - Agent 4 used: {LLM_MODEL_RESPONSE_GEN} (OpenRouter)")
+                except Exception as e:
+                    logger.warning(f"  - OpenRouter failed, fallback to GPT-4o: {e}")
+                    response = None
+
+            if not response and self.openai_client:
+                response = await self.openai_client.chat.completions.create(
+                    model="gpt-4o", **_llm_params
+                )
+                logger.info("  - Agent 4 used: gpt-4o (OpenAI fallback)")
+
+            if not response or not response.choices:
+                logger.error("LLM returned empty response")
                 return self._build_fallback_answer(retrieval_result, grounding_result)
             answer = response.choices[0].message.content.strip()
 

@@ -1,7 +1,7 @@
 import logging
 from supabase import create_client, Client
 
-from app.config import OPENAI_API_KEY, SUPABASE_URL, SUPABASE_KEY
+from app.config import OPENAI_API_KEY, OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY, LLM_RESPONSE_GEN_PROVIDER
 from app.services.analytics import AnalyticsTracker, AlertManager
 from app.services.handoff import HandoffManager
 
@@ -18,6 +18,18 @@ if OPENAI_API_KEY:
         max_retries=3,
     )
     logger.info("OpenAI initialized successfully (timeout=30s, max_retries=3)")
+
+# Initialize OpenRouter client (for Claude Haiku — Agent 4 response generation)
+openrouter_client = None
+if OPENROUTER_API_KEY and LLM_RESPONSE_GEN_PROVIDER == "openrouter":
+    from openai import AsyncOpenAI as _AsyncOpenAI_OR
+    openrouter_client = _AsyncOpenAI_OR(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        timeout=httpx.Timeout(30.0, connect=10.0),
+        max_retries=2,
+    )
+    logger.info("OpenRouter initialized (Claude Haiku for Agent 4)")
 
 # Initialize Supabase (fallback)
 supabase_client: Client = None
