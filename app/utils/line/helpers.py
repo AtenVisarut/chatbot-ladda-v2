@@ -31,8 +31,10 @@ async def show_loading(user_id: str, seconds: int = 20) -> None:
         payload = {"chatId": user_id, "loadingSeconds": min(seconds, 60)}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code != 202:
-                logger.warning(f"Loading animation unexpected status {resp.status_code}: {resp.text[:200]}")
+            if resp.status_code == 202:
+                logger.info(f"··· Loading animation sent for {user_id[:12]}")
+            else:
+                logger.warning(f"Loading animation status {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         logger.warning(f"Loading animation failed: {e}")
 
