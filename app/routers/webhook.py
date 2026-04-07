@@ -133,14 +133,16 @@ async def _guarded_process_webhook(events: list):
             await asyncio.wait_for(_task_semaphore.acquire(), timeout=0.01)
         except asyncio.TimeoutError:
             # All slots busy — check queue depth
+            _QUEUE_FULL_REPLY = "ขณะนี้ ไอ ซี พี ลัดดา กำลังตรวจสอบข้อมูลให้คุณลูกค้าค่ะ\n\nแอดมินแจ้งให้ทราบอีกครั้งนะคะ ต้องขออภัยในความล่าช้าด้วยค่ะ 🙏🙏"
             if _queue_depth >= MAX_QUEUE_DEPTH:
-                # REJECT — queue full
+                # REJECT — queue full → handoff-style reply
                 reply_token = next((e.get("replyToken") for e in events if e.get("replyToken")), None)
                 if reply_token:
                     try:
-                        await reply_line(reply_token, "ขออภัยค่ะ ระบบกำลังยุ่งมาก กรุณาลองใหม่อีกครั้งนะคะ ⏳")
+                        await reply_line(reply_token, _QUEUE_FULL_REPLY)
                     except Exception:
                         pass
+                logger.warning(f"Queue full ({MAX_QUEUE_DEPTH}) — replied with handoff message")
                 return
 
             # QUEUE — wait with 30s timeout (reply_token lifetime)
@@ -149,7 +151,14 @@ async def _guarded_process_webhook(events: list):
             try:
                 await asyncio.wait_for(_task_semaphore.acquire(), timeout=30)
             except asyncio.TimeoutError:
-                logger.error("Queue timeout 30s — dropping")
+                # Timeout → handoff-style reply instead of silent drop
+                reply_token = next((e.get("replyToken") for e in events if e.get("replyToken")), None)
+                if reply_token:
+                    try:
+                        await reply_line(reply_token, _QUEUE_FULL_REPLY)
+                    except Exception:
+                        pass
+                logger.error(f"Queue timeout 30s — replied with handoff message")
                 return
             finally:
                 _queue_depth -= 1
