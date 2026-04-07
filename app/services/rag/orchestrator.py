@@ -529,7 +529,7 @@ class AgenticRAG:
                 hints.get('disease_name') or hints.get('pest_name')
                 or hints.get('plant_type') or hints.get('product_name')
             )
-            _is_short_followup = len(query.strip()) < 15
+            _is_short_followup = len(query.strip()) < 10  # 15→10: "ข้าวดีดใช้อะไร"=14 chars ควร skip ได้
             _is_usage_kw = any(kw in query for kw in ['ใช้ยังไง', 'ผสมกี่', 'อัตรา', 'ใช้เท่าไหร่', 'กี่ซีซี', 'กี่มล'])
             _has_context_product = bool(hints.get('product_name') and not hints.get('_product_from_query', False))
 
