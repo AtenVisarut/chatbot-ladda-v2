@@ -59,8 +59,9 @@ async def periodic_cleanup():
 async def lifespan(app_instance: FastAPI):
     # Startup — increase thread pool for asyncio.to_thread() (Supabase sync calls)
     loop = asyncio.get_event_loop()
-    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=20))
-    logger.info("Thread pool executor set to 20 workers")
+    _thread_pool_size = int(os.getenv("THREAD_POOL_SIZE", "50"))
+    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=_thread_pool_size))
+    logger.info(f"Thread pool executor set to {_thread_pool_size} workers")
 
     logger.info("=" * 60)
     logger.info("Starting LINE Plant Pest & Disease Detection Bot (Refactored)")
