@@ -1815,7 +1815,7 @@ def calculate_matching_score(product: Dict, disease_name: str, plant_type: str, 
                     # If within 30 days, partial match
                     if abs(user_mid - prod_mid) < 30:
                         stage_score = 0.5
-                except:
+                except Exception:
                     pass
 
     score += stage_score * 0.5

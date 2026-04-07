@@ -657,7 +657,7 @@ def create_disease_result_flex(
         else:
             conf_val = float(confidence)
             confidence_pct = int(conf_val) if conf_val > 1 else int(conf_val * 100)
-    except:
+    except Exception:
         confidence_pct = 75  # default
 
     # กำหนดสีตาม confidence level

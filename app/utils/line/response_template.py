@@ -50,7 +50,7 @@ def calculate_severity_score(disease_info: DiseaseDetectionResult) -> int:
                 elif conf_num < 50:
                     # Low confidence, reduce score slightly
                     score = max(0, score - 10)
-        except:
+        except Exception:
             pass
     elif "ต่ำ" in confidence_text or "low" in confidence_text:
         score = max(0, score - 15)

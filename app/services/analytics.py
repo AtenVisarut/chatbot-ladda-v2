@@ -178,7 +178,7 @@ class AnalyticsTracker:
 
                         if event_type == 'error':
                             daily_errors_by_day[date_str] = daily_errors_by_day.get(date_str, 0) + 1
-                    except:
+                    except Exception:
                         pass
 
             avg_response_time = sum(response_times) / len(response_times) if response_times else 0
