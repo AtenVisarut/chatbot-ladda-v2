@@ -790,16 +790,26 @@ class ResponseGeneratorAgent:
                 logger.info(f"  - Specific variant in query: '{exact_variant_in_query}' → Mode ข")
 
         # Broad query with multiple products → hint LLM to show all (Mode ก)
+        # Exception: if user asks for comparison → use Mode ข (detailed) instead
+        _COMPARISON_KEYWORDS = ['ต่างกันยังไง', 'ต่างกันอย่างไร', 'เปรียบเทียบ', 'ใช้ต่างกัน', 'แตกต่าง', 'เทียบกัน']
+        _is_comparison = any(kw in query_analysis.original_query for kw in _COMPARISON_KEYWORDS)
         if not multi_variant_note and not product_name_query and len(docs_to_use) >= 3:
             unique_names = list(dict.fromkeys(
                 d.metadata.get('product_name', '') for d in docs_to_use if d.metadata.get('product_name')
             ))
             if len(unique_names) >= 3:
-                multi_variant_note = (
-                    f"\n[หมายเหตุ: มีสินค้าหลายตัว] มีสินค้าที่ตรงกับคำถาม {len(unique_names)} ตัว: "
-                    f"{', '.join(unique_names)} — แสดงรายการสั้นๆ ทุกตัวให้เกษตรกรเลือก (ใช้ Mode ก)\n"
-                )
-                logger.info(f"  - Broad query multi-product hint: {len(unique_names)} products → Mode ก")
+                if _is_comparison:
+                    multi_variant_note = (
+                        f"\n[หมายเหตุ: ผู้ใช้ขอเปรียบเทียบ] สินค้า {len(unique_names)} ตัว: "
+                        f"{', '.join(unique_names)} — ตอบรายละเอียดทุกตัวเปรียบเทียบกัน (ใช้ Mode ข) ห้ามบอกให้ถามแยก\n"
+                    )
+                    logger.info(f"  - Comparison query: {len(unique_names)} products → Mode ข")
+                else:
+                    multi_variant_note = (
+                        f"\n[หมายเหตุ: มีสินค้าหลายตัว] มีสินค้าที่ตรงกับคำถาม {len(unique_names)} ตัว: "
+                        f"{', '.join(unique_names)} — แสดงรายการสั้นๆ ทุกตัวให้เกษตรกรเลือก (ใช้ Mode ก)\n"
+                    )
+                    logger.info(f"  - Broad query multi-product hint: {len(unique_names)} products → Mode ก")
 
         # Build category match note for alternatives
         category_match_note = ""
