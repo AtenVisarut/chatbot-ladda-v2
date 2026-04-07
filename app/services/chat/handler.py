@@ -1349,23 +1349,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                                 except Exception:
                                     enriched_products.append({"product_name": mp})
                             rag_metadata["products"] = enriched_products
-                        await add_to_memory(user_id, "assistant", answer, metadata=rag_metadata)
-                        # Save conversation state
-                        await _save_conv_state_from_answer(
-                            user_id, answer, query=message, rag_response=rag_response
-                        )
-                        # Cache response for identical future questions
+                        # Post-processing: run all saves in parallel (~0.5-1s saved)
+                        _post_tasks = [
+                            add_to_memory(user_id, "assistant", answer, metadata=rag_metadata),
+                            _save_conv_state_from_answer(user_id, answer, query=message, rag_response=rag_response),
+                        ]
                         if _response_cache_key:
-                            await set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL)
-                            logger.info(f"✓ Response cached: '{message[:40]}'")
-                        # Semantic cache store
+                            _post_tasks.append(set_to_cache("response", _response_cache_key, answer, ttl=RESPONSE_CACHE_TTL))
                         if _query_embedding_for_semantic:
-                            try:
-                                from app.services.semantic_cache import store_semantic_cache
-                                _plant_for_sc = extract_plant_type_from_question(message) or ""
-                                await store_semantic_cache(message, _query_embedding_for_semantic, answer, _plant_for_sc)
-                            except Exception:
-                                pass
+                            from app.services.semantic_cache import store_semantic_cache
+                            _plant_for_sc = extract_plant_type_from_question(message) or ""
+                            _post_tasks.append(store_semantic_cache(message, _query_embedding_for_semantic, answer, _plant_for_sc))
+                        await asyncio.gather(*_post_tasks, return_exceptions=True)
+                        if _response_cache_key:
+                            logger.info(f"✓ Response cached: '{message[:40]}'")
                         return answer
 
             # Fallback to legacy answer_qa_with_vector_search

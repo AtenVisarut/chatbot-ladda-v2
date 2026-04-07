@@ -598,7 +598,8 @@ class RetrievalAgent:
         self,
         query_analysis: QueryAnalysis,
         top_k: int = DEFAULT_TOP_K,
-        prefetch_docs: list = None
+        prefetch_docs: list = None,
+        skip_rerank: bool = False
     ) -> RetrievalResult:
         """
         Perform retrieval based on query analysis
@@ -791,8 +792,8 @@ class RetrievalAgent:
             logger.info(f"  - After dedup: {len(unique_docs)}")
 
             # Stage 3: Re-ranking with LLM
-            # Skip rerank when direct lookup found product OR ≤3 docs (saves ~0.5-1s)
-            skip_rerank = bool(direct_lookup_ids) or len(unique_docs) <= 3
+            # Skip rerank when: direct lookup, ≤3 docs, or caller requests skip (Stage 0 confident)
+            skip_rerank = skip_rerank or bool(direct_lookup_ids) or len(unique_docs) <= 3
             if skip_rerank:
                 logger.info(f"  - Skipping LLM rerank (direct_lookup={bool(direct_lookup_ids)}, docs={len(unique_docs)})")
 

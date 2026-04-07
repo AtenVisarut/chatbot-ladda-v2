@@ -638,7 +638,8 @@ class AgenticRAG:
             retrieval_result = await self.retrieval_agent.retrieve(
                 query_analysis=query_analysis,
                 top_k=self.config.get('RETRIEVAL_TOP_K', 10),
-                prefetch_docs=prefetch_docs
+                prefetch_docs=prefetch_docs,
+                skip_rerank=_can_skip  # Stage 0 confident → skip LLM rerank (~2s saved)
             )
 
             # =================================================================
