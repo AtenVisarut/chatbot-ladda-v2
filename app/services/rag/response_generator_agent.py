@@ -721,13 +721,32 @@ class ResponseGeneratorAgent:
                     break
 
             if not disease_found_in_products and disease_name:
-                # Safety check: re-verify with ALL disease variants against docs_to_use
-                # (rescue logic above may have injected a matching doc after the initial check)
+                # Safety check: re-verify with ALL disease variants against ALL retrieved docs
+                # (not just docs_to_use which may have been reduced by crop-filter)
                 _all_check_variants = generate_thai_disease_variants(disease_name)
+                _all_docs = retrieval_result.documents if retrieval_result else docs_to_use
                 _really_missing = not any(
                     _any_disease_variant_matches(_all_check_variants, _get_pest_text_from_meta(d.metadata))
-                    for d in docs_to_use
+                    for d in _all_docs
                 )
+                # If found in full docs but not in docs_to_use → rescue the matching doc
+                if not _really_missing and not any(
+                    _any_disease_variant_matches(_all_check_variants, _get_pest_text_from_meta(d.metadata))
+                    for d in docs_to_use
+                ):
+                    # Inject the disease-matching doc into docs_to_use
+                    for d in _all_docs:
+                        if _any_disease_variant_matches(_all_check_variants, _get_pest_text_from_meta(d.metadata)):
+                            if d not in docs_to_use:
+                                if len(docs_to_use) >= 7:
+                                    docs_to_use[-1] = d
+                                else:
+                                    docs_to_use.append(d)
+                                disease_found_in_products = True
+                                matched_disease_label = disease_name
+                                matched_product_name = d.metadata.get('product_name', d.title)
+                                logger.info(f"  - Rescued disease-matched doc '{matched_product_name}' from full results (was removed by crop-filter)")
+                                break
                 if _really_missing:
                     disease_mismatch_note = f"""
 [คำเตือนสำคัญ] โรค "{disease_name}" ไม่ปรากฏใน "ใช้กำจัด" ของสินค้าใดเลย
