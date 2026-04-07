@@ -30,9 +30,11 @@ async def show_loading(user_id: str, seconds: int = 20) -> None:
         }
         payload = {"chatId": user_id, "loadingSeconds": min(seconds, 60)}
         async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(url, json=payload, headers=headers)
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code != 202:
+                logger.warning(f"Loading animation unexpected status {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        logger.debug(f"Loading animation failed (non-critical): {e}")
+        logger.warning(f"Loading animation failed: {e}")
 
 async def get_image_content_from_line(message_id: str) -> bytes:
     url = f"https://api-data.line.me/v2/bot/message/{message_id}/content"

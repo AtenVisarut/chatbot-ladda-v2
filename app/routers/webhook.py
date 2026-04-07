@@ -296,7 +296,7 @@ async def _process_webhook_events(events: list):
                     from app.config import ENABLE_IMAGE_DIAGNOSIS
                     if not ENABLE_IMAGE_DIAGNOSIS:
                         await delete_pending_context(user_id)
-                        asyncio.create_task(show_loading(user_id))
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
@@ -531,7 +531,7 @@ async def _process_webhook_events(events: list):
                         await delete_pending_context(user_id)
 
                         # Q&A Chat
-                        asyncio.create_task(show_loading(user_id))
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
@@ -553,7 +553,7 @@ async def _process_webhook_events(events: list):
 
                     else:
                         # Q&A Chat
-                        asyncio.create_task(show_loading(user_id))
+                        await show_loading(user_id)
                         answer = await handle_natural_conversation(user_id, text)
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
