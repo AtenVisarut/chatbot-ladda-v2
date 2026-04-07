@@ -116,7 +116,9 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add Session Middleware
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY or "fallback-dev-key", https_only=True, same_site="lax")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY env var is required for session security")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, https_only=True, same_site="lax")
 
 # Add CORS Middleware
 _cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else []

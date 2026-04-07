@@ -18,7 +18,7 @@ os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "eyJ-test-dummy")
 os.environ.setdefault("LINE_CHANNEL_ACCESS_TOKEN", "test-dummy")
 os.environ.setdefault("LINE_CHANNEL_SECRET", "test-dummy")
-os.environ.setdefault("SECRET_KEY", "ci-test-secret")
+os.environ.setdefault("SECRET_KEY", "ci-test-secret-key-min16")
 os.environ.setdefault("ADMIN_PASSWORD", "ci-test-password")
 
 

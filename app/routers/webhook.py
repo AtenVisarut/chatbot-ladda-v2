@@ -261,7 +261,9 @@ async def _process_webhook_events(events: list):
                 # ============================================================================#
                 # Quick Commands
                 # ============================================================================#
-                logger.info(f"🟢 Processing text: '{text}'")
+                import uuid as _uuid
+                _req_id = _uuid.uuid4().hex[:8]
+                logger.info(f"🟢 [{_req_id}] Processing text: '{text}' user={user_id[:12]}")
 
                 # 0. Check for usage guide request
                 if text in ["วิธีใช้งาน", "วิธีใช้", "ช่วยเหลือ", "help"]:

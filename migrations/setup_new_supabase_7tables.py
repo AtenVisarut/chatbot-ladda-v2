@@ -22,7 +22,7 @@ OLD_KEY = os.getenv("SUPABASE_KEY")
 
 # NEW Supabase (target)
 NEW_URL = "https://nvtdtyrwvfuvldccpprc.supabase.co"
-NEW_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52dGR0eXJ3dmZ1dmxkY2NwcHJjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDIzMzM3MSwiZXhwIjoyMDg5ODA5MzcxfQ.BlHfKevI41NFv-cgGdTsMvfq4VfCQIkx23opJorEZOc"
+NEW_KEY = os.getenv("NEW_SUPABASE_KEY", "")  # service_role key — set via env var
 
 SQL_TABLES = """
 CREATE EXTENSION IF NOT EXISTS vector;
