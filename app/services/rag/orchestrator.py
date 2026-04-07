@@ -514,73 +514,9 @@ class AgenticRAG:
                 )
                 logger.info("  - Started parallel pre-fetch embedding for original query")
 
-            # --- Stage 0 Confident Skip: bypass Agent 1 LLM when hints are clear ---
-            # Saves 4-10s per request for ~50-60% of queries
-            query_analysis = None
-            _PROBLEM_TO_INTENT = {
-                'disease': IntentType.DISEASE_TREATMENT,
-                'insect': IntentType.PEST_CONTROL,
-                'weed': IntentType.WEED_CONTROL,
-                'nutrient': IntentType.NUTRIENT_SUPPLEMENT,
-            }
-            _stage0_problem = hints.get('problem_type', '')
-            _stage0_intent = _PROBLEM_TO_INTENT.get(_stage0_problem)
-            _has_entity = bool(
-                hints.get('disease_name') or hints.get('pest_name')
-                or hints.get('plant_type') or hints.get('product_name')
-            )
-            _is_short_followup = len(query.strip()) < 10  # 15→10: "ข้าวดีดใช้อะไร"=14 chars ควร skip ได้
-            _is_usage_kw = any(kw in query for kw in ['ใช้ยังไง', 'ผสมกี่', 'อัตรา', 'ใช้เท่าไหร่', 'กี่ซีซี', 'กี่มล'])
-            _has_context_product = bool(hints.get('product_name') and not hints.get('_product_from_query', False))
-
-            _can_skip = (
-                _stage0_intent is not None        # 1. problem_type ชัดเจน
-                and _has_entity                    # 2. มี entity อย่างน้อย 1
-                and not _is_short_followup         # 3. ไม่ใช่ข้อความสั้นคลุมเครือ
-                and not _is_usage_kw               # 4. ไม่ใช่คำถามวิธีใช้ (ต้อง LLM ดู context)
-                and not _has_context_product        # 5. ไม่มี product จาก memory ปน
-                and not hints.get('ambiguous_products')  # 6. ไม่ ambiguous
-            )
-
-            if _can_skip:
-                # Build QueryAnalysis directly from Stage 0 hints
-                _entities = {}
-                for _key in ('product_name', 'plant_type', 'disease_name', 'pest_name', 'weed_type'):
-                    if hints.get(_key):
-                        _entities[_key] = hints[_key]
-                if hints.get('_product_from_query'):
-                    _entities['_product_from_query'] = True
-
-                # If product detected in query, override intent to product_inquiry
-                if hints.get('product_name') and hints.get('_product_from_query'):
-                    _stage0_intent = IntentType.PRODUCT_INQUIRY
-
-                # Generate expanded queries from hints
-                _expanded = [query]
-                _plant = hints.get('plant_type', '')
-                _disease = hints.get('disease_name', '')
-                _pest = hints.get('pest_name', '')
-                if _disease and _plant:
-                    _expanded.append(f"{_disease} {_plant}")
-                    _expanded.append(f"{_disease}")
-                elif _pest and _plant:
-                    _expanded.append(f"กำจัด{_pest} {_plant}")
-                    _expanded.append(f"{_pest} {_plant}")
-                elif _plant:
-                    _expanded.append(f"บำรุง{_plant}")
-
-                query_analysis = QueryAnalysis(
-                    original_query=query,
-                    intent=_stage0_intent,
-                    confidence=0.85,
-                    entities=_entities,
-                    expanded_queries=_expanded[:4],
-                    required_sources=["products"]
-                )
-                logger.info(f"  - ⚡ Stage 0 skip Agent 1: intent={_stage0_intent}, entities={_entities}")
-            else:
-                # Fallback to Agent 1 LLM (complex/ambiguous queries)
-                query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
+            # All queries go through Agent 1 LLM for accurate intent + expanded queries
+            # Stage 0 hints are passed as [CONSTRAINT]/[HINT] to guide LLM
+            query_analysis = await self.query_agent.analyze(query, context=context, hints=hints)
 
             # Inject possible_diseases from symptom mapping into entities for downstream use
             if hints.get('possible_diseases'):
@@ -641,7 +577,7 @@ class AgenticRAG:
                 query_analysis=query_analysis,
                 top_k=self.config.get('RETRIEVAL_TOP_K', 10),
                 prefetch_docs=prefetch_docs,
-                skip_rerank=_can_skip  # Stage 0 confident → skip LLM rerank (~2s saved)
+                skip_rerank=False
             )
 
             # =================================================================

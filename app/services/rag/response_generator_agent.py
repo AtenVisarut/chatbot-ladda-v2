@@ -993,9 +993,11 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                         for name in allowed_names
                     )
                     if not is_allowed:
-                        # Product exists in ICP DB but not in retrieved docs → cross-product hallucination
-                        logger.warning(f"CROSS-PRODUCT hallucination: '{icp_name}' not in retrieved docs")
-                        answer = answer.replace(icp_name, f"(กรุณาสอบถามข้อมูล {icp_name} แยกต่างหากค่ะ)")
+                        # Product exists in ICP DB but not in retrieved docs → remove from answer
+                        logger.warning(f"CROSS-PRODUCT hallucination removed: '{icp_name}' not in retrieved docs")
+                        # Remove the entire line containing the hallucinated product
+                        import re as _re
+                        answer = _re.sub(r'[^\n]*' + _re.escape(icp_name) + r'[^\n]*\n?', '', answer)
 
         except Exception as e:
             logger.error(f"Product name validation error: {e}")
