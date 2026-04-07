@@ -98,8 +98,8 @@ USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
 LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o-mini")
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
-LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "anthropic/claude-haiku-4.5")  # Claude Haiku via OpenRouter
-LLM_RESPONSE_GEN_PROVIDER = os.getenv("LLM_RESPONSE_GEN_PROVIDER", "openrouter")  # "openrouter" or "openai"
+LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
+LLM_RESPONSE_GEN_PROVIDER = os.getenv("LLM_RESPONSE_GEN_PROVIDER", "openai")  # "openrouter" or "openai"
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 AGENTIC_RAG_CONFIG = {
