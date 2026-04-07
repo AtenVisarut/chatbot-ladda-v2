@@ -293,11 +293,13 @@ class ResponseGeneratorAgent:
         docs_to_use = retrieval_result.documents[:7]
 
         # Guarantee Skyrocket/Expand in top 7 (must match query category)
+        # Skip when user asks about a specific product — don't inject unrelated products
         _priority_strategies = {'Skyrocket', 'Expand'}
         _has_priority = any(
             d.metadata.get('strategy') in _priority_strategies for d in docs_to_use
         )
-        if not _has_priority and len(docs_to_use) >= 7:
+        _skip_inject = bool(query_analysis.entities.get('product_name')) and query_analysis.intent in (IntentType.PRODUCT_INQUIRY, IntentType.USAGE_INSTRUCTION)
+        if not _has_priority and len(docs_to_use) >= 7 and not _skip_inject:
             # Determine expected category from intent
             _INTENT_TO_CAT = {
                 'disease_treatment': 'fungicide', 'pest_control': 'insecticide',
@@ -389,7 +391,12 @@ class ResponseGeneratorAgent:
         # Skip when user asks about a specific product (e.g. "โม-เซ่ ใช้กับทุเรียนได้ไหม")
         # IMPORTANT: Exempt disease/pest-matching docs — they must stay even if crop doesn't match
         _product_from_query = query_analysis.entities.get('_product_from_query', False)
-        if plant_type_filter and docs_to_use and not _product_from_query:
+        _queried_product_name = query_analysis.entities.get('product_name', '')
+        _is_product_inquiry = query_analysis.intent in (IntentType.PRODUCT_INQUIRY, IntentType.USAGE_INSTRUCTION)
+        # Skip crop filter when user asks about a specific product (from query OR context)
+        # e.g. "คอนทาฟ ใช้กับมันสำปะหลังได้ไหม" → don't filter out คอนทาฟ
+        _skip_crop_filter = _product_from_query or (_is_product_inquiry and bool(_queried_product_name))
+        if plant_type_filter and docs_to_use and not _skip_crop_filter:
             # Build disease/pest check for exemption (prevent ราสีชมพู bug: crop filter kills disease doc)
             _ex_disease = query_analysis.entities.get('disease_name', '')
             _ex_possible = query_analysis.entities.get('possible_diseases', [])
