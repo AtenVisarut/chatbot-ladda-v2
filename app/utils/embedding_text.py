@@ -16,6 +16,7 @@ def build_embedding_text(product: dict) -> str:
         f"สารกระตุ้นชีวภาพ: {product.get('biostimulant', '')}",
         f"ปุ๋ยธาตุอาหาร: {product.get('fertilizer', '')}",
         f"ฮอร์โมนพืช: {product.get('pgr_hormones', '')}",
+        f"จุดเด่น: {product.get('selling_point', '')}",
         f"ใช้ได้กับพืช: {product.get('applicable_crops', '')}",
         f"กลุ่มสาร: {product.get('product_group', '') or product.get('chemical_group_rac', '')}",
         f"ข้อควรระวัง: {product.get('caution_notes', '')}",
