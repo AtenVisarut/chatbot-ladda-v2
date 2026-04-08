@@ -35,7 +35,7 @@ MIN_RELEVANT_DOCS = 3
 # Columns used by _build_doc_from_row — excludes embedding (1536 floats), row_hash, timestamps
 _PRODUCT_COLUMNS = (
     "id, product_name, common_name_th, active_ingredient, "
-    "fungicides, insecticides, herbicides, biostimulant, pgr_hormones, "
+    "fungicides, insecticides, herbicides, biostimulant, pgr_hormones, fertilizer, "
     "applicable_crops, product_category, how_to_use, usage_rate, usage_period, "
     "selling_point, action_characteristics, absorption_method, strategy, "
     "package_size, phytotoxicity, caution_notes, aliases"

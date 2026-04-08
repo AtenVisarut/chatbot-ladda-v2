@@ -11,7 +11,7 @@ This module provides helpers to:
 """
 
 # Column names in products2
-PEST_COLUMNS = ['fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones']
+PEST_COLUMNS = ['fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones', 'fertilizer']
 
 # Thai labels for display
 PEST_LABELS = {
@@ -20,6 +20,7 @@ PEST_LABELS = {
     'herbicides': 'สารกำจัดวัชพืช',
     'biostimulant': 'สารกระตุ้นชีวภาพ',
     'pgr_hormones': 'ฮอร์โมนพืช',
+    'fertilizer': 'ปุ๋ย/ธาตุอาหาร',
 }
 
 
