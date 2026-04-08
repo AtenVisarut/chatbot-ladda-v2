@@ -64,9 +64,8 @@ class ResponseGeneratorAgent:
     Fallback: GPT-4o via OpenAI (if OpenRouter fails)
     """
 
-    def __init__(self, openai_client=None, openrouter_client=None):
+    def __init__(self, openai_client=None):
         self.openai_client = openai_client
-        self.openrouter_client = openrouter_client
 
     async def generate(
         self,
@@ -896,24 +895,9 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
                 max_completion_tokens=LLM_TOKENS_RESPONSE_GEN
             )
 
-            # Primary: Claude Haiku via OpenRouter (fast + low hallucination)
-            # Fallback: GPT-4o via OpenAI
-            response = None
-            if self.openrouter_client:
-                try:
-                    response = await self.openrouter_client.chat.completions.create(
-                        model=LLM_MODEL_RESPONSE_GEN, **_llm_params
-                    )
-                    logger.info(f"  - Agent 4 used: {LLM_MODEL_RESPONSE_GEN} (OpenRouter)")
-                except Exception as e:
-                    logger.warning(f"  - OpenRouter failed, fallback to GPT-4o: {e}")
-                    response = None
-
-            if not response and self.openai_client:
-                response = await self.openai_client.chat.completions.create(
-                    model="gpt-4o", **_llm_params
-                )
-                logger.info("  - Agent 4 used: gpt-4o (OpenAI fallback)")
+            response = await self.openai_client.chat.completions.create(
+                model=LLM_MODEL_RESPONSE_GEN, **_llm_params
+            )
 
             if not response or not response.choices:
                 logger.error("LLM returned empty response")

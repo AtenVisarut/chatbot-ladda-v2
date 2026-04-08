@@ -71,10 +71,8 @@ class AgenticRAG:
             vector_threshold=self.config.get('VECTOR_THRESHOLD', 0.35),
             rerank_threshold=self.config.get('RERANK_THRESHOLD', 0.50)
         )
-        from app.dependencies import openrouter_client
         self.response_agent = ResponseGeneratorAgent(
-            openai_client=self.openai_client,
-            openrouter_client=openrouter_client
+            openai_client=self.openai_client
         )
 
         logger.info("AgenticRAG initialized with config: %s", self.config)
