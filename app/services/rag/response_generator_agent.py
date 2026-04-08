@@ -609,6 +609,8 @@ class ResponseGeneratorAgent:
                 part += f"  ขนาดบรรจุ: {meta['package_size']}\n"
             if meta.get('phytotoxicity'):
                 part += f"  ความเป็นพิษต่อพืช: {meta['phytotoxicity']}\n"
+            if meta.get('chemical_group_rac'):
+                part += f"  กลุ่มสาร (RAC): {meta['chemical_group_rac']}\n"
             if meta.get('caution_notes'):
                 part += f"  ข้อควรระวังเพิ่มเติม: {meta['caution_notes']}\n"
             # strategy is internal-only — NOT sent to LLM to prevent leaking to users

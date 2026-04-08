@@ -38,7 +38,7 @@ _PRODUCT_COLUMNS = (
     "fungicides, insecticides, herbicides, biostimulant, pgr_hormones, fertilizer, "
     "applicable_crops, product_category, how_to_use, usage_rate, usage_period, "
     "selling_point, action_characteristics, absorption_method, strategy, "
-    "package_size, phytotoxicity, caution_notes, aliases"
+    "package_size, phytotoxicity, chemical_group_rac, caution_notes, aliases"
 )
 
 # ============================================================================
