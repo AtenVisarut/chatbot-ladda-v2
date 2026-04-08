@@ -839,9 +839,9 @@ async def _fetch_product_from_db(product_name: str) -> list:
         if not _sb:
             return []
         result = await aexecute(_sb.table(PRODUCT_TABLE).select(
-            'product_name, active_ingredient, fungicides, insecticides, herbicides, '
-            'biostimulant, pgr_hormones, applicable_crops, '
-            'how_to_use, usage_rate, usage_period, package_size, '
+            'product_name, active_ingredient, product_category, fungicides, insecticides, herbicides, '
+            'biostimulant, pgr_hormones, fertilizer, applicable_crops, '
+            'how_to_use, usage_rate, usage_period, package_size, selling_point, '
             'absorption_method, mechanism_of_action, phytotoxicity, caution_notes'
         ).ilike('product_name', f'%{product_name}%').limit(5))
         return result.data if result.data else []

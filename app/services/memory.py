@@ -179,6 +179,7 @@ async def save_recommended_products(user_id: str, products: list, disease_name: 
 
             products_data.append({
                 "product_name": prod_dict.get("product_name", ""),
+                "product_category": prod_dict.get("product_category", ""),
                 "how_to_use": prod_dict.get("how_to_use", ""),
                 "usage_rate": prod_dict.get("usage_rate", ""),
                 "usage_period": prod_dict.get("usage_period", ""),
@@ -187,9 +188,11 @@ async def save_recommended_products(user_id: str, products: list, disease_name: 
                 "herbicides": prod_dict.get("herbicides", ""),
                 "biostimulant": prod_dict.get("biostimulant", ""),
                 "pgr_hormones": prod_dict.get("pgr_hormones", ""),
+                "fertilizer": prod_dict.get("fertilizer", ""),
                 "active_ingredient": prod_dict.get("active_ingredient", ""),
                 "applicable_crops": prod_dict.get("applicable_crops", ""),
                 "package_size": prod_dict.get("package_size", ""),
+                "selling_point": prod_dict.get("selling_point", ""),
                 "absorption_method": prod_dict.get("absorption_method", ""),
                 "mechanism_of_action": prod_dict.get("mechanism_of_action", ""),
                 "phytotoxicity": prod_dict.get("phytotoxicity", ""),
