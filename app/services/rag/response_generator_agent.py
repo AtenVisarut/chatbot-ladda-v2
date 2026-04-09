@@ -927,6 +927,11 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
         'ข้าว', 'ทุเรียน', 'มะม่วง', 'ลำไย', 'มังคุด', 'อ้อย', 'ข้าวโพด',
         # Generic terms
         'ดื้อยา', 'ดื้อสาร', 'ใบ', 'ดอก', 'ผล', 'ราก', 'กิ่ง', 'ลำต้น',
+        # Category/group terms (not product names)
+        'Insecticide', 'Fungicide', 'Herbicide', 'Biostimulants', 'Fertilizer', 'PGR',
+        'insecticide', 'fungicide', 'herbicide', 'biostimulants', 'fertilizer', 'pgr',
+        'IRAC', 'FRAC', 'HRAC', 'irac', 'frac', 'hrac',
+        'กลุ่มสาร', 'กลุ่มเคมี', 'สารกำจัดแมลง', 'สารกำจัดเชื้อรา', 'สารกำจัดวัชพืช',
     }
 
     def _validate_product_names(self, answer: str, docs: list, query_analysis: QueryAnalysis = None) -> str:
