@@ -38,7 +38,7 @@ _PRODUCT_COLUMNS = (
     "fungicides, insecticides, herbicides, biostimulant, pgr_hormones, fertilizer, "
     "applicable_crops, product_category, how_to_use, usage_rate, usage_period, "
     "selling_point, action_characteristics, absorption_method, strategy, "
-    "package_size, phytotoxicity, chemical_group_rac, caution_notes, aliases"
+    "package_size, physical_form, phytotoxicity, chemical_group_rac, caution_notes, aliases"
 )
 
 # ============================================================================
@@ -240,7 +240,10 @@ class RetrievalAgent:
                 'absorption_method': item.get('absorption_method'),
                 'strategy': item.get('strategy'),
                 'package_size': item.get('package_size'),
+                'physical_form': item.get('physical_form'),
                 'phytotoxicity': item.get('phytotoxicity'),
+                'chemical_group_rac': item.get('chemical_group_rac'),
+                'fertilizer': item.get('fertilizer'),
                 'caution_notes': item.get('caution_notes'),
                 'aliases': item.get('aliases'),
             }
@@ -773,6 +776,36 @@ class RetrievalAgent:
                         pest_fallback_ids = {d.id for d in pest_fallback_docs}
                         all_docs.extend(pest_fallback_docs)
                         logger.info(f"  - Pest column fallback added: {len(pest_fallback_docs)} docs for '{pest_name}'")
+
+            # Stage 1.97: Fertilizer form-specific fallback
+            # "ปุ๋ยเกล็ด" → fetch Fertilizer + physical_form=ผง/เกล็ด (NPK)
+            # "ปุ๋ยน้ำ" → fetch Fertilizer + physical_form=น้ำ (บอมส์ ซิงค์/แม็กซ์/ไวท์)
+            if query_analysis.intent == IntentType.NUTRIENT_SUPPLEMENT:
+                _q_lower = query_analysis.original_query.lower()
+                _fert_form = None
+                if any(kw in _q_lower for kw in ['ปุ๋ยเกล็ด', 'ปุ๋ยสูตร', 'ปุ๋ยnpk']):
+                    _fert_form = ['ผง', 'เกล็ด']
+                elif 'ปุ๋ยน้ำ' in _q_lower:
+                    _fert_form = ['น้ำ']
+                if _fert_form:
+                    try:
+                        _existing_ids = {d.id for d in all_docs}
+                        _q_builder = self.supabase.table(PRODUCT_TABLE) \
+                            .select(_PRODUCT_COLUMNS) \
+                            .eq('product_category', 'Fertilizer')
+                        if len(_fert_form) == 1:
+                            _q_builder = _q_builder.eq('physical_form', _fert_form[0])
+                        else:
+                            _q_builder = _q_builder.in_('physical_form', _fert_form)
+                        _fert_result = await aexecute(_q_builder)
+                        if _fert_result.data:
+                            _fert_docs = [self._build_doc_from_row(item, similarity=0.70)
+                                          for item in _fert_result.data
+                                          if str(item.get('id')) not in _existing_ids]
+                            all_docs.extend(_fert_docs)
+                            logger.info(f"  - Fertilizer form fallback: added {len(_fert_docs)} docs for form={_fert_form}")
+                    except Exception as e:
+                        logger.warning(f"Fertilizer form fallback failed: {e}")
 
             total_retrieved = len(all_docs)
             logger.info(f"  - Total retrieved: {total_retrieved}")

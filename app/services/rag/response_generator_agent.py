@@ -484,6 +484,14 @@ class ResponseGeneratorAgent:
                 if _npk_docs:
                     _nutrient_docs = _npk_docs
                     logger.info(f"  - NPK-only filter: kept {len(_npk_docs)} NPK products")
+
+            # Extra filter: "ปุ๋ยน้ำ" → keep only liquid fertilizers (physical_form=น้ำ)
+            if 'ปุ๋ยน้ำ' in _q_lower and _nutrient_docs:
+                _liquid_docs = [d for d in _nutrient_docs
+                                if 'น้ำ' in str(d.metadata.get('physical_form') or '')]
+                if _liquid_docs:
+                    _nutrient_docs = _liquid_docs
+                    logger.info(f"  - Liquid-fertilizer filter: kept {len(_liquid_docs)} liquid products")
             if _nutrient_docs:
                 _removed_cat = len(docs_to_use) - len(_nutrient_docs)
                 if _removed_cat > 0:
