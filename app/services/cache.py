@@ -175,7 +175,7 @@ async def get_from_cache(cache_type: str, key: str) -> Optional[Any]:
         if not supabase_client:
             return None
         
-        result = await aexecute(supabase_client.table('cache')\
+        result = await aexecute(supabase_client.table('cache_chatbot')\
             .select('value, expires_at')\
             .eq('key', full_key)\
             .gt('expires_at', datetime.now(timezone.utc).isoformat()))
@@ -226,7 +226,7 @@ async def set_to_cache(cache_type: str, key: str, data: Any, ttl: int = CACHE_TT
         
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=ttl)).isoformat()
         
-        await aexecute(supabase_client.table('cache').upsert({
+        await aexecute(supabase_client.table('cache_chatbot').upsert({
             'key': full_key,
             'value': data,
             'expires_at': expires_at
@@ -253,7 +253,7 @@ async def delete_from_cache(cache_type: str, key: str):
     # L2: Delete from Supabase
     try:
         if supabase_client:
-            await aexecute(supabase_client.table('cache').delete().eq('key', full_key))
+            await aexecute(supabase_client.table('cache_chatbot').delete().eq('key', full_key))
     except Exception as e:
         logger.error(f"Cache delete error: {e}")
 
@@ -400,7 +400,7 @@ async def cleanup_expired_cache():
         if not supabase_client:
             return
         
-        result = await aexecute(supabase_client.table('cache')\
+        result = await aexecute(supabase_client.table('cache_chatbot')\
             .delete()\
             .lt('expires_at', datetime.now(timezone.utc).isoformat()))
         
@@ -420,7 +420,7 @@ async def clear_all_caches():
     # L2: Clear Supabase cache
     try:
         if supabase_client:
-            await aexecute(supabase_client.table('cache').delete().neq('key', '0'))
+            await aexecute(supabase_client.table('cache_chatbot').delete().neq('key', '0'))
             logger.info("L2 Supabase cache cleared")
     except Exception as e:
         logger.error(f"Error clearing L2 cache: {e}")
@@ -435,7 +435,7 @@ async def get_cache_stats() -> dict:
     
     try:
         if supabase_client:
-            result = await aexecute(supabase_client.table('cache').select('key', count='exact'))
+            result = await aexecute(supabase_client.table('cache_chatbot').select('key', count='exact'))
             stats["l2_supabase"] = {
                 "items": result.count if result.count is not None else 0,
                 "storage": "Supabase (PostgreSQL)"
