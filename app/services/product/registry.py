@@ -333,6 +333,9 @@ class ProductRegistry:
         """
         Extract ALL product names from user question (for multi-product comparison queries).
         Returns list of unique canonical product names found.
+
+        If user types a base name (e.g. "โบว์แลน") that has variants (e.g. "โบว์แลน 285"),
+        returns ALL variants of that family.
         """
         self._ensure_loaded()
         question_lower = question.lower()
@@ -362,6 +365,47 @@ class ProductRegistry:
                         found.append(canonical)
                         seen.add(canonical)
                     remaining_stripped = remaining_stripped.replace(stripped_alias, ' ', 1)
+
+        # Family expansion: if user typed base name, include all variants
+        # e.g. "โบว์แลน" → ["โบว์แลน", "โบว์แลน 285"]
+        # e.g. "พรีดิคท์" → ["พรีดิคท์ 10%", "พรีดิคท์ 15%", "พรีดิคท์ 25% เอฟ"]
+        all_canonical = self.get_canonical_list()
+
+        # Find shortest canonical name that appears in query (the "base")
+        # This handles case where "โบว์แลน" alias → maps to "โบว์แลน 285" but
+        # product "โบว์แลน" (base) also exists as separate product
+        base_candidates = []
+        for canonical in all_canonical:
+            c_lower = canonical.lower()
+            if c_lower in question_lower:
+                base_candidates.append(canonical)
+        # Sort by length: shortest = base name
+        base_candidates.sort(key=len)
+
+        if base_candidates:
+            base = base_candidates[0]
+            base_lower = base.lower()
+            # Skip family expansion if a longer variant is already in query
+            # e.g. "โบว์แลน 285" → don't expand to include plain "โบว์แลน"
+            has_longer = any(
+                c != base and c.lower() in question_lower and len(c) > len(base)
+                for c in base_candidates
+            )
+            if not has_longer:
+                # Add base itself if not found
+                if base not in seen:
+                    found.insert(0, base)
+                    seen.add(base)
+                # Add all variants
+                for other in all_canonical:
+                    if other == base or other in seen:
+                        continue
+                    other_lower = other.lower()
+                    if other_lower.startswith(base_lower) and len(other_lower) > len(base_lower):
+                        next_char = other_lower[len(base_lower):len(base_lower)+1]
+                        if next_char in (' ', '%', '-') or next_char.isdigit():
+                            found.append(other)
+                            seen.add(other)
 
         return found
 
