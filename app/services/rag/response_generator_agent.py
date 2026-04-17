@@ -459,8 +459,12 @@ class ResponseGeneratorAgent:
         if _is_nutrient_query and docs_to_use and not _product_from_query:
             # Narrow categories when user asks specifically for fertilizer/PGR/biostimulant
             _q_lower = query_analysis.original_query.lower()
-            if any(kw in _q_lower for kw in ['ปุ๋ยเกล็ด', 'ปุ๋ยnpk', 'ปุ๋ยน้ำ', 'npk', 'ปุ๋ยสูตร']):
+            _npk_only = False  # special case: "ปุ๋ยเกล็ด" = NPK เกล็ด only (not liquid fertilizer)
+            if any(kw in _q_lower for kw in ['ปุ๋ยเกล็ด', 'ปุ๋ยnpk', 'npk', 'ปุ๋ยสูตร']):
                 _NUTRIENT_CATS = {'fertilizer'}
+                _npk_only = True
+            elif 'ปุ๋ยน้ำ' in _q_lower:
+                _NUTRIENT_CATS = {'fertilizer'}  # liquid fertilizer (บอมส์ ซิงค์/แม็กซ์/ไวท์)
             elif any(kw in _q_lower for kw in ['ฮอร์โมน', 'pgr', 'เร่งดอก', 'ยับยั้งใบอ่อน', 'ราดสาร', 'ชะลอ']):
                 _NUTRIENT_CATS = {'pgr'}
             elif any(kw in _q_lower for kw in ['biostimulant', 'สาหร่าย', 'ฟื้นฟูต้น', 'กรดอะมิโน']):
@@ -474,6 +478,12 @@ class ResponseGeneratorAgent:
                 or (('biostimulants' in _NUTRIENT_CATS) and bool(d.metadata.get('biostimulant')))
                 or (('pgr' in _NUTRIENT_CATS) and bool(d.metadata.get('pgr_hormones')))
             ]
+            # Extra filter: if NPK-specific query, keep only products with "NPK" in name
+            if _npk_only and _nutrient_docs:
+                _npk_docs = [d for d in _nutrient_docs if 'npk' in d.metadata.get('product_name', '').lower()]
+                if _npk_docs:
+                    _nutrient_docs = _npk_docs
+                    logger.info(f"  - NPK-only filter: kept {len(_npk_docs)} NPK products")
             if _nutrient_docs:
                 _removed_cat = len(docs_to_use) - len(_nutrient_docs)
                 if _removed_cat > 0:
