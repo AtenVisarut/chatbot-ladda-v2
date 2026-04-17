@@ -111,7 +111,7 @@ _FALLBACK_PRODUCTS = {
     "อัพดาว": ["อัพดาว", "อัปดาว", "updown", "อัพดาวน์", "อัปดาวน์"],
     "อาร์ดอน": ["อาร์ดอน", "อาดอน", "ardon"],
     "อาร์เทมิส": ["อาร์เทมิส", "อาร์เทมีส", "อาเทมิส", "artemis", "อาทิมิส"],
-    "อิมิดาโกลด์": ["อิมิดาโกลด์", "อิมิดา", "อิมิดาโกล", "imidagold", "อิมิดาโกลด์70", "อิมิดาโกลด์ 70", "imida"],
+    "อิมิดาโกลด์ 70": ["อิมิดาโกลด์ 70", "อิมิดาโกลด์70", "อิมิดาโกลด์", "อิมิดา", "อิมิดาโกล", "imidagold", "imida"],
     "เกรค": ["เกรค", "เกรค 5 เอสซี", "เกรด", "เกรด5", "เกรค5", "เกรด 5", "grace", "เกร็ค", "เกรค 5"],
     "เคเซีย": ["เคเซีย", "เคเซีย์", "kesia", "cassia", "คาเซีย"],
     "เทอราโน": ["เทอราโน่", "เทอราโน", "terano", "เทอร่าโน่"],
@@ -193,6 +193,7 @@ class ProductRegistry:
         Falls back to _FALLBACK_PRODUCTS if DB is unavailable.
         """
         products: Dict[str, List[str]] = {}
+        db_category_map: Dict[str, str] = {}
         try:
             if supabase_client is None:
                 raise RuntimeError("supabase_client is None")
@@ -407,7 +408,65 @@ class ProductRegistry:
                             found.append(other)
                             seen.add(other)
 
+        # Suffix-only multi-match for families with "<prefix> <suffix>" pattern
+        # e.g. "ไวท์ แม็กซ์ ซิงค์" → [บอมส์ ไวท์, บอมส์ แม็กซ์, บอมส์ ซิงค์]
+        # Trigger when ≥2 distinct suffix words of the same family appear together
+        # (single suffix is too ambiguous: "ไวท์" could mean บลูไวท์)
+        family_suffix_hits = self._scan_family_suffixes(question_lower, seen)
+        for canon in family_suffix_hits:
+            if canon not in seen:
+                found.append(canon)
+                seen.add(canon)
+
         return found
+
+    def _scan_family_suffixes(self, question_lower: str, already_found: set) -> list:
+        """
+        Detect multi-suffix queries for space-separated product families.
+        Example: canonical 'บอมส์ ไวท์', 'บอมส์ แม็กซ์', 'บอมส์ ซิงค์' all share prefix 'บอมส์'.
+        If user types 'ไวท์ แม็กซ์' (≥2 suffixes from same family) → return all matching siblings.
+
+        Returns list of canonical names to add.
+        """
+        # Group canonicals by prefix (first space-delimited token)
+        families: Dict[str, List[Tuple[str, str]]] = {}  # prefix → [(canonical, suffix_lower)]
+        for canonical in self._canonical_list:
+            parts = canonical.split(' ', 1)
+            if len(parts) != 2:
+                continue
+            prefix, suffix = parts[0], parts[1]
+            suffix_lower = suffix.lower().strip()
+            if not suffix_lower:
+                continue
+            families.setdefault(prefix, []).append((canonical, suffix_lower))
+
+        additions: List[str] = []
+        for prefix, members in families.items():
+            if len(members) < 2:
+                continue  # not a real family
+            # Count how many distinct suffixes appear in query
+            matched = []
+            for canonical, suffix_lower in members:
+                # word-boundary-ish check: suffix must appear surrounded by space/start/end/punct
+                # (otherwise "ไวท์" inside "บลูไวท์" would false-match)
+                idx = question_lower.find(suffix_lower)
+                while idx >= 0:
+                    before = question_lower[idx - 1] if idx > 0 else ' '
+                    after_i = idx + len(suffix_lower)
+                    after = question_lower[after_i] if after_i < len(question_lower) else ' '
+                    # Thai words don't have spaces internally; require non-Thai char on both sides
+                    # OR that the prefix token is NOT immediately before (to avoid บลูไวท์ matching ไวท์)
+                    is_boundary_before = not ('\u0E00' <= before <= '\u0E7F')
+                    is_boundary_after = not ('\u0E00' <= after <= '\u0E7F')
+                    if is_boundary_before and is_boundary_after:
+                        matched.append((canonical, suffix_lower))
+                        break
+                    idx = question_lower.find(suffix_lower, idx + 1)
+            if len(matched) >= 2:
+                for canonical, _ in matched:
+                    if canonical not in already_found:
+                        additions.append(canonical)
+        return additions
 
     def fuzzy_match(self, text: str, threshold: float = 0.75) -> Optional[str]:
         """

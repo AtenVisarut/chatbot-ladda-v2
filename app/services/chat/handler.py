@@ -844,7 +844,8 @@ async def _fetch_product_from_db(product_name: str) -> list:
             'product_name, active_ingredient, product_category, fungicides, insecticides, herbicides, '
             'biostimulant, pgr_hormones, fertilizer, applicable_crops, '
             'how_to_use, usage_rate, usage_period, package_size, selling_point, '
-            'absorption_method, mechanism_of_action, phytotoxicity, caution_notes'
+            'absorption_method, mechanism_of_action, phytotoxicity, caution_notes, '
+            'chemical_group_rac, physical_form, strategy'
         ).ilike('product_name', f'%{product_name}%').limit(5))
         return result.data if result.data else []
     except Exception as e:
@@ -898,7 +899,8 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
                         'how_to_use', 'usage_rate', 'usage_period',
                         'fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones',
-                        'active_ingredient', 'applicable_crops', 'phytotoxicity', 'caution_notes']
+                        'active_ingredient', 'applicable_crops', 'phytotoxicity', 'caution_notes',
+                        'chemical_group_rac', 'physical_form', 'product_category']
         if products_in_question:
             # products fresh จาก DB แล้ว (Fix 1) — ข้าม enrich
             pass
@@ -930,6 +932,15 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
         products_text = ""
         for idx, p in enumerate(products, 1):
             products_text += f"\n[{idx}] {p.get('product_name', 'N/A')}"
+            # Core identity (กัน LLM ตอบ "ไม่มีข้อมูล" เวลาถาม category/IRAC/สารสำคัญ)
+            if p.get('product_category'):
+                products_text += f"\n   • ประเภท: {p.get('product_category')}"
+            if p.get('active_ingredient'):
+                products_text += f"\n   • สารสำคัญ: {p.get('active_ingredient')}"
+            if p.get('chemical_group_rac'):
+                products_text += f"\n   • กลุ่มสาร (IRAC/FRAC/HRAC): {p.get('chemical_group_rac')}"
+            if p.get('physical_form'):
+                products_text += f"\n   • รูปแบบ: {p.get('physical_form')}"
             if p.get('how_to_use'):
                 products_text += f"\n   • วิธีใช้: {p.get('how_to_use')}"
             if p.get('usage_rate'):
