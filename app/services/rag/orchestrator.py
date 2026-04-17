@@ -438,7 +438,15 @@ class AgenticRAG:
                         ]
                         _is_usage_followup = len(query.strip()) < 40 and any(p in query for p in _FOLLOWUP_USAGE)
 
-                        if not _has_reference and not _is_usage_followup:
+                        # Keep if comparison follow-up ("ต่างกันยังไง", "แตกต่างกัน")
+                        # User comparing previous products — product context MUST be preserved
+                        _FOLLOWUP_COMPARE = [
+                            'ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ', 'อันไหนดี', 'ตัวไหนดี',
+                            'อันไหนดีกว่า', 'ตัวไหนดีกว่า', 'ใช้ต่าง',
+                        ]
+                        _is_compare_followup = any(p in query for p in _FOLLOWUP_COMPARE)
+
+                        if not _has_reference and not _is_usage_followup and not _is_compare_followup:
                             _has_specific_entity = bool(
                                 hints.get('disease_name') or hints.get('pest_name')
                                 or hints.get('plant_type')

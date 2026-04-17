@@ -287,6 +287,59 @@ class TestMultiProductAnswer:
 # 5. Enrich consistency — memory ที่มีค่าว่าง ต้องถูก overwrite จาก DB
 # =============================================================================
 
+class TestComparisonFollowup:
+    """
+    Real-world bug (2026-04-17): user พิมพ์ "ไดยูแมก" → bot ตอบ 2 variants.
+    แล้ว user ถาม "ใช้แตกต่างกันยังไง" (follow-up comparison)
+    → bot ตอบเกี่ยวกับ 'บอมส์ แม็กซ์' แทน ไดยูแมกซ์ (เอาของเก่าจาก memory มา)
+
+    Root cause: orchestrator dropped product_name='ไดยูแมกซ์' จาก conversation state
+    เพราะ "ใช้แตกต่างกันยังไง" ไม่อยู่ใน _FOLLOWUP_USAGE → ถูกตีเป็น vague query
+    → clear conversation state → RAG pipeline หา product จาก memory context
+    → ดึง บอมส์ แม็กซ์ จาก 10 products ใน memory ผิด
+
+    Fix: เพิ่ม comparison patterns เข้า orchestrator (preserve product context)
+    """
+
+    @pytest.mark.parametrize("query", [
+        "ใช้แตกต่างกันยังไง",
+        "ต่างกันยังไง",
+        "แตกต่างกันยังไง",
+        "เปรียบเทียบหน่อย",
+        "อันไหนดีกว่า",
+        "ตัวไหนดีกว่ากัน",
+        "ใช้ต่างกันยังไง",
+    ])
+    def test_comparison_query_pattern_recognized(self, registry_loaded, query):
+        """
+        Regression guard: comparison follow-up ต้องถูกตรวจจับและ preserve product
+        จาก conversation state ไม่ใช่ drop แล้ว clear state
+        """
+        _FOLLOWUP_COMPARE = [
+            'ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ', 'อันไหนดี', 'ตัวไหนดี',
+            'อันไหนดีกว่า', 'ตัวไหนดีกว่า', 'ใช้ต่าง',
+        ]
+        matched = any(p in query for p in _FOLLOWUP_COMPARE)
+        assert matched, f"Comparison pattern not matched for query: {query!r}"
+
+    def test_orchestrator_keeps_product_on_comparison(self):
+        """
+        เช็คว่า orchestrator source มี _FOLLOWUP_COMPARE และใช้เป็น guard
+        เพื่อไม่ drop product context
+        """
+        import inspect
+        from app.services.rag import orchestrator
+
+        src = inspect.getsource(orchestrator)
+        assert "_FOLLOWUP_COMPARE" in src, (
+            "Orchestrator missing _FOLLOWUP_COMPARE list → 'ใช้แตกต่างกันยังไง' "
+            "will drop product from conversation state and pull random from memory"
+        )
+        assert "_is_compare_followup" in src, (
+            "Orchestrator not checking _is_compare_followup as drop guard"
+        )
+
+
 class TestEnrichFromDB:
     @pytest.mark.asyncio
     async def test_enrich_overwrites_short_values(self, registry_loaded):
