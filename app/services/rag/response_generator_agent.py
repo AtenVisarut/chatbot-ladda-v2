@@ -560,9 +560,23 @@ class ResponseGeneratorAgent:
 
         # Early extract: disease from conversation context for follow-up queries
         # (full extraction + assignment to disease_name happens later at line ~427)
-        # Skip for WEED_CONTROL / PEST_CONTROL — disease context is irrelevant for these intents
+        # Skip for:
+        #   - WEED_CONTROL / PEST_CONTROL / NUTRIENT_SUPPLEMENT / USAGE_INSTRUCTION
+        #     (disease context is irrelevant for these intents)
+        #   - Comparison follow-ups ("ต่างกัน", "เปรียบเทียบ", "อันไหน")
+        #     (user compares previous products, not asking about any disease)
         context_disease = ''
-        _skip_disease_context = query_analysis.intent in (IntentType.WEED_CONTROL, IntentType.PEST_CONTROL)
+        _skip_intents = (
+            IntentType.WEED_CONTROL,
+            IntentType.PEST_CONTROL,
+            IntentType.NUTRIENT_SUPPLEMENT,
+            IntentType.USAGE_INSTRUCTION,
+        )
+        _skip_disease_context = query_analysis.intent in _skip_intents
+        if not _skip_disease_context:
+            _COMPARE_PAT = ['ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ', 'อันไหน', 'ตัวไหน', 'ใช้ต่าง']
+            if any(p in query_analysis.original_query for p in _COMPARE_PAT):
+                _skip_disease_context = True
         if context and not query_analysis.entities.get('disease_name', '') and not _skip_disease_context:
             from app.utils.text_processing import diacritics_match as _dm_early
             from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_EARLY, get_canonical as _gc_early

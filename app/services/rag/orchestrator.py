@@ -141,6 +141,22 @@ class AgenticRAG:
                 if len(all_detected_products) > 1:
                     hints['product_names'] = all_detected_products
                     logger.info(f"  - Multi-product query: {all_detected_products}")
+
+                # Fix #2: Topic boundary — when user pipelines a NEW product that
+                # differs from active_product in conversation state, treat as new
+                # topic and skip stale memory context (prevents disease/products
+                # from older turns polluting retrieval).
+                if user_id and product_from_query:
+                    try:
+                        from app.services.cache import get_conversation_state
+                        _prev_state = await get_conversation_state(user_id)
+                        if _prev_state and _prev_state.get('active_product'):
+                            _prev = _prev_state['active_product']
+                            if _prev not in all_detected_products:
+                                _skip_context_product = True
+                                logger.info(f"  - New-product topic: query has {all_detected_products}, state had '{_prev}' — skipping context")
+                    except Exception:
+                        pass
                 # ── Strategy -1: Conversation State (most reliable for follow-ups) ──
                 # Read explicit state instead of scanning text heuristically
                 if not detected_product and user_id:
@@ -168,6 +184,16 @@ class AgenticRAG:
                             if not _new_topic:
                                 detected_product = conv_state['active_product']
                                 logger.info(f"  - Product from conversation state: {detected_product}")
+                                # Fix #1: Comparison follow-up → use ALL last-turn products (not just 1)
+                                # so "ใช้แตกต่างกันยังไง" after bot showed 2 variants retrieves both
+                                _COMPARE_PATTERNS = ['ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ',
+                                                     'อันไหนดี', 'ตัวไหนดี', 'ใช้ต่าง']
+                                _is_compare = any(p in query for p in _COMPARE_PATTERNS)
+                                _active_products = conv_state.get('active_products') or []
+                                if _is_compare and len(_active_products) >= 2:
+                                    hints['product_names'] = list(_active_products)
+                                    all_detected_products = list(_active_products)
+                                    logger.info(f"  - Comparison follow-up: using all {len(_active_products)} products from state: {_active_products}")
                             else:
                                 _skip_context_product = True
                                 logger.info(f"  - State has '{conv_state['active_product']}' but query has new topic (plant:{_plant_in_q_s} vs state:{_state_plant}), skipping")
@@ -656,16 +682,19 @@ def get_agentic_rag() -> AgenticRAG:
     return _agentic_rag_instance
 
 
-async def process_with_agentic_rag(query: str, context: str = "") -> AgenticRAGResponse:
+async def process_with_agentic_rag(
+    query: str, context: str = "", user_id: str = None,
+) -> AgenticRAGResponse:
     """
     Convenience function to process a query with the global AgenticRAG instance
 
     Args:
         query: User's question
         context: Optional conversation context
+        user_id: Optional user ID (enables conversation state lookup)
 
     Returns:
         AgenticRAGResponse
     """
     rag = get_agentic_rag()
-    return await rag.process(query, context)
+    return await rag.process(query, context, user_id=user_id)
