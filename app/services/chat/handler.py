@@ -875,42 +875,33 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
             logger.info(f"⚠️ คำถามสั้นไม่ระบุรายละเอียด: {message}")
             return "ขอทราบรายละเอียดเพิ่มเติมค่ะ:\n- ต้องการทราบอัตราการใช้ของสินค้าตัวไหนคะ?\n- และใช้กับพืชอะไรคะ?\n\nเพื่อให้ลัดดาแนะนำอัตราการใช้ที่ถูกต้องค่ะ"
 
-        # ดึงข้อมูลสินค้าที่แนะนำล่าสุด
-        products = await get_recommended_products(user_id, limit=5)
-
-        if not products:
-            # ถ้าไม่มี memory แต่ระบุชื่อสินค้า → ดึงจาก DB ตรงๆ (ทุกตัวที่พบ)
-            if products_in_question:
-                for piq in products_in_question:
-                    db_rows = await _fetch_product_from_db(piq)
-                    if db_rows:
-                        products.extend(db_rows)
+        # ถ้า user ระบุชื่อสินค้าในคำถาม → ใช้เฉพาะตัวที่ถาม (ไม่ปนกับ memory เก่า)
+        # ป้องกัน context contamination: memory เก่ามี "คอนทาฟ" + user ถาม "ดอยเลอร์"
+        # → LLM สับสน ดึง active_ingredient ผิดระหว่างสินค้า
+        if products_in_question:
+            products = []
+            for piq in products_in_question:
+                db_rows = await _fetch_product_from_db(piq)
+                if db_rows:
+                    products.append(db_rows[0])
+                    logger.info(f"📦 Fresh fetch '{piq}' (skip memory to prevent contamination)")
+            if not products:
+                return None
+        else:
+            # ไม่ระบุชื่อสินค้า → ใช้ memory (follow-up เช่น "ใช้ยังไง", "กี่ซีซี")
+            products = await get_recommended_products(user_id, limit=5)
             if not products:
                 return None  # ไม่มีสินค้าใน memory → ให้ไปใช้ flow ปกติ
 
         # Enrich ข้อมูลจาก DB (กรณี memory เก่าไม่มี fields เช่น package_size)
+        # เช็คเข้มขึ้น: ถ้า memory มีค่าว่าง/สั้นเกิน → overwrite จาก DB
         _ENRICH_KEYS = ['package_size', 'absorption_method', 'mechanism_of_action',
                         'how_to_use', 'usage_rate', 'usage_period',
                         'fungicides', 'insecticides', 'herbicides', 'biostimulant', 'pgr_hormones',
                         'active_ingredient', 'applicable_crops', 'phytotoxicity', 'caution_notes']
         if products_in_question:
-            for piq in products_in_question:
-                db_product = await _fetch_product_from_db(piq)
-                if db_product:
-                    # Merge DB data into memory products
-                    merged = False
-                    for p in products:
-                        if piq.lower() in p.get('product_name', '').lower():
-                            db_p = db_product[0]
-                            for key in _ENRICH_KEYS:
-                                if db_p.get(key) and not p.get(key):
-                                    p[key] = db_p[key]
-                            merged = True
-                            break
-                    # ถ้าสินค้าที่ถามไม่อยู่ใน memory → เพิ่มจาก DB
-                    if not merged:
-                        logger.info(f"📦 Product '{piq}' not in memory, adding from DB")
-                        products.append(db_product[0])
+            # products fresh จาก DB แล้ว (Fix 1) — ข้าม enrich
+            pass
         else:
             # ไม่มีชื่อสินค้าในคำถาม (เช่น "กี่กระสอบ", "1ขวดฉีดได้กี่ไร่")
             # → enrich ทุกตัวใน memory ที่ยังขาด field สำคัญ
@@ -926,7 +917,10 @@ async def answer_usage_question(user_id: str, message: str, context: str = "") -
                     if db_rows:
                         db_p = db_rows[0]
                         for key in _ENRICH_KEYS:
-                            if db_p.get(key) and not p.get(key):
+                            # เช็คเข้ม: ถ้า memory ว่าง/สั้นเกิน → overwrite จาก DB
+                            mem_val = str(p.get(key) or "").strip()
+                            db_val = str(db_p.get(key) or "").strip()
+                            if db_val and (not mem_val or len(mem_val) < 3):
                                 p[key] = db_p[key]
                         logger.info(f"📦 Enriched '{pname}' from DB (follow-up without product name)")
                 except Exception as e:
