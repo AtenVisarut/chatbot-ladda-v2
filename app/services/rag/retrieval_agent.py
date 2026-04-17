@@ -845,6 +845,23 @@ class RetrievalAgent:
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
 
+            # Narrow NUTRIENT_SUPPLEMENT when user asks specifically for "ปุ๋ย" / fertilizer
+            # Prevents mixing Biostimulants/PGR when user wants plain Fertilizer (NPK)
+            if query_analysis.intent == IntentType.NUTRIENT_SUPPLEMENT:
+                _q_lower = query_analysis.original_query.lower()
+                _fert_specific = ['ปุ๋ยเกล็ด', 'ปุ๋ยnpk', 'ปุ๋ยน้ำ', 'npk', 'ปุ๋ยสูตร']
+                _pgr_specific = ['ฮอร์โมน', 'pgr', 'เร่งดอก', 'ยับยั้งใบอ่อน', 'ราดสาร', 'ชะลอ']
+                _bio_specific = ['biostimulant', 'สาหร่าย', 'ฟื้นฟูต้น', 'กรดอะมิโน']
+                if any(kw in _q_lower for kw in _fert_specific):
+                    expected_categories = ["Fertilizer", "fertilizer", "ปุ๋ย"]
+                    logger.info(f"  - Narrowed to Fertilizer only (user asked specifically for ปุ๋ย/NPK)")
+                elif any(kw in _q_lower for kw in _pgr_specific):
+                    expected_categories = ["PGR", "pgr", "ฮอร์โมน"]
+                    logger.info(f"  - Narrowed to PGR only")
+                elif any(kw in _q_lower for kw in _bio_specific):
+                    expected_categories = ["Biostimulants", "biostimulants"]
+                    logger.info(f"  - Narrowed to Biostimulants only")
+
             # Infer from entities when intent doesn't specify (PRODUCT_RECOMMENDATION, UNKNOWN, etc.)
             if not expected_categories:
                 expected_categories = self._infer_expected_categories(query_analysis)

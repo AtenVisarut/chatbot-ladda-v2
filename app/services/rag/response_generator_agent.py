@@ -457,13 +457,22 @@ class ResponseGeneratorAgent:
             or query_analysis.entities.get('problem_type') == 'nutrient'
         )
         if _is_nutrient_query and docs_to_use and not _product_from_query:
-            _NUTRIENT_CATS = {'biostimulants', 'pgr', 'fertilizer'}
+            # Narrow categories when user asks specifically for fertilizer/PGR/biostimulant
+            _q_lower = query_analysis.original_query.lower()
+            if any(kw in _q_lower for kw in ['ปุ๋ยเกล็ด', 'ปุ๋ยnpk', 'ปุ๋ยน้ำ', 'npk', 'ปุ๋ยสูตร']):
+                _NUTRIENT_CATS = {'fertilizer'}
+            elif any(kw in _q_lower for kw in ['ฮอร์โมน', 'pgr', 'เร่งดอก', 'ยับยั้งใบอ่อน', 'ราดสาร', 'ชะลอ']):
+                _NUTRIENT_CATS = {'pgr'}
+            elif any(kw in _q_lower for kw in ['biostimulant', 'สาหร่าย', 'ฟื้นฟูต้น', 'กรดอะมิโน']):
+                _NUTRIENT_CATS = {'biostimulants'}
+            else:
+                _NUTRIENT_CATS = {'biostimulants', 'pgr', 'fertilizer'}
             _nutrient_docs = [
                 d for d in docs_to_use
                 if any(nc in str(d.metadata.get('category') or d.metadata.get('product_category') or '').lower()
                        for nc in _NUTRIENT_CATS)
-                or bool(d.metadata.get('biostimulant'))    # product HAS biostimulant data
-                or bool(d.metadata.get('pgr_hormones'))    # product HAS PGR data
+                or (('biostimulants' in _NUTRIENT_CATS) and bool(d.metadata.get('biostimulant')))
+                or (('pgr' in _NUTRIENT_CATS) and bool(d.metadata.get('pgr_hormones')))
             ]
             if _nutrient_docs:
                 _removed_cat = len(docs_to_use) - len(_nutrient_docs)
