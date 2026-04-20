@@ -988,9 +988,66 @@ class ResponseGeneratorAgent:
 → ห้ามข้ามขั้นไปแนะนำสินค้าอื่นโดยไม่บอกสถานะของ "{asked_product}" ก่อน
 """
 
+        # "Best pick" follow-up — user asks "ตัวไหนดีสุด" after bot listed multiple
+        # → should ask back for crop + growth stage BEFORE picking one
+        best_pick_note = ""
+        _q = query_analysis.original_query
+        _q_lower = _q.lower()
+        _BEST_PICK_PATTERNS = [
+            'ตัวไหนดีสุด', 'ตัวไหนดีที่สุด', 'ตัวไหนดี', 'อันไหนดีสุด',
+            'อันไหนดีที่สุด', 'อันไหนดี', 'แนะนำตัวไหน', 'สรุปตัวไหน',
+            'ตัวไหนเวิร์ค', 'เลือกตัวไหน', 'ใช้ตัวไหนดี',
+        ]
+        _is_best_pick = any(p in _q for p in _BEST_PICK_PATTERNS) and len(_q.strip()) < 40
+        if _is_best_pick and context:
+            # Check what context we already know — from entities AND context text
+            _known_plant = bool(query_analysis.entities.get('plant_type'))
+            if not _known_plant:
+                # Fallback: scan context text for known plant names
+                _PLANT_NAMES = (
+                    "ทุเรียน", "ข้าว", "มะม่วง", "ลำไย", "ลิ้นจี่", "ส้ม",
+                    "มะนาว", "อ้อย", "มันสำปะหลัง", "ข้าวโพด", "พริก",
+                    "มะเขือ", "ผักคะน้า", "ถั่วฝักยาว", "ยางพารา", "ปาล์ม",
+                    "หอมแดง", "กระเทียม", "นาข้าว",
+                )
+                _known_plant = any(p in context for p in _PLANT_NAMES)
+
+            _known_stage_keywords = ('ใบอ่อน', 'ออกดอก', 'ติดผล', 'ระยะ',
+                                    'ต้นอ่อน', 'หลังเก็บเกี่ยว', 'แตกใบ',
+                                    'ก่อนเก็บ', 'ระยะดอก', 'ระยะผล')
+            # Only count stage keyword if it's near the user's message (not just in any recent line)
+            # Heuristic: take last 500 chars (most recent exchange)
+            _recent_context = context[-800:]
+            _known_stage = any(kw in _recent_context for kw in _known_stage_keywords)
+            _missing = []
+            if not _known_plant:
+                _missing.append("ใช้กับพืชอะไร (เช่น ทุเรียน/ข้าว/มะม่วง)")
+            if not _known_stage:
+                _missing.append("ระยะของพืชตอนนี้ (เช่น ใบอ่อน/ออกดอก/ติดผล/หลังเก็บเกี่ยว)")
+
+            if _missing:
+                _ask_list = "\n  ".join(f"• {m}" for m in _missing)
+                best_pick_note = f"""
+[คำถาม "ตัวไหนดีสุด" — user ต้องการเลือกจากสินค้าที่แนะนำไปแล้ว]
+→ ก่อนเลือกตัวเดียวให้ user ต้องถามกลับเพื่อให้แนะนำที่ตรงที่สุด
+→ ใช้รูปแบบนี้:
+   "เพื่อแนะนำสินค้าที่เหมาะสมที่สุด ขอทราบข้อมูลเพิ่มเติมค่ะ 😊
+   {_ask_list}
+   บอกน้องลัดดามาได้เลยนะคะ 🌱"
+→ ห้ามเลือกสินค้าตัวเดียวมาแนะนำโดยไม่ถามข้อมูลเหล่านี้ก่อน
+→ ห้ามเดาว่าพืชคืออะไรหรือระยะไหนถ้าไม่ได้ระบุไว้ใน context
+"""
+            else:
+                # User has provided enough context → pick + explain
+                best_pick_note = """
+[คำถาม "ตัวไหนดีสุด" — user มีพืชและระยะครบแล้ว]
+→ เลือก 1 สินค้าที่ตรงกับพืช+ระยะของ user ที่สุด
+→ บอกเหตุผลว่าทำไมเลือกตัวนี้ (เช่น crop-specific, selling_point ตรง, กลไกเหมาะสม)
+→ ถ้ามีหลายตัวที่เหมาะ → เลือก 1 ที่ strategy=Skyrocket/Expand ก่อน
+"""
+
         # Chemical-group query hint — tell LLM that RAC field answers IRAC/FRAC/HRAC/MoA
         chem_group_note = ""
-        _q_lower = query_analysis.original_query.lower()
         _chem_group_kw = [
             'irac', 'frac', 'hrac', 'rac', 'moa', 'mode of action',
             'กลุ่มสาร', 'กลุ่มเคมี', 'กลุ่มยา', 'กลไกการออกฤทธิ์',
@@ -1017,7 +1074,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}{chem_group_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}{chem_group_note}{best_pick_note}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท
