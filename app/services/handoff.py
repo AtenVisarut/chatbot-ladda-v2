@@ -145,3 +145,55 @@ class HandoffManager:
         except Exception as e:
             logger.error(f"Failed to get handoff for user: {e}")
             return None
+
+
+async def fire_no_data_alert(
+    user_id: str,
+    platform: str = "line",
+    question: str = "",
+    reason: str = "bot_cannot_answer",
+    display_name: str = "",
+) -> None:
+    """
+    เรียกใช้ทุกครั้งที่ bot ตอบ NO_DATA_REPLY — สร้างทั้ง
+      1. admin_handoffs row (pending) — เพื่อให้ admin รับงาน
+      2. analytics_alerts row (warning) — แสดงในหน้าการแจ้งเตือน
+
+    Fire-and-forget: ห้ามให้ error จากการสร้าง alert/handoff ทำให้ user ไม่ได้รับ reply
+    """
+    import asyncio
+    from app.dependencies import handoff_manager, alert_manager
+
+    async def _create_handoff():
+        try:
+            if handoff_manager:
+                await handoff_manager.create_handoff(
+                    user_id=user_id,
+                    platform=platform,
+                    display_name=display_name,
+                    trigger_message=question,
+                )
+        except Exception as e:
+            logger.warning(f"fire_no_data_alert/handoff failed: {e}")
+
+    async def _create_alert():
+        try:
+            if alert_manager:
+                preview = (question or "").strip()[:140]
+                msg = (
+                    f"Bot ตอบคำถามไม่ได้ (ช่องทาง: {platform}) — "
+                    f"รอ admin ตอบแทน\n"
+                    f"คำถาม: {preview or '(ไม่มีข้อความ)'}"
+                )
+                await alert_manager._create_alert(
+                    alert_type=reason,
+                    message=msg,
+                    severity="warning",
+                )
+        except Exception as e:
+            logger.warning(f"fire_no_data_alert/alert failed: {e}")
+
+    # Run both in background — don't block the user's reply
+    # Using create_task so the caller doesn't have to await us
+    asyncio.create_task(_create_handoff())
+    asyncio.create_task(_create_alert())

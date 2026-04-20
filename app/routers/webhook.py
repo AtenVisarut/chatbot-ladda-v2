@@ -40,6 +40,7 @@ try:
 except ImportError:
     generate_text_response = None
 from app.services.chat.handler import handle_natural_conversation
+from app.services.handoff import fire_no_data_alert
 from app.services.context_handler import (
     handle_context_interrupt,
     handle_new_image_during_flow
@@ -303,9 +304,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
-                            if handoff_manager:
-                                await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin + alert")
+                            await fire_no_data_alert(
+                                user_id=user_id, platform="line", question=text,
+                            )
                             # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
                         continue
 
@@ -537,9 +539,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
-                            if handoff_manager:
-                                await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin + alert")
+                            await fire_no_data_alert(
+                                user_id=user_id, platform="line", question=text,
+                            )
 
                 else:
                     # Normal text message handling
@@ -558,9 +561,10 @@ async def _process_webhook_events(events: list):
                         if answer is not None and not _is_no_data_answer(answer):
                             await reply_line(reply_token, answer)
                         else:
-                            logger.info(f"⏭️ No data for {user_id} — notifying admin (silent)")
-                            if handoff_manager:
-                                await handoff_manager.create_handoff(user_id=user_id, platform="line", trigger_message=text)
+                            logger.info(f"⏭️ No data for {user_id} — notifying admin + alert")
+                            await fire_no_data_alert(
+                                user_id=user_id, platform="line", question=text,
+                            )
                             # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
 
             # 4. Handle Sticker (Just for fun)

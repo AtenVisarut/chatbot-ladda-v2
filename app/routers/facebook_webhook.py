@@ -11,6 +11,7 @@ from app.utils.facebook.helpers import (
     split_message,
 )
 from app.services.chat.handler import handle_natural_conversation
+from app.services.handoff import fire_no_data_alert
 from app.services.memory import clear_memory, add_to_memory
 from app.utils.rate_limiter import check_user_rate_limit
 from app.config import MAX_CONCURRENT_TASKS
@@ -156,9 +157,10 @@ async def _process_fb_message(event: dict) -> None:
 
             logger.info(f"FB reply sent to {psid} ({len(chunks)} chunk(s)) in {time.time() - start_time:.2f}s")
         else:
-            logger.info(f"⏭️ No data for fb:{psid} — notifying admin (silent)")
-            if handoff_manager:
-                await handoff_manager.create_handoff(user_id=user_id, platform="facebook", trigger_message=text)
+            logger.info(f"⏭️ No data for fb:{psid} — notifying admin + alert")
+            await fire_no_data_alert(
+                user_id=user_id, platform="facebook", question=text,
+            )
             # Silent: ไม่ตอบ user — admin จะเห็นใน dashboard
 
     except Exception as e:

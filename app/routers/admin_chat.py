@@ -414,3 +414,131 @@ async def resolve_handoff(request: Request, handoff_id: int):
     if not success:
         raise HTTPException(status_code=500, detail="Failed to resolve handoff")
     return {"status": "resolved", "admin": admin_name}
+
+
+# ============================================================================
+# Admin Templates API — pre-written replies for faster handoff response
+# ============================================================================
+
+
+class TemplateRequest(BaseModel):
+    title: str
+    content: str
+    category: str = "general"
+    placeholders: Optional[list[str]] = None
+
+
+@router.get("/api/admin/templates")
+@limiter.limit("120/minute")
+async def list_templates(request: Request, category: Optional[str] = None):
+    """List reply templates (admin handoff helper)"""
+    _require_auth(request)
+    if not supabase_client:
+        return {"templates": [], "count": 0}
+
+    query = supabase_client.table("admin_templates").select("*").order(
+        "usage_count", desc=True,
+    ).order("updated_at", desc=True).limit(200)
+    if category:
+        query = query.eq("category", category)
+    result = await aexecute(query)
+    data = result.data or []
+    return {"templates": data, "count": len(data)}
+
+
+@router.post("/api/admin/templates")
+@limiter.limit("30/minute")
+async def create_template(request: Request, body: TemplateRequest):
+    """Create a new reply template"""
+    _require_auth(request)
+    if not supabase_client:
+        raise HTTPException(status_code=503, detail="DB not available")
+
+    admin_name = request.session.get("user", "admin")
+    title = body.title.strip()
+    content = body.content.strip()
+    if not title or not content:
+        raise HTTPException(status_code=400, detail="title and content required")
+
+    payload = {
+        "title": title,
+        "content": content,
+        "category": (body.category or "general").strip(),
+        "placeholders": body.placeholders or [],
+        "created_by": admin_name,
+    }
+    result = await aexecute(supabase_client.table("admin_templates").insert(payload))
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create template")
+    return {"template": result.data[0]}
+
+
+@router.put("/api/admin/templates/{tid}")
+@limiter.limit("60/minute")
+async def update_template(request: Request, tid: int, body: TemplateRequest):
+    """Update an existing template"""
+    _require_auth(request)
+    if not supabase_client:
+        raise HTTPException(status_code=503, detail="DB not available")
+
+    title = body.title.strip()
+    content = body.content.strip()
+    if not title or not content:
+        raise HTTPException(status_code=400, detail="title and content required")
+
+    payload = {
+        "title": title,
+        "content": content,
+        "category": (body.category or "general").strip(),
+        "placeholders": body.placeholders or [],
+    }
+    result = await aexecute(
+        supabase_client.table("admin_templates").update(payload).eq("id", tid)
+    )
+    if result.data is None:
+        raise HTTPException(status_code=500, detail="Failed to update template")
+    return {"status": "updated", "id": tid}
+
+
+@router.delete("/api/admin/templates/{tid}")
+@limiter.limit("30/minute")
+async def delete_template(request: Request, tid: int):
+    """Delete a template"""
+    _require_auth(request)
+    if not supabase_client:
+        raise HTTPException(status_code=503, detail="DB not available")
+
+    await aexecute(supabase_client.table("admin_templates").delete().eq("id", tid))
+    return {"status": "deleted", "id": tid}
+
+
+@router.post("/api/admin/templates/{tid}/use")
+@limiter.limit("120/minute")
+async def increment_template_usage(request: Request, tid: int):
+    """Increment usage_count — called when admin uses a template to reply"""
+    _require_auth(request)
+    if not supabase_client:
+        return {"status": "skipped"}
+
+    # Atomic-ish increment via RPC fallback to read-modify-write
+    try:
+        current = await aexecute(
+            supabase_client.table("admin_templates")
+            .select("usage_count")
+            .eq("id", tid)
+            .limit(1)
+        )
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Template not found")
+        next_count = (current.data[0].get("usage_count") or 0) + 1
+        await aexecute(
+            supabase_client.table("admin_templates")
+            .update({"usage_count": next_count})
+            .eq("id", tid)
+        )
+        return {"status": "incremented", "usage_count": next_count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Failed to increment template usage: {e}")
+        return {"status": "error"}
