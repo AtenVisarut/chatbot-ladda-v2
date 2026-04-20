@@ -56,6 +56,43 @@ def _get_pest_text_from_meta(metadata: dict) -> str:
     return get_pest_text(metadata)
 
 
+# Formulation suffixes stripped when pairing % with Thai ingredient name
+# (users want 'ไบเฟนทริน 5%' not 'ไบเฟนทริน 5% SC')
+_FORMULATION_SUFFIX_RE = re.compile(
+    r'\s*(?:SC|EC|WG|WP|GR|SL|EW|OL|ME|OD|CS|DP|DS|ZW|ZC|WS|FS|'
+    r'ดับเบิลยู\.?พี\.?|ดับเบิ้ลยู\.?พี\.?|เอฟ|อีซี|ดับเบิลยู\.?จี\.?)\s*$',
+    re.IGNORECASE,
+)
+
+
+def _combine_thai_name_with_percent(thai_name: str, active_ingredient: str) -> str:
+    """
+    Produce "ไบเฟนทริน 5% + อิมิดาคลอพริด 25%" by pairing Thai ingredient
+    tokens with percentages parsed from the English active_ingredient field.
+
+    Falls back to the Thai name alone when structures don't align or no
+    percentages exist in active_ingredient.
+    """
+    if not thai_name or not active_ingredient:
+        return thai_name or ""
+    # Split both by "+" and strip
+    thai_parts = [p.strip() for p in thai_name.split('+') if p.strip()]
+    ai_parts = [p.strip() for p in active_ingredient.split('+') if p.strip()]
+    if len(thai_parts) != len(ai_parts):
+        return thai_name  # can't align → show Thai only, LLM decides
+    combined_parts = []
+    percent_re = re.compile(r'(\d+(?:\.\d+)?\s*%)')
+    for t, ai in zip(thai_parts, ai_parts):
+        m = percent_re.search(ai)
+        if m:
+            # Keep only the "name + %"; drop formulation suffix (SC/EC/WG/etc.)
+            combined = f"{t} {m.group(1).replace(' ', '')}"
+        else:
+            combined = t
+        combined_parts.append(combined.strip())
+    return " + ".join(combined_parts)
+
+
 class ResponseGeneratorAgent:
     """
     Agent 4: Response Generation
@@ -289,16 +326,19 @@ class ResponseGeneratorAgent:
             return self._build_fallback_answer(retrieval_result, grounding_result)
 
         # Keep all products (including Standard) — just sort by strategy priority
-        docs_to_use = retrieval_result.documents[:7]
+        # Limit to top 10 (was 7) — support broader queries like "เพลี้ยไฟในทุเรียน"
+        # where 7+ matching products exist
+        _DOCS_LIMIT = 10
+        docs_to_use = retrieval_result.documents[:_DOCS_LIMIT]
 
-        # Guarantee Skyrocket/Expand in top 7 (must match query category)
+        # Guarantee Skyrocket/Expand in top N (must match query category)
         # Skip when user asks about a specific product — don't inject unrelated products
         _priority_strategies = {'Skyrocket', 'Expand'}
         _has_priority = any(
             d.metadata.get('strategy') in _priority_strategies for d in docs_to_use
         )
         _skip_inject = bool(query_analysis.entities.get('product_name')) and query_analysis.intent in (IntentType.PRODUCT_INQUIRY, IntentType.USAGE_INSTRUCTION)
-        if not _has_priority and len(docs_to_use) >= 7 and not _skip_inject:
+        if not _has_priority and len(docs_to_use) >= _DOCS_LIMIT and not _skip_inject:
             # Determine expected category from intent
             _INTENT_TO_CAT = {
                 'disease_treatment': 'fungicide', 'pest_control': 'insecticide',
@@ -306,15 +346,15 @@ class ResponseGeneratorAgent:
             }
             _intent_val = query_analysis.intent.value if hasattr(query_analysis.intent, 'value') else str(query_analysis.intent)
             _expected_cat = _INTENT_TO_CAT.get(_intent_val, '')
-            # Search beyond top 7 for matching Skyrocket/Expand
+            # Search beyond top N for matching Skyrocket/Expand
             _top_ids = {d.id for d in docs_to_use}
-            for d in retrieval_result.documents[7:]:
+            for d in retrieval_result.documents[_DOCS_LIMIT:]:
                 _strat = d.metadata.get('strategy', '')
                 _cat = (d.metadata.get('category') or '').lower()
                 if _strat in _priority_strategies and d.id not in _top_ids:
                     if not _expected_cat or _expected_cat in _cat:
                         docs_to_use[-1] = d  # Replace lowest-ranked
-                        logger.info(f"  - Guaranteed {_strat} slot: injected '{d.title}' into top 7 (category: {_cat})")
+                        logger.info(f"  - Guaranteed {_strat} slot: injected '{d.title}' into top {_DOCS_LIMIT} (category: {_cat})")
                         break
 
         # Sort by strategy priority: Skyrocket=Expand > Natural=Standard=Cosmic-star
@@ -615,6 +655,12 @@ class ResponseGeneratorAgent:
             part += "\n"
             if meta.get('common_name_th'):
                 part += f"  ชื่อสารไทย: {meta['common_name_th']}\n"
+                # Build "ชื่อไทย + %" display hint so LLM doesn't drop percentages
+                _combined = _combine_thai_name_with_percent(
+                    meta.get('common_name_th', ''), meta.get('active_ingredient', ''),
+                )
+                if _combined and _combined != meta.get('common_name_th'):
+                    part += f"  แสดงในวงเล็บ: {_combined}\n"
             if meta.get('category'):
                 part += f"  ประเภท: {meta['category']}\n"
             _pest_disp = _get_pest_text_from_meta(meta)
@@ -780,7 +826,7 @@ class ResponseGeneratorAgent:
                     for d in _all_docs:
                         if _any_disease_variant_matches(_all_check_variants, _get_pest_text_from_meta(d.metadata)):
                             if d not in docs_to_use:
-                                if len(docs_to_use) >= 7:
+                                if len(docs_to_use) >= _DOCS_LIMIT:
                                     docs_to_use[-1] = d
                                 else:
                                     docs_to_use.append(d)
