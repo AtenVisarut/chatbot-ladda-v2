@@ -313,46 +313,82 @@ def export_excel(results: List[ProductResult], out_path: Path) -> None:
     # Row 3 empty (spacer)
     ws.row_dimensions[3].height = 8
 
-    # --- Row 4: Column headers with criteria ---
+    # --- Row 4: Simple clean column headers (criteria → criteria sheet) ---
     HEADER_ROW = 4
     headers = [
-        ("product", "ชื่อสินค้า", ""),
-        ("category", "ประเภท", ""),
-        ("cap1", "#1 ข้อมูลสินค้า\n(0-100)",
-         "name+thai+%+formulation\nแต่ละอย่าง +25"),
-        ("cap2", "#2 โรค/แมลง/พืช\n(0-100)",
-         "target ≥2=+50, ≥1=+35\ncrop ≥1=+50"),
-        ("cap3", "#3 อัตรา+วิธีใช้\n(0-100)",
-         "number match=+50\nverb (ผสม/ฉีด/พ่น)=+50"),
-        ("cap4", "#4 MoA / IRAC\n(0-100)",
-         "group code match=+100\nnarrative keywords ≥2=+100"),
-        ("cap5", "#5 จุดเด่น\n(0-100)",
-         "selling_point token\noverlap ≥50%=+100"),
-        ("cap6", "#6 เปรียบเทียบ\n(0-100)",
-         "both names=+50\n+ differentiator=+50"),
-        ("avg", "เฉลี่ย\n(1-100)", "mean(cap1..6)"),
-        ("status", "status", "≥70 ✅\n50-69 ⚠️\n<50 ❌"),
-        ("feedback", "FEEDBACK\n(ใส่ความเห็นเอง)", "ช่องว่าง — admin กรอกเอง"),
+        "ชื่อสินค้า",
+        "ประเภท",
+        "#1 ข้อมูลสินค้า",
+        "#2 โรค/แมลง/พืช",
+        "#3 อัตรา+วิธีใช้",
+        "#4 MoA / IRAC",
+        "#5 จุดเด่น",
+        "#6 เปรียบเทียบ",
+        "เฉลี่ย",
+        "สถานะ",
+        "Feedback (auto)",
     ]
-    # Header (2 lines: label + criteria)
-    for col_i, (_, label, criteria) in enumerate(headers, 1):
+    for col_i, label in enumerate(headers, 1):
         cell = ws.cell(row=HEADER_ROW, column=col_i)
-        if criteria:
-            cell.value = f"{label}\n\n📐 {criteria}"
-        else:
-            cell.value = label
+        cell.value = label
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = wrap_center
         cell.border = Border(bottom=Side(style="medium", color="0F4C81"))
-    ws.row_dimensions[HEADER_ROW].height = 75
+    ws.row_dimensions[HEADER_ROW].height = 28
+
+    # Sub-header (row 5): scoring range, points-out-of
+    SUB_ROW = HEADER_ROW + 1
+    sub_headers = [
+        "", "",
+        "0-100", "0-100", "0-100", "0-100", "0-100", "0-100",
+        "1-100", "", "ดูแผ่น criteria",
+    ]
+    for col_i, label in enumerate(sub_headers, 1):
+        cell = ws.cell(row=SUB_ROW, column=col_i)
+        cell.value = label
+        cell.fill = PatternFill("solid", fgColor="BFDBFE")
+        cell.font = Font(size=9, italic=True, color="333333")
+        cell.alignment = wrap_center
+    ws.row_dimensions[SUB_ROW].height = 16
 
     # --- Data rows (sorted by avg desc) ---
     results_sorted = sorted(results, key=lambda r: r.avg_score, reverse=True)
+
+    def generate_feedback(pr: ProductResult) -> str:
+        """Build a concise feedback note from test results"""
+        by_cap = {c.capability: c for c in pr.cells}
+        cap_names = {
+            1: "ข้อมูลสินค้า", 2: "โรค/แมลง/พืช", 3: "อัตรา+วิธีใช้",
+            4: "MoA/IRAC", 5: "จุดเด่น", 6: "เปรียบเทียบ",
+        }
+        failed = [(cid, c) for cid, c in by_cap.items() if c.score < 70]
+        warn = [(cid, c) for cid, c in by_cap.items() if 70 <= c.score < 100]
+
+        if not failed and all(c.score == 100 for c in by_cap.values()):
+            return "✅ ผ่านเต็ม 100 ทุกด้าน"
+
+        lines = []
+        if not failed:
+            lines.append(f"✅ ผ่านทุกด้าน (avg {pr.avg_score:.0f})")
+        else:
+            lines.append(f"❌ ต้องแก้ {len(failed)} ด้าน (avg {pr.avg_score:.0f}):")
+            for cid, c in failed:
+                # Shorten reason for readability
+                reason = c.reason[:80] + ("..." if len(c.reason) > 80 else "")
+                lines.append(f"  • #{cid} {cap_names[cid]} [{c.score}] — {reason}")
+        if warn and failed:
+            # Show warnings only if there are also failures (otherwise too noisy)
+            warn_labels = [f"#{cid} {cap_names[cid]}({c.score})" for cid, c in warn[:2]]
+            if warn_labels:
+                lines.append(f"⚠️ เสริม: {', '.join(warn_labels)}")
+        return "\n".join(lines)
+
     for pr in results_sorted:
         by_cap = {c.capability: c.score for c in pr.cells}
         status_icon = ("✅" if pr.avg_score >= 70
                        else "⚠️" if pr.avg_score >= 50 else "❌")
+        feedback = generate_feedback(pr)
         ws.append([
             pr.product, pr.category,
             by_cap.get(1, "-"), by_cap.get(2, "-"),
@@ -360,11 +396,11 @@ def export_excel(results: List[ProductResult], out_path: Path) -> None:
             by_cap.get(5, "-"), by_cap.get(6, "-"),
             round(pr.avg_score, 1),
             status_icon,
-            "",  # feedback column — blank for admin to fill
+            feedback,
         ])
 
-    first_data_row = HEADER_ROW + 1
-    last_data_row = HEADER_ROW + len(results_sorted)
+    first_data_row = SUB_ROW + 1
+    last_data_row = SUB_ROW + len(results_sorted)
 
     # Conditional color on avg (col I) and individual caps (C-H)
     avg_col = "I"
@@ -392,11 +428,19 @@ def export_excel(results: List[ProductResult], out_path: Path) -> None:
         )
 
     # Column widths
-    widths = [28, 14, 16, 16, 16, 16, 16, 16, 12, 10, 40]
+    widths = [28, 14, 14, 14, 14, 14, 14, 14, 10, 10, 60]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    ws.freeze_panes = f"C{HEADER_ROW + 1}"  # freeze product + category
+    # Wrap + size feedback cells per-row (varying content length)
+    for r in range(first_data_row, last_data_row + 1):
+        fb_cell = ws.cell(row=r, column=11)
+        fb_cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
+        # Auto-size row height based on feedback line count
+        lines = (fb_cell.value or "").count("\n") + 1
+        ws.row_dimensions[r].height = max(18, lines * 15)
+
+    ws.freeze_panes = f"C{first_data_row}"  # freeze product + category
 
     # --------------- Sheet 2: details ---------------
     ws2 = wb.create_sheet("details")
