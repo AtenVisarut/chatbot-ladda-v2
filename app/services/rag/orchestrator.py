@@ -123,8 +123,12 @@ class AgenticRAG:
                     or "ใช้กับพืชอะไร" in context
                 )
                 if _is_short_stage_reply and _bot_asked_for_context:
-                    # Find the earliest substantive ผู้ใช้: line in context
-                    # — this is the ROOT question (not "ตัวไหนดีสุด")
+                    # Find the MOST RECENT substantive ผู้ใช้: line in context
+                    # — that is the CURRENT topic the user is on, not the
+                    # first topic of the session.
+                    # Skip best-pick intermediaries ("ตัวไหนดีสุด") and
+                    # stage-only replies (the current one) so we find the
+                    # real product/problem question.
                     import re
                     _user_msgs = re.findall(r"ผู้ใช้:\s*(.+?)(?=\n|$)", context)
                     _SKIP_PATTERNS = (
@@ -132,15 +136,27 @@ class AgenticRAG:
                         "ใช้ตัวไหน", "เลือกตัวไหน",
                     )
                     _root_topic = None
-                    for msg in _user_msgs:
+                    # Reverse iteration: prefer most recent topic
+                    for msg in reversed(_user_msgs):
                         msg = msg.strip()
-                        if len(msg) > 10 and not any(p in msg for p in _SKIP_PATTERNS):
-                            _root_topic = msg
-                            break
+                        if len(msg) < 10:
+                            continue
+                        if any(p in msg for p in _SKIP_PATTERNS):
+                            continue
+                        # Skip messages that are themselves stage-only replies
+                        # (keeps us from picking up an earlier clarification echo)
+                        if (len(msg) < 30
+                                and any(w in msg for w in _STAGE_WORDS)
+                                and not any(w in msg for w in ("ยา", "ใช้", "แนะนำ",
+                                                              "โรค", "หนอน", "เพลี้ย",
+                                                              "หญ้า", "บำรุง"))):
+                            continue
+                        _root_topic = msg
+                        break
                     if _root_topic:
                         logger.info(
-                            f"  - Clarification reply: merging with root topic\n"
-                            f"    root: {_root_topic[:60]}\n"
+                            f"  - Clarification reply: merging with latest topic\n"
+                            f"    latest: {_root_topic[:60]}\n"
                             f"    reply: {query}"
                         )
                         query = f"{_root_topic} {query.strip()}"

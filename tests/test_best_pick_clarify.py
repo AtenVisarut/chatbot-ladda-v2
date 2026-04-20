@@ -83,7 +83,7 @@ class TestClarificationMerge:
         src = inspect.getsource(orchestrator)
         assert "_is_short_stage_reply" in src
         assert "_bot_asked_for_context" in src
-        assert "Clarification reply: merging with root topic" in src
+        assert "Clarification reply: merging with" in src
 
     def test_skip_short_best_pick_messages_when_finding_root(self):
         """Ensure ตัวไหนดีสุด is NOT picked as root topic"""
@@ -92,6 +92,32 @@ class TestClarificationMerge:
         src = inspect.getsource(orchestrator)
         assert "ตัวไหนดี" in src
         assert "_SKIP_PATTERNS" in src or "SKIP_PATTERNS" in src
+
+    def test_uses_latest_topic_not_earliest(self):
+        """Multi-topic conversation: must use LATEST user topic, not first"""
+        import inspect
+        from app.services.rag import orchestrator
+        src = inspect.getsource(orchestrator)
+        # Must iterate in reverse to prefer recent topic
+        assert "reversed(_user_msgs)" in src, (
+            "Must iterate ผู้ใช้ messages in reverse to pick latest topic"
+        )
+        assert "latest topic" in src.lower() or "most recent" in src.lower(), (
+            "Logic must document latest-first selection"
+        )
+
+    def test_skips_stage_only_messages_when_finding_root(self):
+        """An earlier stage-only message must not be used as root topic"""
+        import inspect
+        from app.services.rag import orchestrator
+        src = inspect.getsource(orchestrator)
+        # The skip must check for stage words AND require action words to pass
+        assert "_STAGE_WORDS" in src
+        # Keywords that distinguish real queries from stage-only replies
+        for kw in ("ยา", "ใช้", "แนะนำ", "โรค", "หนอน", "เพลี้ย"):
+            assert kw in src, (
+                f"Stage-reply filter must check for action keyword {kw!r}"
+            )
 
 
 class TestSourceWiring:
