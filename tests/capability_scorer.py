@@ -84,26 +84,59 @@ def _tokenize_thai(text: str, min_len: int = 3) -> List[str]:
     return toks
 
 
+_CROP_NAMES = (
+    "ข้าว", "ทุเรียน", "อ้อย", "มันสำปะหลัง", "ยางพารา", "ปาล์ม",
+    "มะม่วง", "ลำไย", "ลำใย", "ลิ้นจี่", "เงาะ", "มังคุด", "พริก",
+    "มะเขือเทศ", "ข้าวโพด", "ถั่ว", "ถั่วฝักยาว", "ผัก", "ผักคะน้า",
+    "กล้วย", "มะพร้าว", "ส้ม", "มะนาว", "ฝรั่ง", "หอมแดง", "หอม",
+    "กระเทียม", "มะเขือ", "นาข้าว",
+)
+
+
 def _tokenize_targets(text: str, min_len: int = 3) -> List[str]:
     """
-    Tokenize pest/disease column values but **strip crop prefixes**.
-    Format in DB is "<crop> - <pest list>" (e.g. "ทุเรียน - เพลี้ยไฟ เพลี้ยจั๊กจั่น").
-    We only want the pest part.
+    Tokenize pest/disease column values and **strip crop prefixes/suffixes**.
+
+    DB has two common formats:
+      "<crop> - <pest list>"              (e.g. "ทุเรียน - เพลี้ยไฟ")
+      "<pest>ใน<crop>,<pest>ใน<crop>"     (e.g. "เพลี้ยไฟในส้ม,หนอนชอนใบในถั่วฝักยาว")
+
+    We extract only the pest part and also generate crop-less aliases for the
+    "ใน<crop>" case so "เพลี้ยไฟในส้ม" produces both
+    "เพลี้ยไฟในส้ม" AND "เพลี้ยไฟ" as tokens.
     """
     if not text:
         return []
     tokens = []
-    for line in re.split(r"[\n]+", text):
-        line = line.strip()
-        if not line:
+    # Split top level by newline OR comma (DB uses both)
+    for chunk in re.split(r"[\n,]+", text):
+        chunk = chunk.strip()
+        if not chunk:
             continue
-        # Split "crop - pests" — take only the 2nd half if " - " present
-        if " - " in line:
-            parts = line.split(" - ", 1)
+        # Format 1: "<crop> - <pest>"
+        if " - " in chunk:
+            parts = chunk.split(" - ", 1)
             if len(parts) == 2:
-                line = parts[1]
-        tokens.extend(_tokenize_thai(line, min_len=min_len))
-    return tokens
+                chunk = parts[1]
+        # Format 2: "<pest>ใน<crop>" → also keep crop-less pest
+        # Strip "ใน<crop>" suffix by longest-match
+        for crop in sorted(_CROP_NAMES, key=len, reverse=True):
+            suffix = f"ใน{crop}"
+            if suffix in chunk:
+                pest_only = chunk.replace(suffix, "").strip()
+                if len(pest_only) >= min_len:
+                    tokens.append(pest_only)
+                # also keep the whole "pestในcrop" form
+                break
+        tokens.extend(_tokenize_thai(chunk, min_len=min_len))
+    # dedupe while preserving order
+    seen = set()
+    unique = []
+    for t in tokens:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    return unique
 
 
 # =============================================================================
@@ -324,6 +357,10 @@ def score_usage_rate(answer: str, product: dict) -> CapabilityScore:
 def score_moa(answer: str, product: dict) -> CapabilityScore:
     """
     +100 pts  answer contains the chemical_group_rac value (or its core group code)
+
+    Special cases:
+    - Narrative rac (e.g. "ควบคุมการเจริญเติบโตของพืช" for PGR) — accept if
+      answer mentions PGR semantics (ควบคุม/เจริญเติบโต/ฮอร์โมน/PGR)
     """
     if not answer:
         return CapabilityScore(0, "empty answer", {})
@@ -335,17 +372,33 @@ def score_moa(answer: str, product: dict) -> CapabilityScore:
             100, "no rac in DB — full credit", {"rac": 100}
         )
 
-    # Extract group codes from rac (e.g. "กลุ่ม 3A + 4A" → ['3A', '4A'])
-    # Also catch "C2", "E", "O + K3" etc.
-    codes = re.findall(r"\b[A-Z]?\d+[A-Z]?\b|\b[A-Z]\d?\b", rac)
-    # Keep only ones that look like group codes (not random numbers)
-    codes = [c for c in codes if re.match(r"^[A-Z]?\d+[A-Z]?$|^[A-Z]\d?$", c)
-             and c not in ("I", "A", "D")]  # filter noise
+    # Narrative rac: no numeric group code (e.g. "ควบคุมการเจริญเติบโตของพืช")
+    # → score based on semantic match instead
+    is_narrative = bool(re.search(r"ควบคุมการเจริญเติบโต|กลุ่มจิบเบอเรลลิน|Plant Growth|PGR", rac, re.IGNORECASE))
+    if is_narrative:
+        narrative_keywords = ["ควบคุม", "เจริญเติบโต", "ฮอร์โมน", "PGR",
+                              "Plant Growth Regulator", "จิบเบอเรลลิน",
+                              "ยับยั้ง", "ใบอ่อน"]
+        matched = sum(1 for k in narrative_keywords if k.lower() in answer.lower())
+        if matched >= 2:
+            return CapabilityScore(
+                100, f"narrative rac — {matched} keywords matched", {"rac": 100}
+            )
+        elif matched >= 1:
+            return CapabilityScore(
+                60, f"narrative rac — only {matched} keyword", {"rac": 60}
+            )
+        return CapabilityScore(
+            0, "narrative rac — no semantic match", {"rac": 0}
+        )
 
-    # Check LLM mentions no-data phrase (bad — this should fail)
+    # Extract group codes from rac (e.g. "กลุ่ม 3A + 4A" → ['3A', '4A'])
+    codes = re.findall(r"\b[A-Z]?\d+[A-Z]?\b|\b[A-Z]\d?\b", rac)
+    codes = [c for c in codes if re.match(r"^[A-Z]?\d+[A-Z]?$|^[A-Z]\d?$", c)
+             and c not in ("I", "A", "D")]
+
+    # Check LLM mentions no-data phrase
     bad_phrases = ["ไม่มีข้อมูล", "ไม่ทราบ", "ไม่ได้ระบุ"]
-    # Exception: if LLM says "ไม่ได้ระบุว่าใช้กับ..." (applicability denial, not missing rac)
-    # → only penalize if the phrase is about rac/group/moa
     rac_context_near_denial = False
     for bp in bad_phrases:
         if bp in answer:
@@ -359,7 +412,6 @@ def score_moa(answer: str, product: dict) -> CapabilityScore:
         return CapabilityScore(0, "LLM said 'no data' about MoA", {"rac": 0})
 
     if not codes:
-        # Fallback: check full rac string appears in answer
         if rac in answer:
             return CapabilityScore(100, "exact rac match", {"rac": 100})
         return CapabilityScore(0, f"rac {rac!r} not matched", {"rac": 0})
@@ -448,33 +500,49 @@ def score_comparison(answer: str, product_a: dict, product_b: dict) -> Capabilit
     else:
         breakdown["both_names"] = 0
 
-    # Differentiator: product_category, mechanism_of_action, active_ingredient, usage_rate
+    # Differentiator: any of category / ingredient / mechanism / rate / pest
     cat_a = _clean(product_a.get("product_category"))
     cat_b = _clean(product_b.get("product_category"))
-    mechanism_a = _clean(product_a.get("mechanism_of_action"))[:80]
-    mechanism_b = _clean(product_b.get("mechanism_of_action"))[:80]
+    thai_a_tokens = [t.strip() for t in _clean(product_a.get("common_name_th")).split("+") if t.strip()]
+    thai_b_tokens = [t.strip() for t in _clean(product_b.get("common_name_th")).split("+") if t.strip()]
+    mechanism_a = _clean(product_a.get("mechanism_of_action"))
+    mechanism_b = _clean(product_b.get("mechanism_of_action"))
+    rate_a = _clean(product_a.get("usage_rate"))
+    rate_b = _clean(product_b.get("usage_rate"))
 
     differentiator_found = False
-    # Different categories → answer should show both categories
+    reason_bits = []
+
+    # 1. Different categories → answer mentions at least one category
     if cat_a and cat_b and cat_a.lower() != cat_b.lower():
         if cat_a.lower() in answer.lower() or cat_b.lower() in answer.lower():
             differentiator_found = True
-    # Same category → check mechanism or target differences
-    if not differentiator_found:
-        # Any mechanism word
-        mech_tokens = _tokenize_thai(mechanism_a + " " + mechanism_b, min_len=4)
-        if any(t in answer for t in mech_tokens[:3]):
+            reason_bits.append("category")
+
+    # 2. Different ingredients (same or cross category): Thai ingredient names from each
+    if not differentiator_found and thai_a_tokens and thai_b_tokens:
+        a_found = any(t in answer for t in thai_a_tokens if len(t) >= 3)
+        b_found = any(t in answer for t in thai_b_tokens if len(t) >= 3)
+        if a_found and b_found:
             differentiator_found = True
-    # Target differences (pest vs disease etc.)
+            reason_bits.append("both_ingredients")
+
+    # 3. Mechanism of action keywords
     if not differentiator_found:
-        ai_a = _clean(product_a.get("active_ingredient"))
-        ai_b = _clean(product_b.get("active_ingredient"))
-        if ai_a and ai_b and ai_a != ai_b:
-            # Check if any AI-related Thai ingredient name appears
-            thai_a = _clean(product_a.get("common_name_th")).split("+")[0].strip()
-            thai_b = _clean(product_b.get("common_name_th")).split("+")[0].strip()
-            if (thai_a and thai_a in answer) or (thai_b and thai_b in answer):
-                differentiator_found = True
+        mech_tokens = _tokenize_thai(mechanism_a + "\n" + mechanism_b, min_len=5)
+        if sum(1 for t in mech_tokens[:5] if t in answer) >= 2:
+            differentiator_found = True
+            reason_bits.append("mechanism")
+
+    # 4. Different rates mentioned
+    if not differentiator_found and rate_a and rate_b and rate_a != rate_b:
+        nums_a = set(re.findall(r"\d+", rate_a))
+        nums_b = set(re.findall(r"\d+", rate_b))
+        a_shown = any(n in answer for n in nums_a)
+        b_shown = any(n in answer for n in nums_b)
+        if a_shown and b_shown and (nums_a & set(re.findall(r"\d+", answer))) != (nums_b & set(re.findall(r"\d+", answer))):
+            differentiator_found = True
+            reason_bits.append("rates")
 
     if differentiator_found:
         score += 50

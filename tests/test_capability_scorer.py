@@ -260,6 +260,80 @@ class TestComparison:
 # Question builder
 # =============================================================================
 
+class TestTokenizeTargets:
+    """Cover DB's 'pestในcrop' compact format (no ' - ' separator)"""
+
+    def test_compact_pest_in_crop_format(self):
+        from tests.capability_scorer import _tokenize_targets
+        text = "เพลี้ยไฟในส้ม,หนอนชอนใบในถั่วฝักยาว,เพลี้ยไฟในมะเขือ"
+        toks = _tokenize_targets(text, min_len=3)
+        # Should produce both "เพลี้ยไฟในส้ม" AND "เพลี้ยไฟ" (crop-less aliases)
+        assert "เพลี้ยไฟ" in toks
+        assert "หนอนชอนใบ" in toks
+
+    def test_dash_separator_format(self):
+        from tests.capability_scorer import _tokenize_targets
+        text = "ทุเรียน - เพลี้ยไฟ เพลี้ยจักจั่น"
+        toks = _tokenize_targets(text, min_len=3)
+        assert "เพลี้ยไฟ" in toks
+        assert "เพลี้ยจักจั่น" in toks
+        # crop name should not be a token
+        assert "ทุเรียน" not in toks
+
+    def test_newline_separator(self):
+        from tests.capability_scorer import _tokenize_targets
+        text = "เพลี้ยไฟในทุเรียน\nเพลี้ยแป้งในลำไย"
+        toks = _tokenize_targets(text, min_len=3)
+        assert "เพลี้ยไฟ" in toks
+        assert "เพลี้ยแป้ง" in toks
+
+
+class TestMoANarrative:
+    """PGR products have narrative rac (not numeric codes)"""
+
+    PRODUCT = {
+        "chemical_group_rac": "ควบคุมการเจริญเติบโตของพืช",
+    }
+
+    def test_narrative_with_keywords(self):
+        from tests.capability_scorer import score_moa
+        answer = "พรีดิคท์ 10% เป็นสารควบคุมการเจริญเติบโตของพืช (PGR) ยับยั้งการแตกใบอ่อน"
+        r = score_moa(answer, self.PRODUCT)
+        assert r.score == 100
+
+    def test_narrative_partial(self):
+        from tests.capability_scorer import score_moa
+        answer = "เป็นสารควบคุม"
+        r = score_moa(answer, self.PRODUCT)
+        assert r.score == 60
+
+    def test_narrative_no_match(self):
+        from tests.capability_scorer import score_moa
+        answer = "ใช้กับทุเรียนได้"
+        r = score_moa(answer, self.PRODUCT)
+        assert r.score == 0
+
+
+class TestComparisonBothIngredients:
+    """New: if answer mentions both Thai ingredient names → differentiator found"""
+
+    def test_both_thai_ingredients_differentiates(self):
+        from tests.capability_scorer import score_comparison
+        a = {
+            "product_name": "แจ๊ส 50 อีซี", "product_category": "Insecticide",
+            "common_name_th": "ฟีโนบูคาร์บ", "active_ingredient": "FENOBUCARB 50% EC",
+            "mechanism_of_action": "", "usage_rate": "10-20 มล.",
+        }
+        b = {
+            "product_name": "โบรีส", "product_category": "Insecticide",
+            "common_name_th": "ไพริดาเบน", "active_ingredient": "PYRIDABEN 20% WP",
+            "mechanism_of_action": "", "usage_rate": "30 กรัม",
+        }
+        answer = "แจ๊ส 50 อีซี (ฟีโนบูคาร์บ 50%) และ โบรีส (ไพริดาเบน 20%) ต่างกัน"
+        r = score_comparison(answer, a, b)
+        assert r.score == 100
+
+
 class TestQuestionBuilder:
     def test_builds_5_questions_without_partner(self):
         q = build_questions({"product_name": "ไบเตอร์"})
