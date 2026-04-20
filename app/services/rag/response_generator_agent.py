@@ -697,7 +697,17 @@ class ResponseGeneratorAgent:
             if meta.get('phytotoxicity'):
                 part += f"  ความเป็นพิษต่อพืช: {meta['phytotoxicity']}\n"
             if meta.get('chemical_group_rac'):
-                part += f"  กลุ่มสาร (RAC): {meta['chemical_group_rac']}\n"
+                # Tag with all synonyms so LLM links user-typed acronyms to this field
+                _cat = str(meta.get('product_category') or '').lower()
+                if 'insect' in _cat:
+                    _tag = "IRAC"
+                elif 'fung' in _cat:
+                    _tag = "FRAC"
+                elif 'herb' in _cat:
+                    _tag = "HRAC"
+                else:
+                    _tag = "RAC"
+                part += f"  กลุ่มสาร ({_tag} / MoA / Mode of Action): {meta['chemical_group_rac']}\n"
             if meta.get('caution_notes'):
                 part += f"  ข้อควรระวังเพิ่มเติม: {meta['caution_notes']}\n"
             # strategy is internal-only — NOT sent to LLM to prevent leaking to users
@@ -978,6 +988,23 @@ class ResponseGeneratorAgent:
 → ห้ามข้ามขั้นไปแนะนำสินค้าอื่นโดยไม่บอกสถานะของ "{asked_product}" ก่อน
 """
 
+        # Chemical-group query hint — tell LLM that RAC field answers IRAC/FRAC/HRAC/MoA
+        chem_group_note = ""
+        _q_lower = query_analysis.original_query.lower()
+        _chem_group_kw = [
+            'irac', 'frac', 'hrac', 'rac', 'moa', 'mode of action',
+            'กลุ่มสาร', 'กลุ่มเคมี', 'กลุ่มยา', 'กลไกการออกฤทธิ์',
+        ]
+        if any(kw in _q_lower for kw in _chem_group_kw):
+            chem_group_note = """
+[คำถามเรื่องกลุ่มสาร / IRAC / FRAC / HRAC / RAC / MoA / กลไกการออกฤทธิ์]
+→ คำตอบอยู่ในฟิลด์ "กลุ่มสาร (IRAC/FRAC/HRAC/MoA)" ของแต่ละสินค้า
+→ ถ้าข้อมูลสินค้ามีฟิลด์นี้ระบุ → ตอบด้วยค่านั้น (เช่น "กลุ่ม 3A + 4A", "กลุ่ม E", "กลุ่ม 1A")
+→ Mapping: Insecticide→IRAC, Fungicide→FRAC, Herbicide→HRAC — แต่ใช้ค่าเดียวกันทั้งหมด
+→ ถ้ามี "กลไกการออกฤทธิ์" เพิ่มเติม ให้ระบุด้วย เช่น "กลุ่ม 1A — Acetylcholinesterase (AChE) inhibitors"
+→ ห้ามตอบว่า "ไม่มีข้อมูล" ถ้าข้อมูลมีฟิลด์กลุ่มสารอยู่
+"""
+
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
@@ -986,7 +1013,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}{chem_group_note}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท
