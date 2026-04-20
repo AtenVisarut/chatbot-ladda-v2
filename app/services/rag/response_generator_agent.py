@@ -944,6 +944,40 @@ class ResponseGeneratorAgent:
                         )
                     break
 
+        # Applicability denial note — user asking "X ใช้กับ Y ได้ไหม" where DB doesn't list Y
+        applicability_note = ""
+        asked_product = query_analysis.entities.get('asked_product')
+        if asked_product:
+            # Check if asked_product's DB data covers the current pest/plant/disease
+            _pest = query_analysis.entities.get('pest_name', '')
+            _disease = query_analysis.entities.get('disease_name', '')
+            _plant = query_analysis.entities.get('plant_type', '')
+            _target = _pest or _disease or ''
+            _asked_doc = next(
+                (d for d in docs_to_use if d.metadata.get('product_name') == asked_product),
+                None,
+            )
+            _covers = False
+            if _asked_doc:
+                _pest_text = _get_pest_text_from_meta(_asked_doc.metadata)
+                _crops_text = str(_asked_doc.metadata.get('applicable_crops') or '')
+                _full_text = f"{_pest_text} {_crops_text}".lower()
+                if _target and _target.lower() in _full_text:
+                    if not _plant or _plant_matches_crops(_plant, _crops_text):
+                        _covers = True
+            if not _covers:
+                _target_phrase = (
+                    f"{_target}ใน{_plant}" if _target and _plant
+                    else (_target or (f"ใน{_plant}" if _plant else "คำถามนี้"))
+                )
+                applicability_note = f"""
+[คำถาม applicability — ผู้ใช้กำลังถามว่า "{asked_product}" ใช้กับ "{_target_phrase}" ได้ไหม]
+→ ในข้อมูล "{asked_product}" ไม่ได้ระบุว่าใช้กับ "{_target_phrase}" ได้
+→ ต้องบอกตรงๆ ก่อนว่า "{asked_product} ไม่ได้ระบุว่าใช้กับ{_target_phrase}ได้ค่ะ" (หรือคำใกล้เคียง)
+→ แล้วค่อยแนะนำสินค้าตัวอื่นที่ตรงกับ "{_target_phrase}" เป็นทางเลือก
+→ ห้ามข้ามขั้นไปแนะนำสินค้าอื่นโดยไม่บอกสถานะของ "{asked_product}" ก่อน
+"""
+
         prompt = f"""{context_section}คำถาม: "{query_analysis.original_query}"
 Intent: {query_analysis.intent.value}
 Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
@@ -952,7 +986,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท

@@ -275,6 +275,11 @@ required_sources:
                 entities['_product_from_query'] = hints['_product_from_query']
             if hints.get('product_names'):
                 entities['product_names'] = hints['product_names']
+            # asked_product: previous product that user is asking applicability for
+            # e.g. "ถ้าเพลี้ยจั๊กจั่นในทุเรียนล่ะ ใช้ได้มั้ย" after asking about เกรก 5
+            # → asked_product="เกรก 5 เอสซี"; response must confirm or deny applicability
+            if hints.get('asked_product'):
+                entities['asked_product'] = hints['asked_product']
 
             # Remove LLM-hallucinated product_name for recommendation/treatment queries
             # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)

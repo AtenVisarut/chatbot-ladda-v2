@@ -228,23 +228,51 @@ class AgenticRAG:
                     # e.g. "ใช้ในทุเรียนได้มั้ย", "ฉีดมะม่วงได้ไหม" → NOT a new topic
                     _usage_verbs = ['ใช้', 'ฉีด', 'พ่น', 'ผสม', 'ราด', 'หยด', 'รด',
                                     'บำรุง', 'เร่ง', 'พัฒนา', 'เสริม', 'กระตุ้น']
+                    # Explicit applicability check phrases ("ใช้ได้มั้ย/ได้ไหม/ใช้ได้ป่ะ")
+                    _APPLICABILITY_PHRASES = [
+                        'ใช้ได้มั้ย', 'ใช้ได้ไหม', 'ใช้ได้ป่ะ', 'ใช้ได้รึเปล่า',
+                        'ฉีดได้มั้ย', 'ฉีดได้ไหม', 'พ่นได้มั้ย', 'พ่นได้ไหม',
+                        'กับ{plant}ได้', 'ใน{plant}ได้', 'ใช้กับ', 'ใช้ในได้',
+                    ]
+                    _has_applicability_phrase = any(p.replace('{plant}', _plant_in_query or '') in query for p in _APPLICABILITY_PHRASES if '{plant}' not in p or _plant_in_query) or any(
+                        kw in query for kw in ['ใช้ได้มั้ย', 'ใช้ได้ไหม', 'ฉีดได้มั้ย', 'ฉีดได้ไหม', 'ได้มั้ย', 'ได้ไหม']
+                    )
                     _is_applicability = _plant_in_query and any(v in query for v in _usage_verbs)
-                    _has_new_topic = (_plant_in_query and not _is_applicability) or _has_disease_pest_kw
+                    _has_new_topic = (_plant_in_query and not _is_applicability) or (_has_disease_pest_kw and not _has_applicability_phrase)
+
+                    # Extract previous product from context regardless of new-topic detection —
+                    # needed so we can annotate "user ถาม applicability ของสินค้านี้"
+                    _prev_product_from_context: Optional[str] = None
+                    for line in context.split('\n'):
+                        if line.startswith("[สินค้าล่าสุดในบทสนทนา]"):
+                            section_text = line.replace("[สินค้าล่าสุดในบทสนทนา]", "").strip()
+                            if section_text:
+                                for product_name in section_text.split(','):
+                                    pname = product_name.strip()
+                                    if pname in ICP_PRODUCT_NAMES:
+                                        _prev_product_from_context = pname
+                                        break
+                            break
+
                     if _has_new_topic:
                         logger.info(f"  - Strategy 0 skipped: query has new topic (plant={_plant_in_query})")
+                        # Still capture previous product as 'asked_product' when applicability phrasing present
+                        if _has_applicability_phrase and _prev_product_from_context:
+                            hints['asked_product'] = _prev_product_from_context
+                            # Ensure retrieval fetches asked_product's doc alongside new pest/plant search
+                            _pnames = list(hints.get('product_names') or [])
+                            if _prev_product_from_context not in _pnames:
+                                _pnames.insert(0, _prev_product_from_context)
+                                hints['product_names'] = _pnames
+                            logger.info(f"  - Applicability question: asked_product='{_prev_product_from_context}' (query about new pest/plant)")
                     else:
-                        for line in context.split('\n'):
-                            if line.startswith("[สินค้าล่าสุดในบทสนทนา]"):
-                                # Extract first product (= most relevant from last recommendation)
-                                section_text = line.replace("[สินค้าล่าสุดในบทสนทนา]", "").strip()
-                                if section_text:
-                                    for product_name in section_text.split(','):
-                                        pname = product_name.strip()
-                                        if pname in ICP_PRODUCT_NAMES:
-                                            detected_product = pname
-                                            logger.info(f"  - Product from metadata (recent recommendation): {detected_product}")
-                                            break
-                                break
+                        if _prev_product_from_context:
+                            detected_product = _prev_product_from_context
+                            logger.info(f"  - Product from metadata (recent recommendation): {detected_product}")
+                        # Mark as applicability when phrase present — lets LLM know to confirm/deny
+                        if _has_applicability_phrase and detected_product:
+                            hints['asked_product'] = detected_product
+                            logger.info(f"  - Applicability question: asked_product='{detected_product}'")
 
                     # Strategy 1: Scan active topic text (bottom-up, last assistant msg)
                     if not detected_product and _active_section:
