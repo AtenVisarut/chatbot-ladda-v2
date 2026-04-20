@@ -52,6 +52,48 @@ class TestBestPickPatterns:
         )
 
 
+class TestClarificationMerge:
+    """
+    Real-world regression (LINE screenshot 2026-04-20):
+      T1: user "ไฟท็อปใช้ยาอะไรแก้"    → bot: 4 fungicides
+      T2: user "ตัวไหนดีสุดคับ"        → bot asks for stage
+      T3: user "ระยะติดผล"            → BUG: bot recommended PGR/ปุ๋ย instead
+                                       of narrowing to fungicides
+
+    Fix: when context shows bot asked for missing info AND current query
+    is a short stage-only reply → merge with root topic from earlier
+    user message.
+    """
+
+    def test_stage_reply_patterns(self):
+        _STAGE_WORDS = (
+            "ใบอ่อน", "ออกดอก", "ติดผล", "หลังเก็บเกี่ยว",
+            "ต้นอ่อน", "แตกใบ", "ระยะ", "ต้นกล้า", "หลังเก็บ",
+        )
+        positive = ["ระยะติดผล", "ใบอ่อน", "ออกดอกแล้ว", "หลังเก็บเกี่ยว"]
+        negative = ["ไบเตอร์ใช้ยังไง", "อัตราเท่าไหร่", "ใช้ยังไง"]
+        for q in positive:
+            assert any(kw in q for kw in _STAGE_WORDS), f"Missed: {q!r}"
+        for q in negative:
+            assert not any(kw in q for kw in _STAGE_WORDS), f"False match: {q!r}"
+
+    def test_orchestrator_has_clarification_merge_logic(self):
+        import inspect
+        from app.services.rag import orchestrator
+        src = inspect.getsource(orchestrator)
+        assert "_is_short_stage_reply" in src
+        assert "_bot_asked_for_context" in src
+        assert "Clarification reply: merging with root topic" in src
+
+    def test_skip_short_best_pick_messages_when_finding_root(self):
+        """Ensure ตัวไหนดีสุด is NOT picked as root topic"""
+        import inspect
+        from app.services.rag import orchestrator
+        src = inspect.getsource(orchestrator)
+        assert "ตัวไหนดี" in src
+        assert "_SKIP_PATTERNS" in src or "SKIP_PATTERNS" in src
+
+
 class TestSourceWiring:
     """Source-level guards on response generator"""
 

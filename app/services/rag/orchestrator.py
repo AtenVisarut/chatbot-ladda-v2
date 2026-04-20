@@ -100,6 +100,52 @@ class AgenticRAG:
             logger.info(f"AgenticRAG.process: '{query[:50]}...'")
 
             # =================================================================
+            # Stage -1: Clarification reply detection
+            # If bot previously asked for missing context (stage/plant/rate)
+            # and user's current reply is a short stage-only answer → merge with
+            # the root topic from the earlier user message so the pipeline
+            # continues the original intent (disease/pest/weed) instead of
+            # classifying the bare stage word as a new nutrient query.
+            # =================================================================
+            if context:
+                _STAGE_WORDS = (
+                    "ใบอ่อน", "ออกดอก", "ติดผล", "หลังเก็บเกี่ยว",
+                    "ต้นอ่อน", "แตกใบ", "ระยะ", "ต้นกล้า", "หลังเก็บ",
+                )
+                _is_short_stage_reply = (
+                    len(query.strip()) < 30
+                    and any(kw in query for kw in _STAGE_WORDS)
+                )
+                # Was the bot's last message an ask-back for stage/plant?
+                _bot_asked_for_context = (
+                    "ขอทราบข้อมูลเพิ่มเติม" in context
+                    or "ระยะของพืชตอนนี้" in context
+                    or "ใช้กับพืชอะไร" in context
+                )
+                if _is_short_stage_reply and _bot_asked_for_context:
+                    # Find the earliest substantive ผู้ใช้: line in context
+                    # — this is the ROOT question (not "ตัวไหนดีสุด")
+                    import re
+                    _user_msgs = re.findall(r"ผู้ใช้:\s*(.+?)(?=\n|$)", context)
+                    _SKIP_PATTERNS = (
+                        "ตัวไหนดี", "อันไหนดี", "แนะนำตัวไหน", "สรุปตัวไหน",
+                        "ใช้ตัวไหน", "เลือกตัวไหน",
+                    )
+                    _root_topic = None
+                    for msg in _user_msgs:
+                        msg = msg.strip()
+                        if len(msg) > 10 and not any(p in msg for p in _SKIP_PATTERNS):
+                            _root_topic = msg
+                            break
+                    if _root_topic:
+                        logger.info(
+                            f"  - Clarification reply: merging with root topic\n"
+                            f"    root: {_root_topic[:60]}\n"
+                            f"    reply: {query}"
+                        )
+                        query = f"{_root_topic} {query.strip()}"
+
+            # =================================================================
             # Stage 0: Pre-detect hints using keyword functions
             # =================================================================
             hints = {}
