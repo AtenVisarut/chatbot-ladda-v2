@@ -233,14 +233,21 @@ def detect_unknown_product_in_question(question: str) -> Optional[str]:
 
 def extract_plant_type_from_question(question: str) -> Optional[str]:
     """
-    ดึงชื่อพืชจากคำถาม
-    Returns: ชื่อพืช หรือ None ถ้าไม่พบ
+    ดึงชื่อพืชจากคำถาม (data-driven + longest-first).
 
-    CRITICAL: plants must be checked in LONGEST-FIRST order to prevent
-    substring match bugs like "ข้าวโพด" matching "ข้าว" first, or
-    "ส้มโอ" matching "ส้ม" first.
+    Uses PlantRegistry which loads plant names from products3.applicable_crops
+    every 15 minutes, so new crops are automatically supported without code
+    changes. Always uses longest-match-first to avoid substring bugs
+    (ข้าวโพด vs ข้าว, ส้มโอ vs ส้ม, ปาล์มน้ำมัน vs ปาล์ม).
     """
-    # รายชื่อพืชที่รองรับ — auto-sorted by length desc at use-time
+    if not question:
+        return None
+    from app.services.plant.registry import PlantRegistry
+    reg = PlantRegistry.get_instance()
+    if reg.loaded:
+        return reg.extract(question)
+
+    # Fallback: registry not loaded (startup / DB unreachable) — use hardcoded list
     plants = [
         "มะม่วงหิมพานต์", "ปาล์มน้ำมัน", "ข้าวเหนียว",
         "ทุเรียน", "ข้าว", "ข้าวโพด", "มันสำปะหลัง", "อ้อย", "ยางพารา", "ปาล์ม",
@@ -249,25 +256,19 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
         "สับปะรด", "หอมแดง", "กระเทียม", "ผัก", "ไม้ผล",
         "มะละกอ", "แตงโม", "แตงกวา", "ฟักทอง", "องุ่น", "ลองกอง", "กาแฟ",
     ]
-    # Sort by length desc so compound names always win over their substrings
-    # e.g. "ข้าวโพด" (7) checked before "ข้าว" (4)
     plants_sorted = sorted(plants, key=len, reverse=True)
-
-    # Farmer typos/abbreviations → canonical plant name
     _PLANT_TYPOS = {
-        "ทุเรีย": "ทุเรียน",           # common: ขาด น
-        "มันสัม": "มันสำปะหลัง",       # abbreviation
-        "มันสัมปะหลัง": "มันสำปะหลัง", # diacritics variant
-        "ยาง": "ยางพารา",              # short form
-        "ข้าวนา": "ข้าว",              # regional term
-        "ลิ้นจี": "ลิ้นจี่",           # missing trailing mark
+        "ทุเรีย": "ทุเรียน",
+        "มันสัม": "มันสำปะหลัง",
+        "มันสัมปะหลัง": "มันสำปะหลัง",
+        "ยาง": "ยางพารา",
+        "ข้าวนา": "ข้าว",
+        "ลิ้นจี": "ลิ้นจี่",
     }
-
     question_lower = question.lower()
     for plant in plants_sorted:
         if plant in question_lower:
             return plant
-    # Fallback: common typos
     for typo, canonical in _PLANT_TYPOS.items():
         if typo in question_lower:
             return canonical
@@ -1106,11 +1107,17 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
     try:
         _start_time = time.time()
 
-        # 0. Auto-refresh ProductRegistry if stale (keeps in sync with DB after new products added)
+        # 0. Auto-refresh ProductRegistry + PlantRegistry if stale
+        # (keeps in sync with DB after new products/plants added)
         try:
             await ProductRegistry.get_instance().refresh_if_stale(supabase_client)
         except Exception:
             pass  # non-critical — fallback data still works
+        try:
+            from app.services.plant.registry import PlantRegistry
+            await PlantRegistry.get_instance().refresh_if_stale(supabase_client)
+        except Exception:
+            pass  # non-critical — hardcoded fallback still works
 
         # 1+2. Add message to memory + get context in parallel (saves ~100-200ms)
         import asyncio as _asyncio
