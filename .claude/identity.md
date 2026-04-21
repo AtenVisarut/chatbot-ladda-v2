@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-21 (best-pick stage-scan scoped to user turns)
+> Last updated: 2026-04-21 (rice stage vocab + nutrient-classifier bleed fix)
 
 ---
 
@@ -827,3 +827,44 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 - [tests/test_best_pick_clarify.py](tests/test_best_pick_clarify.py) — regression test
 
 **Test results:** 1310 passed, 117 skipped (full suite), lint clean บน `app/`
+
+---
+
+### 2026-04-21 (late 2) — Rice stage vocab + classifier bleed fix
+
+**Context:** Railway log 13:57 — user ถาม "เพลี้ยกระโดดข้าว" → bot แนะนำ 5 ยาฆ่าแมลงถูก (ไบเตอร์, โบว์แลน 285, โบว์แลน, อิมิดาโกลด์ 70, อัลแรม) + ถามระยะข้าว → user ตอบ `"แตกกอ"` → bot ตอบ **"ไม่มีข้อมูลสินค้าที่เหมาะสมในระบบ"** ทั้งที่ ไบเตอร์ ยังอยู่ใน direct lookup
+
+**Root causes (3 ชั้น):**
+
+1. `_STAGE_WORDS` ใน `orchestrator.py` ขาดระยะข้าวที่ bot ตัวเองแนะนำใน template — `"แตกกอ", "ตั้งท้อง", "ออกรวง", "สุก", "เก็บเกี่ยว"` → Stage -1 clarification merge miss
+2. `NUTRIENT_KEYWORDS` ใน `handler.py` มี `"แตกกอ", "ออกรวง", "ตั้งท้อง", "เร่ง"` (phenology ใส่ผิดที่) → `detect_problem_types("แตกกอ") → ['nutrient']` → orchestrator drop product + clear state
+3. `"ติดดอก", "ติดผล"` ก็อยู่ใน NUTRIENT_KEYWORDS (stage words จริง) → บั๊กซ้ำกับทุกครั้งที่ user ตอบสั้นๆ ด้วย stage name
+
+**Fix:**
+
+| จุด | เดิม | หลัง |
+|-----|------|------|
+| `_STAGE_WORDS` (orchestrator) | 23 คำ (fruit-tree centric) | 35 คำ ครอบ rice/corn/cane/cassava/bulb/rubber |
+| `_known_stage_keywords` (response_generator) | 19 คำ | 30 คำ ตรงกับ `_CROP_STAGES` |
+| `NUTRIENT_KEYWORDS` (handler) | มี `"แตกกอ","ออกรวง","ตั้งท้อง","เร่ง","ติดดอก","ติดผล"` | ลบออก เหลือเฉพาะ nutrient intent จริง (`"เร่งแตกกอ","เร่งออกรวง","เร่งตั้งท้อง"`) |
+| `_CROP_STAGES["ผัก"]` | `"โต"` (กำกวม) | `"โตเต็มที่"` |
+
+**Key insight:**
+- `"แตกกอ"` (bare) = **phenology** — ตอบคำถาม "ตอนนี้ระยะไหน" → ต้อง merge กับ topic เดิม (เพลี้ย)
+- `"เร่งแตกกอ"` (compound) = **nutrient intent** — ผู้ใช้อยากได้ปุ๋ย/สารกระตุ้น → route เป็น nutrient
+
+**Tests:** เพิ่ม [tests/test_stage_coverage.py](tests/test_stage_coverage.py) — **395 assertions**:
+- Every stage ใน `_CROP_STAGES` ต้อง match `_STAGE_WORDS` (สำหรับทุกพืช 25 ชนิด × ทุกระยะ)
+- Pure stage reply (22 คำ) ต้องไม่ classify เป็น nutrient
+- Compound nutrient intent (6 queries) ยัง route เป็น nutrient
+- Sync guard: mirror ใน `test_best_pick_clarify.py` ต้องมีระยะข้าวด้วย
+- Regression: Railway log exact case ต้อง pass Stage -1 merge
+
+**Files touched:**
+- [app/services/chat/handler.py](app/services/chat/handler.py) — `NUTRIENT_KEYWORDS` purge
+- [app/services/rag/orchestrator.py](app/services/rag/orchestrator.py) — `_STAGE_WORDS` expand
+- [app/services/rag/response_generator_agent.py](app/services/rag/response_generator_agent.py) — `_known_stage_keywords` + `_CROP_STAGES["ผัก"]` fix
+- [tests/test_stage_coverage.py](tests/test_stage_coverage.py) — new
+- [tests/test_best_pick_clarify.py](tests/test_best_pick_clarify.py) — mirror update
+
+**Test results:** 1683 passed, 117 skipped (full suite), lint clean
