@@ -66,12 +66,23 @@ class TestClarificationMerge:
     """
 
     def test_stage_reply_patterns(self):
+        # Keep in sync with orchestrator Stage -1 _STAGE_WORDS
         _STAGE_WORDS = (
             "ใบอ่อน", "ออกดอก", "ติดผล", "หลังเก็บเกี่ยว",
             "ต้นอ่อน", "แตกใบ", "ระยะ", "ต้นกล้า", "หลังเก็บ",
+            "ก่อนเก็บ", "ก่อนเก็บเกี่ยว", "กำลังติดผล", "กำลังออกดอก",
+            "ระยะดอก", "ระยะผล", "ระยะก่อนออกดอก", "ระยะติดผล",
+            "ดอก", "ผลอ่อน", "ผลแก่", "ผลเล็ก",
+            "ใบแก่", "แตกยอด",
         )
-        positive = ["ระยะติดผล", "ใบอ่อน", "ออกดอกแล้ว", "หลังเก็บเกี่ยว"]
-        negative = ["ไบเตอร์ใช้ยังไง", "อัตราเท่าไหร่", "ใช้ยังไง"]
+        positive = [
+            "ระยะติดผล", "ใบอ่อน", "ออกดอกแล้ว", "หลังเก็บเกี่ยว",
+            # Short-form replies users actually send
+            "ดอก",          # short for ออกดอก
+            "ผลอ่อน",
+            "ระยะดอก",
+        ]
+        negative = ["ไบเตอร์ใช้ยังไง", "อัตราเท่าไหร่", "ใช้ยังไง", "ราคา"]
         for q in positive:
             assert any(kw in q for kw in _STAGE_WORDS), f"Missed: {q!r}"
         for q in negative:
