@@ -428,6 +428,39 @@ class AgenticRAG:
                     hints['plant_type'] = detected_plant
                     logger.info(f"  - Pre-extracted plant: '{detected_plant}'")
 
+                # --- Diagnostic Intent + Crop-Specific Disease Priors ---
+                # Gated by DIAGNOSTIC_INTENT_ENABLED flag for safe rollout.
+                # Only refines possible_diseases when: flag on + intent is
+                # diagnostic ("เกิดจากอะไร", etc.) + plant_type known.
+                # Never removes or overrides a Stage 0 pinned disease_name —
+                # hedge + priors flow through hints, existing CONSTRAINT
+                # path is untouched.
+                from app.config import DIAGNOSTIC_INTENT_ENABLED
+                if DIAGNOSTIC_INTENT_ENABLED:
+                    from app.services.disease.diagnostic_intent import is_diagnostic_query
+                    from app.services.disease.crop_disease_priors import resolve_crop_symptom_to_diseases
+                    if is_diagnostic_query(query):
+                        hints['diagnostic_intent'] = True
+                        crop = hints.get('plant_type')
+                        if crop:
+                            crop_diseases = resolve_crop_symptom_to_diseases(crop, query)
+                            if crop_diseases:
+                                generic = hints.get('possible_diseases', []) or []
+                                hints['possible_diseases'] = crop_diseases + [
+                                    d for d in generic if d not in crop_diseases
+                                ]
+                                hints['_prior_source'] = 'crop_specific'
+                                logger.info(
+                                    f"[DIAG] plant={crop} priors_used=crop_specific "
+                                    f"candidates={hints['possible_diseases']}"
+                                )
+                            elif hints.get('possible_diseases'):
+                                hints['_prior_source'] = 'generic_symptom'
+                                logger.info(
+                                    f"[DIAG] plant={crop} priors_used=generic_symptom "
+                                    f"candidates={hints['possible_diseases']}"
+                                )
+
                 # --- Pre-LLM Entity Extraction: Pest name ---
                 # Compound words: "ยาเพลี้ย", "ยาหนอน" → extract pest name
                 _PEST_COMPOUND_WORD_MAP = {

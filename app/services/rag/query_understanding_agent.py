@@ -240,6 +240,25 @@ required_sources:
             # Clean entities (remove null values)
             entities = {k: v for k, v in data.get("entities", {}).items() if v is not None}
 
+            # Defense in depth: reject non-Thai / non-DB disease_name values.
+            # A smarter Agent 1 model (gpt-4.1-mini) may try to "improve"
+            # ราชมพู → "Corticium salmonicolor" or translate "รากเน่า" to
+            # "Phytophthora root rot"; downstream retrieval keys on Thai
+            # canonicals in products3.pest columns and would miss.
+            _llm_disease = entities.get('disease_name')
+            if _llm_disease:
+                from app.services.disease.constants import DISEASE_PATTERNS
+                _is_thai = any('฀' <= c <= '๿' for c in _llm_disease)
+                _db_match = any(
+                    p in _llm_disease or _llm_disease in p for p in DISEASE_PATTERNS
+                )
+                if not _is_thai or not _db_match:
+                    logger.warning(
+                        f"[DIAG] llm_disease_rejected='{_llm_disease}' "
+                        f"reason={'non_thai' if not _is_thai else 'no_db_match'}"
+                    )
+                    entities.pop('disease_name', None)
+
             # Post-LLM override: pre-extracted entities take priority
             # This prevents LLM from "translating" ราชมพู→ฟอซาเรียม etc.
             if hints.get('disease_name') and entities.get('disease_name') != hints['disease_name']:
@@ -280,6 +299,16 @@ required_sources:
             # → asked_product="เกรก 5 เอสซี"; response must confirm or deny applicability
             if hints.get('asked_product'):
                 entities['asked_product'] = hints['asked_product']
+
+            # Diagnostic-intent flags (§4) — propagated to Agent 3 so the
+            # response template can switch to hedge language when the bot
+            # is choosing between multiple disease candidates.
+            if hints.get('diagnostic_intent'):
+                entities['diagnostic_intent'] = True
+            if hints.get('_prior_source'):
+                entities['_prior_source'] = hints['_prior_source']
+            if hints.get('possible_diseases'):
+                entities['possible_diseases'] = hints['possible_diseases']
 
             # Remove LLM-hallucinated product_name for recommendation/treatment queries
             # e.g. "โรครากเน่าโคนเน่า แก้ยังไง" → LLM adds product_name=โค-ราซ (wrong!)

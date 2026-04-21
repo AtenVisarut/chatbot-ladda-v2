@@ -92,11 +92,15 @@ MEMORY_TABLE = os.getenv("MEMORY_TABLE", "memory_chatladda")
 # Set to "0" to disable (legacy functions have been removed)
 USE_AGENTIC_RAG = os.getenv("USE_AGENTIC_RAG", "1") == "1"
 
+# Diagnostic-intent path: crop-specific disease priors + hedge-language response.
+# Default off in production; set true in test-dev / staging to roll out gradually.
+DIAGNOSTIC_INTENT_ENABLED = os.getenv("DIAGNOSTIC_INTENT_ENABLED", "false").lower() == "true"
+
 # ============================================================================#
 # LLM MODEL NAMES (centralized — change once, applies everywhere)
 # ============================================================================#
 LLM_MODEL_GENERAL_CHAT = os.getenv("LLM_MODEL_GENERAL_CHAT", "gpt-4o")
-LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4o-mini")
+LLM_MODEL_QUERY_UNDERSTANDING = os.getenv("LLM_MODEL_QUERY_UNDERSTANDING", "gpt-4.1-mini")
 LLM_MODEL_RERANKING = os.getenv("LLM_MODEL_RERANKING", "gpt-4o-mini")
 LLM_MODEL_RESPONSE_GEN = os.getenv("LLM_MODEL_RESPONSE_GEN", "gpt-4o")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")

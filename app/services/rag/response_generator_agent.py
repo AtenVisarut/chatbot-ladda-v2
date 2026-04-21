@@ -1136,6 +1136,34 @@ class ResponseGeneratorAgent:
 → ถ้ามีหลายตัวที่เหมาะพอกัน → เลือก 1 ที่ strategy=Skyrocket/Expand ก่อน
 """
 
+        # Hedge note — active only for diagnostic queries where multiple
+        # disease candidates exist and Stage 0 did not pin a disease_name.
+        # Tells Agent 3 to present the answer as "อาจเกิดจาก X หรือ Y"
+        # instead of picking one disease confidently.
+        hedge_note = ""
+        _qa_entities = query_analysis.entities or {}
+        _is_diag = _qa_entities.get('diagnostic_intent') is True
+        _pinned_disease = _qa_entities.get('disease_name')
+        _poss_diseases = _qa_entities.get('possible_diseases') or []
+        _prior_src = _qa_entities.get('_prior_source')
+        if _is_diag and not _pinned_disease and len(_poss_diseases) >= 2:
+            _hedge_list = " หรือ ".join(_poss_diseases[:3])
+            hedge_note = f"""
+[คำถามเชิงวินิจฉัย — ใช้ภาษาเชิงคาดคะเน]
+→ ผู้ใช้ถามหาสาเหตุ ("เกิดจากอะไร" / "สาเหตุ") ของอาการ — บอทยังไม่มีข้อมูลยืนยันโรค
+→ อาการที่ผู้ใช้เล่า อาจเกิดจาก: {_hedge_list}
+→ โครงสร้างคำตอบ:
+   1. เปิดด้วย "จากอาการที่เล่า สาเหตุอาจเป็น {_hedge_list}"
+   2. แนะนำสินค้าที่ครอบคลุมโรคเหล่านี้ (ที่มีในข้อมูลสินค้าด้านบนเท่านั้น)
+   3. ถ้าไม่ชัดเจนว่าโรคไหน → เพิ่มประโยค "หากใช้แล้วอาการไม่ดีขึ้นภายใน 7 วัน อาจเป็นโรคอื่น รบกวนปรึกษาเจ้าหน้าที่ ICP Ladda เพิ่มเติมค่ะ"
+→ ห้ามใช้ชื่อเทคนิคภาษาอังกฤษ (เช่น "Phytophthora", "Cercospora") — ใช้ชื่อภาษาไทยตาม DB
+→ ห้ามฟันธงโรคเดียวเมื่อมีหลายความเป็นไปได้
+"""
+            logger.info(
+                f"[DIAG] hedge_applied=true candidates_shown={len(_poss_diseases[:3])} "
+                f"prior_source={_prior_src}"
+            )
+
         # Chemical-group query hint — tell LLM that RAC field answers IRAC/FRAC/HRAC/MoA
         chem_group_note = ""
         _chem_group_kw = [
@@ -1164,7 +1192,7 @@ Entities: {json.dumps(query_analysis.entities, ensure_ascii=False)}
 {product_context}
 
 สินค้าที่เกี่ยวข้องกับคำถาม: [{relevant_str}]
-{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}{chem_group_note}{best_pick_note}
+{crop_note}{disease_mismatch_note}{disease_match_note}{multi_variant_note}{category_match_note}{nutrient_constraint_note}{applicability_note}{chem_group_note}{best_pick_note}{hedge_note}
 สร้างคำตอบจากข้อมูลด้านบน
 - ถ้าเป็นคำถามต่อเนื่องเกี่ยวกับสินค้าตัวเดิม (เช่น "วิธีใช้" "อัตราผสม") → ตอบเกี่ยวกับสินค้าตัวเดิม
 - ถ้าผู้ใช้เปลี่ยนหัวข้อ (ถามโรค/แมลง/สินค้าใหม่) → ยึดคำถามปัจจุบันเป็นหลัก ไม่ต้องอ้างอิงสินค้าเก่าจากบริบท

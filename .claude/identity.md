@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-21 (symptom word-order variants for diagnostic queries)
+> Last updated: 2026-04-22 (diagnostic-intent path + crop priors + anti-hallucination) — `test-dev` branch
 
 ---
 
@@ -904,3 +904,56 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 - [tests/test_symptom_resolution.py](tests/test_symptom_resolution.py) — new
 
 **Test results:** 1757 passed, 117 skipped (full suite), lint clean
+
+---
+
+### 2026-04-22 — Diagnostic-intent path + crop priors (`test-dev` branch)
+
+**Context:** Plan [`validated-swimming-quail.md`](/Users/aten/.claude/plans/validated-swimming-quail.md) — เปิดเส้นทาง diagnostic query (`"ยางพาราเป็นจุดสีน้ำตาลที่ใบเกิดจากอะไร"`) แบบปิดความเสี่ยง 6 ด้าน: data integrity / regression / perf / tests / revert / user trust. **ทำบน `test-dev` branch เท่านั้น ไม่ push ไป `main`** — รอ manual QA บน staging ก่อน
+
+**Decision matrix (user):**
+- Model: `LLM_MODEL_QUERY_UNDERSTANDING` `gpt-4o-mini` → **`gpt-4.1-mini`** (smarter, low-temp 0.1, OpenAI native, no new SDK)
+- Priors scope: Top 8 พืชหลัก (ยางพารา, ทุเรียน, ข้าว, ข้าวโพด, มันสำปะหลัง, อ้อย, มะม่วง, ปาล์ม) — ~80% traffic
+
+**Changes:**
+
+| § | File | What |
+|---|------|------|
+| §2 | [app/services/disease/diagnostic_intent.py](app/services/disease/diagnostic_intent.py) | **New.** `is_diagnostic_query()` keyword check: "เกิดจาก", "สาเหตุ", "โรคอะไร", "เพราะอะไร", "เป็นโรคอะไร", "อาการแบบนี้", "ทำไม", "คืออะไร" |
+| §3 | [app/services/disease/crop_disease_priors.py](app/services/disease/crop_disease_priors.py) | **New.** `CROP_DISEASE_PRIORS` (8 crops × common symptoms) + `_SYMPTOM_VARIANT_GROUPS` (word-order variants) + `resolve_crop_symptom_to_diseases()` |
+| §4 | [app/services/rag/orchestrator.py](app/services/rag/orchestrator.py) | Conditional hint refinement: if `DIAGNOSTIC_INTENT_ENABLED` + diagnostic intent + `plant_type` → prepend crop-specific diseases to `possible_diseases`. **ไม่ถอด `[CONSTRAINT]` ใดๆ** |
+| §5 | [app/services/rag/response_generator_agent.py](app/services/rag/response_generator_agent.py) | `hedge_note` (inject "จากอาการที่เล่า สาเหตุอาจเป็น X หรือ Y") เฉพาะเมื่อ `diagnostic_intent=True + disease_name=None + possible_diseases≥2` |
+| §6 | [app/config.py](app/config.py) | `LLM_MODEL_QUERY_UNDERSTANDING` default → `gpt-4.1-mini` (env var override คงไว้) |
+| §7 | [app/services/rag/query_understanding_agent.py](app/services/rag/query_understanding_agent.py) | Defense-in-depth: ถ้า LLM คืน `disease_name` ที่ไม่ Thai หรือไม่ match `DISEASE_PATTERNS` → zero out (กันกรณี smarter model normalize "รากเน่า" → "Phytophthora root rot") |
+| §8 | [app/config.py](app/config.py) | `DIAGNOSTIC_INTENT_ENABLED` feature flag (default `false`) |
+| §9 | All 3 RAG agents | Structured `[DIAG]` log lines: priors source, hedge application, LLM rejections |
+| §10 | [tests/test_diagnostic_intent.py](tests/test_diagnostic_intent.py) | **New.** 48 assertions — intent detection, priors whitelist, weight ordering, dedupe, flag gating, English/non-DB disease rejection |
+
+**Anti-hallucination stack (3 layers):**
+1. `[CONSTRAINT]` from Stage 0 disease extraction (pre-existing)
+2. Defense-in-depth validation — reject English/non-canonical (new §7)
+3. Post-LLM `hints[disease_name]` override (pre-existing lines 245-247)
+
+**Hedge trigger condition (เด็ดขาด):**
+- `entities.diagnostic_intent == True`
+- `entities.disease_name is None`
+- `len(entities.possible_diseases) >= 2`
+
+→ ถ้าใดใดไม่ครบ → fallback ไป existing confident-answer path
+
+**Whitelist guard (กัน "แต่งเชื้อ"):**
+- `test_all_priors_reference_known_diseases` ตรวจทุก disease ใน `CROP_DISEASE_PRIORS` values → ต้องอยู่ใน `DISEASE_PATTERNS ∪ DISEASE_CANONICAL.values() ∪ SYMPTOM_PATHOGEN_MAP.values()`
+- ไม่มี pathogen ใหม่ ไม่มี canonical ใหม่
+
+**Flag-off regression:**
+- Default `DIAGNOSTIC_INTENT_ENABLED=false` → orchestrator ข้าม block §4 ทั้งหมด → behavior = main branch
+- ยืนยันด้วย test suite: 1805 passed (เดิม 1757 + 48 new), ไม่มี test เดิมเสีย
+
+**Next steps (§11 staged rollout):**
+1. Deploy `test-dev` branch → Railway staging env (set `DIAGNOSTIC_INTENT_ENABLED=true`)
+2. Manual QA 20 diagnostic queries ผ่าน LINE
+3. Monitor Railway log 48 ชม. หา `[DIAG] llm_disease_rejected` events
+4. If clean → merge `test-dev` → `main` (flag ยังคง `false` ใน prod)
+5. Canary 10% ก่อน full rollout
+
+**Test results:** 1805 passed, 117 skipped (full suite), ruff clean
