@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-22 (diagnostic path + greeting + capability follow-up fixes) — `test-dev` branch
+> Last updated: 2026-04-22 (diagnostic path + greeting + capability follow-up + open-category clarify) — `test-dev` branch
 
 ---
 
@@ -1008,3 +1008,33 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 **File:** [tests/test_followup_capability.py](tests/test_followup_capability.py) — new, 18 assertions covering the capability-followup recognition (10 cases) and capability-context-skip behavior (8 cases incl. negatives).
 
 **Test results:** 1843 passed (1825 + 18), ruff clean
+
+---
+
+### 2026-04-22 (late 3) — Open-category clarify (`test-dev`)
+
+**Problem:** เมื่อ user ถามปลายเปิดไม่มี crop เช่น `"แนะนำยาฆ่าหญ้าหน่อย"` / `"อยากได้กำจัดแมลง"` / `"มีปุ๋ยไหม"` — pipeline พยายาม rank ทั้ง category ซึ่งคืนสินค้าไม่ตรง intent (herbicide ที่ใช้กับข้าวอาจไม่เหมาะกับอ้อย) → accuracy ลด และ user ต้องเดาว่าควรถามอะไร.
+
+**Fix:** Detector + clarify prompt + resume 2 turn loop เพื่อเก็บ crop (+ อาการ/ระยะ) ก่อนเข้า RAG.
+
+- [app/services/category_clarify.py](app/services/category_clarify.py): ใหม่. `CategoryType` enum (HERBICIDE / INSECTICIDE / FUNGICIDE / FERTILIZER) + trigger keywords per category + 4 clarify messages (น้องลัดดาถาม, ยกตัวอย่างเดียว, ไม่บังคับ format) + `detect_open_category_query()` (gating: keyword match, no crop, < 40 chars, no escape word "ทั่วไป") + `resume_query_from_clarify()` (merge user reply → well-formed RAG query).
+- [app/services/chat/handler.py:1270](app/services/chat/handler.py#L1270): Hook หลัง greeting fast-path. (1) ถ้ามี `pending_category_clarify` ใน `conversation_state` → rewrite message แล้ว fall-through เข้า RAG ตามปกติ. (2) ถ้าเป็น open-category query + ไม่มี `active_product` → save pending + return clarify prompt. Skip clarify ระหว่าง conversation ที่มี product อยู่แล้ว (user น่าจะถาม follow-up ไม่ใช่ start fresh).
+- Schema: ใช้ field ใหม่ `pending_category_clarify` ใน `conversation_state` (flat dict, ไม่ต้อง migration).
+
+**UX design (after user feedback "ไม่ต้องบังคับ user format"):** 1 example per category, free-form reply accepted.
+- Herbicide: crop-only reply (pre-emergent สินค้าไม่ผูกกับอาการ): `"ข้าว"` → `"แนะนำยาฆ่าหญ้าในข้าว"`
+- Other 3: crop + symptom/stage free-form: `"ข้าวใช้กับหนอน"` → `"ยาฆ่าแมลง ข้าวใช้กับหนอน"`, `"บำรุงต้นเพิ่มสารอาหารทุเรียน"` → `"ปุ๋ย บำรุงต้นเพิ่มสารอาหารทุเรียน"`
+
+**File:** [tests/test_category_clarify.py](tests/test_category_clarify.py) — new, 40 assertions (detection positives + skip cases + escape words + long-query skip + message shape + resume — including the exact free-form examples user requested).
+
+**Test results:** 1883 passed (1843 + 40), ruff clean
+
+---
+
+### 2026-04-22 (late 4) — Welcome refresh + remove "คู่มือ" banner (`test-dev`)
+
+**Problem:** (1) `get_usage_guide_text()` opened with `"📖 คู่มือการใช้งานน้องลัดดา"` banner + separator row — redundant noise ahead of the actual examples. (2) `WELCOME_MESSAGE` (first reply when user adds LINE friend) said only `"ถามเรื่องสินค้า — ใช้กับพืชอะไร อัตราผสม วิธีใช้ ถามมาได้หมดเลย"` — too abstract; new users didn't know what to actually type.
+
+**Fix:**
+- [app/utils/line/text_messages.py:48](app/utils/line/text_messages.py#L48): Removed the `"📖 คู่มือการใช้งานน้องลัดดา"` header + separator line from `get_usage_guide_text()`. The content now opens directly with `"💬 ถามข้อมูลสินค้า ICP กับน้องลัดดาได้นะคะ:"` and the bullet list.
+- [app/prompts.py:309](app/prompts.py#L309): Rewrote `WELCOME_MESSAGE` with 5 concrete example questions covering the 4 categories + product-lookup: pest (`เพลี้ยไฟทุเรียน`), disease (`ข้าวใบจุดสีน้ำตาล`), herbicide (`ยาฆ่าหญ้าในข้าวโพด`), fertilizer (`ปุ๋ยบำรุงทุเรียนช่วงออกดอก`), product spec (`อาร์ดอนใช้กับพืชอะไร`). Keeps `"ช่วยเหลือ"` escape hatch.

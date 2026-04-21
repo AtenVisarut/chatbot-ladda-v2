@@ -1266,6 +1266,47 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             await clear_conversation_state(user_id)
             return greeting_answer
 
+        # 5a.1. Open-category clarify: resume pending OR prompt for crop.
+        try:
+            from app.services.cache import get_conversation_state, save_conversation_state
+            from app.services.category_clarify import (
+                PENDING_CLARIFY_KEY,
+                CategoryType,
+                detect_open_category_query,
+                get_clarify_message,
+                resume_query_from_clarify,
+            )
+            _conv_state = await get_conversation_state(user_id)
+            _pending_val = _conv_state.get(PENDING_CLARIFY_KEY) if _conv_state else None
+            if _pending_val:
+                try:
+                    _pending_cat = CategoryType(_pending_val)
+                    _resumed = resume_query_from_clarify(_pending_cat, message)
+                    logger.info(
+                        f"[CLARIFY] Resume: pending={_pending_cat.value}, "
+                        f"'{message[:40]}' → '{_resumed[:60]}'"
+                    )
+                    message = _resumed
+                except ValueError:
+                    pass
+                _conv_state.pop(PENDING_CLARIFY_KEY, None)
+                await save_conversation_state(user_id, _conv_state)
+            elif not (_conv_state and _conv_state.get("active_product")):
+                _open_cat = detect_open_category_query(message)
+                if _open_cat is not None:
+                    _clarify_msg = get_clarify_message(_open_cat)
+                    _state = _conv_state or {}
+                    _state[PENDING_CLARIFY_KEY] = _open_cat.value
+                    await save_conversation_state(user_id, _state)
+                    logger.info(
+                        f"[CLARIFY] Open category detected: {_open_cat.value} "
+                        f"→ '{message[:40]}'"
+                    )
+                    await add_to_memory(user_id, "assistant", _clarify_msg)
+                    return _clarify_msg
+        except Exception as e:
+            logger.warning(f"Category-clarify flow failed (non-critical): {e}")
+
         # 5b. Response cache + embedding generation in parallel
         # Previously serial: cache check → embedding → semantic cache (~1.5s)
         # Now parallel: cache check + embedding run together (~0.5s)
