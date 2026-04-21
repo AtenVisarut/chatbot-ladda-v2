@@ -1102,6 +1102,53 @@ async def _save_conv_state_from_answer(
         logger.error(f"Error saving conversation state: {e}")
 
 
+def _check_unsupported_question(message: str) -> str | None:
+    """Return a safe response for questions we cannot answer accurately yet.
+    Returns None if the question is fine to pass through to RAG.
+    """
+    msg = message.lower()
+
+    # --- Tank mix: mixing two products together ---
+    # Distinguishes from dosage ("ผสมกี่ซีซีต่อน้ำ") by requiring a conjunction
+    _TANKMIX_PATTERNS = (
+        "ผสมร่วมกัน", "ใช้ร่วมกัน", "ฉีดร่วมกัน", "พ่นร่วมกัน",
+        "ผสมพร้อมกัน", "ใช้พร้อมกัน", "ฉีดพร้อมกัน",
+        "ผสมกันได้ไหม", "ใช้ด้วยกันได้ไหม", "tank mix", "tankmix",
+        "รวมยาได้ไหม", "ผสมกันกับ",
+    )
+    if any(p in msg for p in _TANKMIX_PATTERNS):
+        return (
+            "ขออภัยค่ะ ข้อมูลการผสมยาร่วมกัน (tank mix) ยังไม่มีในระบบของน้องลัดดาในขณะนี้ค่ะ 😊\n"
+            "เพื่อความปลอดภัย กรุณาสอบถามตัวแทน ICP Ladda ในพื้นที่โดยตรงนะคะ 🌱"
+        )
+
+    # --- PHI: pre-harvest interval ---
+    _PHI_PATTERNS = (
+        "ระยะหยุดยา", "หยุดพ่นกี่วัน", "หยุดใช้ยากี่วัน",
+        "หยุดยากี่วัน", "ก่อนเก็บเกี่ยวกี่วัน", "หยุดยาก่อนเก็บ",
+        " phi ", "pre-harvest", "preharvest",
+    )
+    if any(p in msg for p in _PHI_PATTERNS):
+        return (
+            "ขออภัยค่ะ ข้อมูลระยะหยุดยาก่อนเก็บเกี่ยว (PHI) ยังไม่ครบถ้วนในระบบขณะนี้ค่ะ\n"
+            "เพื่อความปลอดภัยของผู้บริโภค กรุณาอ่านฉลากสินค้าโดยตรงหรือสอบถามตัวแทน ICP Ladda ในพื้นที่นะคะ 🌱"
+        )
+
+    # --- Resistance: insect/disease resistance to pesticide ---
+    _RESISTANCE_PATTERNS = (
+        "ดื้อยา", "ต้านทานยา", "ต้านยา",
+        "ยาไม่ได้ผลแล้ว", "ยาไม่ค่อยได้ผล", "ยาไม่ work",
+        "แมลงดื้อ", "เชื้อดื้อ",
+    )
+    if any(p in msg for p in _RESISTANCE_PATTERNS):
+        return (
+            "เรื่องการจัดการความต้านทานยา น้องลัดดายังไม่มีข้อมูลเฉพาะในระบบค่ะ 😊\n"
+            "แนะนำให้สอบถามตัวแทน ICP Ladda โดยตรงเพื่อวางแผนการหมุนเวียนกลุ่มยาที่เหมาะสมกับสภาพแปลงนะคะ 🌱"
+        )
+
+    return None
+
+
 async def handle_natural_conversation(user_id: str, message: str) -> str:
     """Handle natural conversation with context and intent detection"""
     try:
@@ -1124,6 +1171,12 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         _mem_task = _asyncio.create_task(add_to_memory(user_id, "user", message))
         context = await get_enhanced_context(user_id, current_query=message)
         await _mem_task  # ensure memory write completes
+
+        # 2.5 Safety intercept — questions we cannot answer safely yet
+        _safety_reply = _check_unsupported_question(message)
+        if _safety_reply:
+            await add_to_memory(user_id, "assistant", _safety_reply)
+            return _safety_reply
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         #    For short ambiguous messages, only route if conversation context involves products
