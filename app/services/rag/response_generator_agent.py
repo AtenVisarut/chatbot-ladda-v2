@@ -23,6 +23,7 @@ from app.services.rag import (
 from app.utils.text_processing import post_process_answer, generate_thai_disease_variants, validate_numbers_against_source
 from app.services.rag.retrieval_agent import _plant_matches_crops
 from app.config import LLM_MODEL_RESPONSE_GEN, LLM_TEMP_RESPONSE_GEN, LLM_TOKENS_RESPONSE_GEN
+from app.services.plant.registry import PlantRegistry
 from app.prompts import (
     PRODUCT_QA_PROMPT,
     GREETINGS,
@@ -1046,16 +1047,15 @@ class ResponseGeneratorAgent:
             _DEFAULT_STAGES = "ต้นอ่อน / ออกดอก / ติดผล / หลังเก็บเกี่ยว"
 
             # Check what context we already know — from entities AND context text
+            _ctx_recent = context[-1500:]
             _plant_from_entities = query_analysis.entities.get('plant_type') or ""
             _known_plant = bool(_plant_from_entities)
             _detected_plant = _plant_from_entities
             if not _known_plant:
                 # Fallback: scan context text for known plant names (longest-first)
-                from app.services.plant.registry import PlantRegistry
                 _reg = PlantRegistry.get_instance()
                 if _reg.loaded:
-                    # Try to find plant mentioned anywhere in recent context
-                    _detected_plant = _reg.extract(context[-1500:]) or ""
+                    _detected_plant = _reg.extract(_ctx_recent) or ""
                     _known_plant = bool(_detected_plant)
 
             _known_stage_keywords = ('ใบอ่อน', 'ออกดอก', 'ติดผล', 'ระยะ',
@@ -1064,15 +1064,13 @@ class ResponseGeneratorAgent:
                                     'ต้นกล้า', 'แตกกอ', 'ออกรวง', 'สร้างหัว',
                                     'ออกฝัก', 'ติดฝัก', 'ฝักแก่', 'ยืดปล้อง',
                                     'ลงหัว')
-            _recent_context = context[-800:]
-            _known_stage = any(kw in _recent_context for kw in _known_stage_keywords)
+            _known_stage = any(kw in _ctx_recent for kw in _known_stage_keywords)
 
             # Intent-specific stage template
             _intent_val = (query_analysis.intent.value if hasattr(query_analysis.intent, 'value')
                           else str(query_analysis.intent))
             # Also scan context for topic keywords — follow-up queries like
             # "ตัวไหนดีสุด" don't carry the original intent
-            _ctx_recent = context[-1500:]
             _is_weed_topic = (
                 _intent_val == 'weed_control' or
                 any(w in _ctx_recent for w in ("กำจัดวัชพืช", "ฆ่าหญ้า", "วัชพืช",
@@ -1117,9 +1115,10 @@ class ResponseGeneratorAgent:
                 best_pick_note = f"""
 [คำถาม "ตัวไหนดีสุด" — user มีพืชและระยะครบแล้ว]
 → พืช: {_detected_plant or "ตามที่ user ระบุ"}
-→ เลือก 1 สินค้าจาก "สินค้าที่แนะนำไปแล้ว" ใน context (ห้ามแนะนำตัวใหม่นอก list เดิม)
-→ เลือกตัวที่ตรงกับพืช+ระยะ+ปัญหา (pest/disease/weed) ของ user ที่สุด
-→ บอกเหตุผลว่าทำไมเลือกตัวนี้สำหรับระยะนี้ (เช่น applicable_crops ตรง, กลไกเหมาะสม, selling_point รองรับระยะนี้)
+→ เลือกสินค้าที่ตรงกับพืช+ระยะ+ปัญหา (pest/disease/weed) ของ user ที่สุดจากข้อมูลสินค้าที่มีอยู่
+→ ถ้าสินค้านั้นอยู่ใน list ที่แนะนำไปแล้ว → เลือกได้เลย พร้อมบอกเหตุผล (applicable_crops ตรง, กลไกเหมาะสม, selling_point รองรับระยะนี้)
+→ ถ้าสินค้าที่เหมาะที่สุดไม่ได้อยู่ใน list เดิม → แจ้ง user ว่า "มีตัวที่เหมาะกว่าสำหรับระยะนี้คือ [ชื่อ]" พร้อมเหตุผล
+→ ถ้าไม่มีสินค้าไหนเหมาะกับระยะนี้เลย → บอกตรงๆ ว่าไม่มี และแนะนำว่าระยะไหนที่ควรใช้สินค้าเหล่านี้แทน
 → ถ้ามีหลายตัวที่เหมาะพอกัน → เลือก 1 ที่ strategy=Skyrocket/Expand ก่อน
 """
 

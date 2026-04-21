@@ -18,6 +18,7 @@ Usage:
 
 import asyncio
 import logging
+import re
 import time
 from typing import Optional
 
@@ -33,6 +34,15 @@ from app.services.rag.response_generator_agent import ResponseGeneratorAgent
 from app.config import AGENTIC_RAG_CONFIG
 
 logger = logging.getLogger(__name__)
+
+_STAGE_WORDS = (
+    "ใบอ่อน", "ออกดอก", "ติดผล", "หลังเก็บเกี่ยว",
+    "ต้นอ่อน", "แตกใบ", "ระยะ", "ต้นกล้า", "หลังเก็บ",
+    "ก่อนเก็บ", "ก่อนเก็บเกี่ยว", "กำลังติดผล", "กำลังออกดอก",
+    "ระยะดอก", "ระยะผล", "ระยะก่อนออกดอก", "ระยะติดผล",
+    "ดอก", "ผลอ่อน", "ผลแก่", "ผลเล็ก",
+    "ใบแก่", "แตกยอด",
+)
 
 
 class AgenticRAG:
@@ -108,16 +118,6 @@ class AgenticRAG:
             # classifying the bare stage word as a new nutrient query.
             # =================================================================
             if context:
-                _STAGE_WORDS = (
-                    # Full forms
-                    "ใบอ่อน", "ออกดอก", "ติดผล", "หลังเก็บเกี่ยว",
-                    "ต้นอ่อน", "แตกใบ", "ระยะ", "ต้นกล้า", "หลังเก็บ",
-                    "ก่อนเก็บ", "ก่อนเก็บเกี่ยว", "กำลังติดผล", "กำลังออกดอก",
-                    "ระยะดอก", "ระยะผล", "ระยะก่อนออกดอก", "ระยะติดผล",
-                    # Short forms users often type as clarification answer
-                    "ดอก", "ผลอ่อน", "ผลแก่", "ผลเล็ก",
-                    "ใบแก่", "ใบอ่อน", "แตกยอด",
-                )
                 _is_short_stage_reply = (
                     len(query.strip()) < 30
                     and any(kw in query for kw in _STAGE_WORDS)
@@ -125,7 +125,7 @@ class AgenticRAG:
                 # Was the bot's last message an ask-back for stage/plant?
                 _bot_asked_for_context = (
                     "ขอทราบข้อมูลเพิ่มเติม" in context
-                    or "ระยะของพืชตอนนี้" in context
+                    or "ระยะของ" in context
                     or "ใช้กับพืชอะไร" in context
                 )
                 if _is_short_stage_reply and _bot_asked_for_context:
@@ -135,7 +135,6 @@ class AgenticRAG:
                     # Skip best-pick intermediaries ("ตัวไหนดีสุด") and
                     # stage-only replies (the current one) so we find the
                     # real product/problem question.
-                    import re
                     _user_msgs = re.findall(r"ผู้ใช้:\s*(.+?)(?=\n|$)", context)
                     _SKIP_PATTERNS = (
                         "ตัวไหนดี", "อันไหนดี", "แนะนำตัวไหน", "สรุปตัวไหน",
@@ -183,7 +182,6 @@ class AgenticRAG:
                     resolve_farmer_slang
                 )
                 from app.utils.text_processing import generate_thai_disease_variants, resolve_symptom_to_pathogens, diacritics_match
-                import re
 
                 _skip_context_product = False  # flag: ถ้า new_topic detected → ไม่ดึง product จาก context
 
