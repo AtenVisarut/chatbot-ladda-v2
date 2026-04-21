@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-22 (diagnostic-intent path + crop priors + anti-hallucination) — `test-dev` branch
+> Last updated: 2026-04-22 (diagnostic-intent path + greeting false-positive fix) — `test-dev` branch
 
 ---
 
@@ -957,3 +957,24 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 5. Canary 10% ก่อน full rollout
 
 **Test results:** 1805 passed, 117 skipped (full suite), ruff clean
+
+---
+
+### 2026-04-22 (late) — Greeting false-positive fix (`test-dev`)
+
+**Problem:** User types follow-up question `"ใช้ตัวไหนดีคับ"` → routed to greeting fast path → RAG skipped, user gets "สวัสดีค่ะ คุณลูกค้า..." instead of product recommendation.
+
+**Root cause:** [handler.py:1241-1252](app/services/chat/handler.py#L1241) matches `GREETING_KEYWORDS` as substring. `"ดีคับ"`/`"ดีครับ"` are 5/6-char members of that list; the existing short-keyword guard only skips keywords ≤2 chars (`"ดี"`, `"hi"`). Follow-up questions ending in `"...ดีคับ"` slipped through.
+
+**Fix:** Added question-marker guard — if message contains `"ไหน", "อะไร", "ยังไง", "เท่าไร", "เท่าไหร่", "ไหม", "มั้ย", "กี่", "ทำไม"` → skip greeting fast path, let it flow to RAG.
+
+| Input | Before | After |
+|-------|--------|-------|
+| `"สวัสดีครับ"` | greeting ✓ | greeting ✓ |
+| `"ใช้ตัวไหนดีคับ"` | greeting ✗ (bug) | RAG ✓ |
+| `"ใช้อะไรดีครับ"` | greeting ✗ (bug) | RAG ✓ |
+| `"ราคาเท่าไรครับ"` | RAG ✓ | RAG ✓ |
+
+**File:** [tests/test_greeting_detection.py](tests/test_greeting_detection.py) — new, 20 assertions (10 false-positive regressions + 8 true-positive preservation + agri-guard + long-message guard)
+
+**Test results:** 1825 passed (1805 + 20), ruff clean

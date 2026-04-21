@@ -1238,12 +1238,20 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         # 5. Route based on intent
 
         # 5a. Greeting fast path — no LLM needed
-        # Guard: skip greeting if message contains agriculture keywords
-        # e.g. "ปลูกข้าว20วันใช้ยาอะไรดีคับ" contains "ดีคับ" but is an agri question
+        # Guards: skip greeting if (a) message contains agri keywords or
+        # (b) message contains a Thai question marker. The "ดี*" family
+        # ("ดีครับ", "ดีคับ", ...) legitimately appears at the end of
+        # follow-up questions like "ใช้ตัวไหนดีคับ" — substring match on
+        # greeting keywords would misroute those to the greeting flow.
         msg_stripped = message.strip().lower()
         _is_greeting = False
         _has_agri_keyword = is_agriculture_question(message)
-        if not _has_agri_keyword and len(msg_stripped) < 30:
+        _QUESTION_MARKERS = (
+            "ไหน", "อะไร", "ยังไง", "เท่าไร", "เท่าไหร่",
+            "ไหม", "มั้ย", "กี่", "ทำไม",
+        )
+        _has_question_marker = any(qm in msg_stripped for qm in _QUESTION_MARKERS)
+        if not _has_agri_keyword and not _has_question_marker and len(msg_stripped) < 30:
             for _gkw in GREETING_KEYWORDS:
                 if _gkw in msg_stripped:
                     if len(_gkw) <= 2 and len(msg_stripped) > 8:
