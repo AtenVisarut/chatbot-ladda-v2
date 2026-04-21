@@ -235,17 +235,23 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
     """
     ดึงชื่อพืชจากคำถาม
     Returns: ชื่อพืช หรือ None ถ้าไม่พบ
+
+    CRITICAL: plants must be checked in LONGEST-FIRST order to prevent
+    substring match bugs like "ข้าวโพด" matching "ข้าว" first, or
+    "ส้มโอ" matching "ส้ม" first.
     """
-    # รายชื่อพืชที่รองรับ
-    # Longer compound names first to prevent partial match (e.g. มะม่วงหิมพานต์ before มะม่วง)
+    # รายชื่อพืชที่รองรับ — auto-sorted by length desc at use-time
     plants = [
-        "มะม่วงหิมพานต์", "ปาล์มน้ำมัน", "ข้าวเหนียว",  # compound names first
+        "มะม่วงหิมพานต์", "ปาล์มน้ำมัน", "ข้าวเหนียว",
         "ทุเรียน", "ข้าว", "ข้าวโพด", "มันสำปะหลัง", "อ้อย", "ยางพารา", "ปาล์ม",
         "มะม่วง", "ลำไย", "ลิ้นจี่", "เงาะ", "มังคุด", "พริก", "มะเขือเทศ",
         "ถั่ว", "กล้วย", "มะพร้าว", "ส้มโอ", "ส้ม", "มะนาว", "ฝรั่ง", "ชมพู่",
         "สับปะรด", "หอมแดง", "กระเทียม", "ผัก", "ไม้ผล",
         "มะละกอ", "แตงโม", "แตงกวา", "ฟักทอง", "องุ่น", "ลองกอง", "กาแฟ",
     ]
+    # Sort by length desc so compound names always win over their substrings
+    # e.g. "ข้าวโพด" (7) checked before "ข้าว" (4)
+    plants_sorted = sorted(plants, key=len, reverse=True)
 
     # Farmer typos/abbreviations → canonical plant name
     _PLANT_TYPOS = {
@@ -258,7 +264,7 @@ def extract_plant_type_from_question(question: str) -> Optional[str]:
     }
 
     question_lower = question.lower()
-    for plant in plants:
+    for plant in plants_sorted:
         if plant in question_lower:
             return plant
     # Fallback: common typos

@@ -39,10 +39,15 @@ class TestBroadQueriesNoProductName:
         # Agent 1 LLM จะ classify ถูกต้องกว่า Stage 0
         ("มะม่วงใบร่วง ทำยังไงดี", "มะม่วง", "nutrient"),
         ("อ้อยมีหนอนเจาะลำต้น", "อ้อย", "insect"),
-        # "ข้าวโพด" ถูก match "ข้าว" ก่อน (substring) — known behavior, Agent 1 LLM จะจับถูก
-        ("ข้าวโพดเป็นราน้ำค้าง", "ข้าว", "disease"),
+        # Longest-first ordering ensures ข้าวโพด matched before ข้าว (fixed 2026-04-21)
+        ("ข้าวโพดเป็นราน้ำค้าง", "ข้าวโพด", "disease"),
+        ("ใช้ยาอะไรฆ่าหญ้าในข้าวโพด", "ข้าวโพด", "weed"),
         # "ใบเหลือง" → nutrient (ขาดธาตุ)
         ("ส้มใบเหลือง แก้ยังไง", "ส้ม", "nutrient"),
+        # ส้มโอ must beat ส้ม by longest-first
+        ("ส้มโอเป็นโรค", "ส้มโอ", "disease"),
+        # ปาล์มน้ำมัน must beat ปาล์ม
+        ("ปาล์มน้ำมันใบเหลือง", "ปาล์มน้ำมัน", "nutrient"),
     ])
     def test_broad_query_detection(self, query, expected_plant, expected_problem):
         plant = extract_plant_type_from_question(query)
