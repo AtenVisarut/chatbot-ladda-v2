@@ -92,3 +92,36 @@ class TestNormalQuestionsPassThrough:
         for q in cases:
             result = _check_unsupported_question(q)
             assert result is None, f"Should NOT block normal question: {q!r}"
+
+
+class TestClarificationScopeFix:
+    """C1 fix: '_bot_asked_for_context' should NOT match 'ระยะของการใช้ยา'"""
+
+    def test_stage_phrase_requires_tonnee_anchor(self):
+        # Simulate orchestrator's narrowed check
+        def bot_asked(context: str) -> bool:
+            return (
+                "ขอทราบข้อมูลเพิ่มเติม" in context
+                or ("ระยะของ" in context and "ตอนนี้" in context)
+                or "ระยะของวัชพืช" in context
+                or "ใช้กับพืชอะไร" in context
+            )
+
+        # False positive cases — should NOT match
+        assert not bot_asked("ผู้ใช้: ระยะของการใช้ยาเป็นยังไง")
+        assert not bot_asked("ผู้ใช้: ระยะของน้ำยาง")
+
+        # True positive cases — should still match bot ask-backs
+        assert bot_asked("บอท: ระยะของทุเรียนตอนนี้อยู่ระยะไหน")
+        assert bot_asked("บอท: ระยะของพืชตอนนี้")
+        assert bot_asked("บอท: ระยะของวัชพืช")
+        assert bot_asked("บอท: ขอทราบข้อมูลเพิ่มเติม")
+
+
+class TestYangTypoRestored:
+    """M1 fix: restore 'ยาง' → 'ยางพารา' alias"""
+
+    def test_yang_resolves_to_yang_para(self):
+        from app.services.plant.registry import _TYPO_FIXES
+        assert "ยาง" in _TYPO_FIXES["ยางพารา"]
+        assert "ยางพา" in _TYPO_FIXES["ยางพารา"]

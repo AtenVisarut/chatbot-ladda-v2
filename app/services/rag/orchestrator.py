@@ -123,9 +123,12 @@ class AgenticRAG:
                     and any(kw in query for kw in _STAGE_WORDS)
                 )
                 # Was the bot's last message an ask-back for stage/plant?
+                # Match bot's generated patterns: f"ระยะของ{plant}ตอนนี้" / "ระยะของพืชตอนนี้" / "ระยะของวัชพืช"
+                # (avoid false positives on user's "ระยะของการใช้ยา" etc.)
                 _bot_asked_for_context = (
                     "ขอทราบข้อมูลเพิ่มเติม" in context
-                    or "ระยะของ" in context
+                    or ("ระยะของ" in context and "ตอนนี้" in context)
+                    or "ระยะของวัชพืช" in context
                     or "ใช้กับพืชอะไร" in context
                 )
                 if _is_short_stage_reply and _bot_asked_for_context:
