@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-21 (rice stage vocab + nutrient-classifier bleed fix)
+> Last updated: 2026-04-21 (symptom word-order variants for diagnostic queries)
 
 ---
 
@@ -868,3 +868,39 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 - [tests/test_best_pick_clarify.py](tests/test_best_pick_clarify.py) — mirror update
 
 **Test results:** 1683 passed, 117 skipped (full suite), lint clean
+
+---
+
+### 2026-04-21 (late 3) — Symptom word-order variants for diagnostic queries
+
+**Context:** ทดสอบคำถามเชิงวินิจฉัยแบบกว้าง `"ยางพาราเป็นจุดสีน้ำตาลที่ใบเกิดจากอะไร"` → bot ไม่ resolve ไป pathogen ได้ เพราะ `diacritics_match` เป็น **substring match** (exact word order) แต่ vocab ใน `SYMPTOM_PATHOGEN_MAP` / `DISEASE_PATTERNS` เก็บ canonical order เดียว (เช่น `"ใบจุดสีน้ำตาล"`) — query ของผู้ใช้ที่เขียน `"จุดสีน้ำตาลที่ใบ"` จึง miss
+
+**Decision:** เลือก **low-risk additive path** (ผู้ใช้สั่ง "แก้ไขด้วยรูปแบบที่ไม่มีความเสี่ยงไปก่อน")
+- ไม่เพิ่ม pathogen ใหม่ ไม่เพิ่ม canonical disease ใหม่ ไม่แก้ logic
+- เฉพาะ word-order variants ที่ชี้ไปหา pathogen / canonical ที่มีอยู่แล้ว
+
+**Fix:**
+
+| จุด | เพิ่ม |
+|-----|------|
+| `SYMPTOM_PATHOGEN_MAP` ([text_processing.py](app/utils/text_processing.py)) | 9 variants: `"จุดที่ใบ"`, `"จุดบนใบ"`, `"ใบมีจุด"`, `"ใบเป็นจุด"`, `"จุดสีน้ำตาล"`, `"จุดน้ำตาล"`, `"ใบเป็นแผลไหม้"`, `"ใบหลุดร่วง"`, `"น้ำยางไหล"` — ทั้งหมด route ไป pathogen ที่มีอยู่แล้ว (เซอโคสปอร่า / แอนแทรคโนส / ไฟทอปธอร่า) |
+| `DISEASE_PATTERNS` + `DISEASE_CANONICAL` ([constants.py](app/services/disease/constants.py)) | 6 surface forms (เฉพาะ `ใบจุด*` family) → canonical เดิม (`ใบจุด`, `ใบจุดสีน้ำตาล`) |
+
+**สิ่งที่จงใจไม่ทำ:**
+- **ไม่เพิ่ม `ใบร่วง` / `โรคใบร่วง` / `ใบหลุดร่วง` เป็น DISEASE_PATTERNS** — `ใบร่วง` อยู่ใน `NUTRIENT_KEYWORDS` ([handler.py:316](app/services/chat/handler.py#L316)) อยู่แล้ว และ `SYMPTOM_PATHOGEN_MAP` มี entry `"ใบร่วง"` → `["แอนแทรคโนส", "ไฟทอปธอร่า"]` พร้อม `"ใบหลุดร่วง"` variant ใหม่ → เส้นทาง symptom-resolution ทำงานโดยไม่ต้องเพิ่ม disease canonical ที่ products3 ไม่การันตีว่ามี
+- ไม่แตะ `query_understanding_agent.py` / `retrieval_agent.py` / `[CONSTRAINT]` logic
+
+**Tests:** เพิ่ม [tests/test_symptom_resolution.py](tests/test_symptom_resolution.py) — 43 assertions:
+- ทุก variant ต้อง route ไป pathogen / canonical ที่ whitelist ไว้ (ไม่หลุด new pathogen)
+- End-to-end `resolve_symptom_to_pathogens` ของ Railway-style query
+- Stage 0 extraction picks canonical สำหรับ word-order variants
+- Dedupe guard (overlap 2 variants ต้องไม่ซ้ำใน result)
+- Negative guard (query ที่ไม่เกี่ยว → empty list)
+- Longest-match precedence preserved
+
+**Files touched:**
+- [app/utils/text_processing.py](app/utils/text_processing.py) — `SYMPTOM_PATHOGEN_MAP` +9 entries
+- [app/services/disease/constants.py](app/services/disease/constants.py) — `DISEASE_PATTERNS` +6 / `DISEASE_CANONICAL` +6
+- [tests/test_symptom_resolution.py](tests/test_symptom_resolution.py) — new
+
+**Test results:** 1757 passed, 117 skipped (full suite), lint clean

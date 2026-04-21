@@ -21,6 +21,11 @@ DISEASE_PATTERNS = [
     'แบคทีเรีย',            # เพิ่ม 2026-03-19: bacterial diseases
     'ใบไหม้', 'ใบจุด',
     'ใบจุ',  # common typo: ใบจุด ขาด ด
+    # เพิ่ม 2026-04-21: word-order variants ของ "ใบจุด*" family
+    # (ใบร่วง-family เจตนาไม่เพิ่มที่นี่ — มันอยู่ใน NUTRIENT_KEYWORDS แล้ว
+    #  และ SYMPTOM_PATHOGEN_MAP handle "ใบหลุดร่วง" ได้แล้ว)
+    'จุดสีน้ำตาล', 'จุดน้ำตาล',
+    'จุดที่ใบ', 'จุดบนใบ', 'ใบมีจุด', 'ใบเป็นจุด',
 ]
 
 # Variant → canonical DB name
@@ -33,6 +38,13 @@ DISEASE_CANONICAL = {
     'ฟอซาเรียม': 'ฟิวซาเรียม',
     'ราชมพู': 'ราสีชมพู',
     'ใบจุ': 'ใบจุด',  # typo: ขาด ด
+    # เพิ่ม 2026-04-21: word-order variants → existing canonicals
+    'จุดสีน้ำตาล': 'ใบจุดสีน้ำตาล',
+    'จุดน้ำตาล': 'ใบจุดสีน้ำตาล',
+    'จุดที่ใบ': 'ใบจุด',
+    'จุดบนใบ': 'ใบจุด',
+    'ใบมีจุด': 'ใบจุด',
+    'ใบเป็นจุด': 'ใบจุด',
 }
 
 # Pre-sorted for matching (longest first)
