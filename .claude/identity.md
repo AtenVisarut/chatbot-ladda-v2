@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-21 (pre-launch hardening: safety intercepts + audit fixes)
+> Last updated: 2026-04-21 (best-pick stage-scan scoped to user turns)
 
 ---
 
@@ -798,3 +798,32 @@ Pre-existing ruff errors ที่ block CI:
 #### UX Recommendation ก่อน launch
 - **ถาม best-pick แค่เมื่อไม่รู้พืช/ระยะ** — รู้แล้วเลือกทันที (ไม่ถามซ้ำ)
 - **Dealer group** soft launch ก่อน → เก็บ feedback → ค่อยเปิดเกษตรกรกลุ่มใหญ่
+
+---
+
+### 2026-04-21 (late) — Best-pick stage scan scoped to user turns
+
+**Context:** Railway log หลัง deploy `5bf8971` พบ case "ตัวไหนใช้ดีที่สุดครับ" สำหรับข้าว → bot ตอบ "ชุดกล่องเหลือง" ตรงๆ โดย**ไม่ถามระยะ** — ผิด flow ที่ควรถาม crop + stage ก่อน pick
+
+**Root cause:** ใน `response_generator_agent.py` บรรทัด 1067 scan `_ctx_recent` ทั้งก้อน (user + bot turns) → bot's previous reply ที่มีคำว่า `"ในระยะข้าวอายุ 10-15 วัน"` ทำให้ `_known_stage=True` แบบ false positive → ข้าม branch "ถาม missing" ไป pick ทันที
+
+**Fix:** filter `_ctx_recent` → เก็บเฉพาะบรรทัดที่ขึ้นต้นด้วย `"ผู้ใช้:"` ก่อน scan stage keywords
+
+```python
+_user_ctx = "\n".join(
+    line for line in _ctx_recent.split("\n") if line.startswith("ผู้ใช้:")
+)
+_known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
+```
+
+**Why user-turns-only:** memory.py format `"ผู้ใช้: ..."` / `"น้องลัดดา: ..."` — bot เองมักพูด "ระยะ..." ใน recommendation (ไม่ใช่ signal ว่า user ให้ context แล้ว) แต่ถ้า user พิมพ์ "ระยะติดผล" เอง → ใช่ signal จริง
+
+**Scope ของ fix:** กระทบแค่ `_known_stage` — `_known_plant` ยัง scan ทั้ง context ได้ (plant names จาก bot reply ก็ถือว่า confirmed context)
+
+**Test:** `tests/test_best_pick_clarify.py::TestSourceWiring::test_known_stage_scans_user_turns_only` — ตรวจ source ว่า filter ผ่าน `line.startswith("ผู้ใช้:")` และใช้ `_user_ctx` ใน scan
+
+**Files touched:**
+- [app/services/rag/response_generator_agent.py](app/services/rag/response_generator_agent.py) — bot-turn filter
+- [tests/test_best_pick_clarify.py](tests/test_best_pick_clarify.py) — regression test
+
+**Test results:** 1310 passed, 117 skipped (full suite), lint clean บน `app/`

@@ -184,3 +184,23 @@ class TestSourceWiring:
             response_generator_agent.ResponseGeneratorAgent._generate_llm_response
         )
         assert "len(_q.strip()) < 40" in src or "len(_q.strip()) <= 40" in src
+
+    def test_known_stage_scans_user_turns_only(self):
+        """
+        Regression (Railway log 2026-04-21): "ตัวไหนใช้ดีที่สุดครับ" for rice
+        went straight to pick-one path because _known_stage=True was triggered
+        by the bot's OWN previous reply containing "ในระยะข้าวอายุ 10-15 วัน".
+        The stage-keyword scan must restrict to user turns only.
+        """
+        from app.services.rag import response_generator_agent
+        src = inspect.getsource(
+            response_generator_agent.ResponseGeneratorAgent._generate_llm_response
+        )
+        # Must build a user-only view of the context before the stage scan
+        assert "line.startswith(\"ผู้ใช้:\")" in src, (
+            "Stage-keyword scan must filter _ctx_recent to ผู้ใช้: lines"
+        )
+        # And must run the scan over that filtered view, not the raw context
+        assert "_known_stage = any(kw in _user_ctx" in src, (
+            "_known_stage must be evaluated against the user-only context"
+        )

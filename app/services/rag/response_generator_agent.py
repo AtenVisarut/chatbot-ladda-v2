@@ -1064,7 +1064,13 @@ class ResponseGeneratorAgent:
                                     'ต้นกล้า', 'แตกกอ', 'ออกรวง', 'สร้างหัว',
                                     'ออกฝัก', 'ติดฝัก', 'ฝักแก่', 'ยืดปล้อง',
                                     'ลงหัว')
-            _known_stage = any(kw in _ctx_recent for kw in _known_stage_keywords)
+            # Only scan USER turns — bot's own recommendations often contain "ระยะ..."
+            # (e.g. "ในระยะข้าวอายุ 10-15 วัน") which would falsely indicate that the
+            # user has already provided stage context.
+            _user_ctx = "\n".join(
+                line for line in _ctx_recent.split("\n") if line.startswith("ผู้ใช้:")
+            )
+            _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 
             # Intent-specific stage template
             _intent_val = (query_analysis.intent.value if hasattr(query_analysis.intent, 'value')
