@@ -1000,37 +1000,112 @@ class ResponseGeneratorAgent:
         ]
         _is_best_pick = any(p in _q for p in _BEST_PICK_PATTERNS) and len(_q.strip()) < 40
         if _is_best_pick and context:
+            # --- Crop/intent-specific stage mapping ---
+            # Different crops have different growth stages. Asking about
+            # "ใบอ่อน/ออกดอก/ติดผล" is wrong for field crops like ข้าวโพด, ข้าว,
+            # อ้อย. And for weed control, what matters is pre/post-emergent,
+            # not plant growth stage.
+            _CROP_STAGES = {
+                # Fruit trees
+                "ทุเรียน":      "ใบอ่อน / แตกใบ / ออกดอก / ติดผล / ผลอ่อน / ผลแก่ / หลังเก็บเกี่ยว",
+                "มะม่วง":       "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ลำไย":         "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ลิ้นจี่":       "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ส้ม":          "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ส้มโอ":        "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "มะนาว":        "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "เงาะ":         "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "มังคุด":       "ใบอ่อน / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ปาล์ม":        "ต้นเล็ก / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "ปาล์มน้ำมัน":   "ต้นเล็ก / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                "มะพร้าว":      "ต้นเล็ก / ออกดอก / ติดผล / ผลแก่ / หลังเก็บเกี่ยว",
+                # Cereal / field crops
+                "ข้าว":         "ต้นกล้า / แตกกอ / ตั้งท้อง / ออกรวง / สุก / เก็บเกี่ยว",
+                "ข้าวโพด":      "ต้นกล้า / ก่อนออกดอก / ออกดอก / ติดฝัก / ฝักแก่",
+                "อ้อย":         "ปลูกใหม่ / แตกกอ / ยืดปล้อง / ก่อนเก็บเกี่ยว",
+                "มันสำปะหลัง":  "ปลูกใหม่ / ต้นเล็ก / สร้างหัว / ก่อนเก็บเกี่ยว",
+                "ยางพารา":      "ต้นเล็ก / ให้น้ำยาง",
+                # Vegetables
+                "ผัก":          "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "ผักคะน้า":     "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "ผักกาด":       "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "ผักกาดขาว":     "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "คะน้า":        "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "กะหล่ำปลี":     "เพาะกล้า / ต้นอ่อน / โต / เก็บเกี่ยว",
+                "พริก":         "ต้นกล้า / ออกดอก / ติดผล / ผลแก่",
+                "มะเขือ":       "ต้นกล้า / ออกดอก / ติดผล / ผลแก่",
+                "มะเขือเทศ":     "ต้นกล้า / ออกดอก / ติดผล / ผลแก่",
+                "ถั่ว":         "ต้นกล้า / ออกดอก / ติดฝัก / ฝักแก่",
+                "ถั่วฝักยาว":   "ต้นกล้า / ออกดอก / ติดฝัก / ฝักแก่",
+                "หอม":          "ต้นกล้า / แตกใบ / ลงหัว / เก็บเกี่ยว",
+                "หอมแดง":       "ต้นกล้า / แตกใบ / ลงหัว / เก็บเกี่ยว",
+                "กระเทียม":     "ต้นกล้า / แตกใบ / ลงหัว / เก็บเกี่ยว",
+                "มันฝรั่ง":     "ต้นกล้า / แตกใบ / ลงหัว / เก็บเกี่ยว",
+                "แตงกวา":       "ต้นกล้า / ออกดอก / ติดผล / ผลแก่",
+            }
+            _DEFAULT_STAGES = "ต้นอ่อน / ออกดอก / ติดผล / หลังเก็บเกี่ยว"
+
             # Check what context we already know — from entities AND context text
-            _known_plant = bool(query_analysis.entities.get('plant_type'))
+            _plant_from_entities = query_analysis.entities.get('plant_type') or ""
+            _known_plant = bool(_plant_from_entities)
+            _detected_plant = _plant_from_entities
             if not _known_plant:
-                # Fallback: scan context text for known plant names
-                _PLANT_NAMES = (
-                    "ทุเรียน", "ข้าว", "มะม่วง", "ลำไย", "ลิ้นจี่", "ส้ม",
-                    "มะนาว", "อ้อย", "มันสำปะหลัง", "ข้าวโพด", "พริก",
-                    "มะเขือ", "ผักคะน้า", "ถั่วฝักยาว", "ยางพารา", "ปาล์ม",
-                    "หอมแดง", "กระเทียม", "นาข้าว",
-                )
-                _known_plant = any(p in context for p in _PLANT_NAMES)
+                # Fallback: scan context text for known plant names (longest-first)
+                from app.services.plant.registry import PlantRegistry
+                _reg = PlantRegistry.get_instance()
+                if _reg.loaded:
+                    # Try to find plant mentioned anywhere in recent context
+                    _detected_plant = _reg.extract(context[-1500:]) or ""
+                    _known_plant = bool(_detected_plant)
 
             _known_stage_keywords = ('ใบอ่อน', 'ออกดอก', 'ติดผล', 'ระยะ',
                                     'ต้นอ่อน', 'หลังเก็บเกี่ยว', 'แตกใบ',
-                                    'ก่อนเก็บ', 'ระยะดอก', 'ระยะผล')
-            # Only count stage keyword if it's near the user's message (not just in any recent line)
-            # Heuristic: take last 500 chars (most recent exchange)
+                                    'ก่อนเก็บ', 'ระยะดอก', 'ระยะผล',
+                                    'ต้นกล้า', 'แตกกอ', 'ออกรวง', 'สร้างหัว',
+                                    'ออกฝัก', 'ติดฝัก', 'ฝักแก่', 'ยืดปล้อง',
+                                    'ลงหัว')
             _recent_context = context[-800:]
             _known_stage = any(kw in _recent_context for kw in _known_stage_keywords)
+
+            # Intent-specific stage template
+            _intent_val = (query_analysis.intent.value if hasattr(query_analysis.intent, 'value')
+                          else str(query_analysis.intent))
+            # Also scan context for topic keywords — follow-up queries like
+            # "ตัวไหนดีสุด" don't carry the original intent
+            _ctx_recent = context[-1500:]
+            _is_weed_topic = (
+                _intent_val == 'weed_control' or
+                any(w in _ctx_recent for w in ("กำจัดวัชพืช", "ฆ่าหญ้า", "วัชพืช",
+                                                "กำจัดหญ้า", "หญ้าในนา"))
+            )
+            if _is_weed_topic:
+                # For herbicide, ask about weed status (pre/post-emergent) and
+                # crop age — NOT flowering/fruiting stages
+                _stages_str = (
+                    "ก่อนวัชพืชงอก (ยาคุม) / หลังวัชพืชงอก (ยาฆ่า)\n"
+                    "  - หรือ อายุของ" + (_detected_plant or "พืช") + " (เช่น หลังปลูก X วัน)"
+                )
+                _stage_question_prefix = "ระยะของวัชพืช"
+            else:
+                _stages_str = _CROP_STAGES.get(_detected_plant, _DEFAULT_STAGES)
+                _stage_question_prefix = (
+                    f"ระยะของ{_detected_plant}ตอนนี้" if _detected_plant
+                    else "ระยะของพืชตอนนี้"
+                )
+
             _missing = []
             if not _known_plant:
-                _missing.append("ใช้กับพืชอะไร (เช่น ทุเรียน/ข้าว/มะม่วง)")
+                _missing.append("ใช้กับพืชอะไร (เช่น ทุเรียน / ข้าวโพด / ผักคะน้า)")
             if not _known_stage:
-                _missing.append("ระยะของพืชตอนนี้ (เช่น ใบอ่อน/ออกดอก/ติดผล/หลังเก็บเกี่ยว)")
+                _missing.append(f"{_stage_question_prefix} (เช่น {_stages_str})")
 
             if _missing:
                 _ask_list = "\n  ".join(f"• {m}" for m in _missing)
                 best_pick_note = f"""
 [คำถาม "ตัวไหนดีสุด" — user ต้องการเลือกจากสินค้าที่แนะนำไปแล้ว]
 → ก่อนเลือกตัวเดียวให้ user ต้องถามกลับเพื่อให้แนะนำที่ตรงที่สุด
-→ ใช้รูปแบบนี้:
+→ **สำคัญ**: ตัวอย่างระยะในข้อความต้องตรงกับพืช/กรณีของ user — ห้ามใช้ระยะผลไม้ (ออกดอก/ติดผล) กับข้าว/ข้าวโพด/อ้อย/วัชพืช
+→ ใช้รูปแบบนี้เป๊ะๆ (ห้ามเปลี่ยนตัวอย่างระยะ):
    "เพื่อแนะนำสินค้าที่เหมาะสมที่สุด ขอทราบข้อมูลเพิ่มเติมค่ะ 😊
    {_ask_list}
    บอกน้องลัดดามาได้เลยนะคะ 🌱"
@@ -1039,11 +1114,13 @@ class ResponseGeneratorAgent:
 """
             else:
                 # User has provided enough context → pick + explain
-                best_pick_note = """
+                best_pick_note = f"""
 [คำถาม "ตัวไหนดีสุด" — user มีพืชและระยะครบแล้ว]
-→ เลือก 1 สินค้าที่ตรงกับพืช+ระยะของ user ที่สุด
-→ บอกเหตุผลว่าทำไมเลือกตัวนี้ (เช่น crop-specific, selling_point ตรง, กลไกเหมาะสม)
-→ ถ้ามีหลายตัวที่เหมาะ → เลือก 1 ที่ strategy=Skyrocket/Expand ก่อน
+→ พืช: {_detected_plant or "ตามที่ user ระบุ"}
+→ เลือก 1 สินค้าจาก "สินค้าที่แนะนำไปแล้ว" ใน context (ห้ามแนะนำตัวใหม่นอก list เดิม)
+→ เลือกตัวที่ตรงกับพืช+ระยะ+ปัญหา (pest/disease/weed) ของ user ที่สุด
+→ บอกเหตุผลว่าทำไมเลือกตัวนี้สำหรับระยะนี้ (เช่น applicable_crops ตรง, กลไกเหมาะสม, selling_point รองรับระยะนี้)
+→ ถ้ามีหลายตัวที่เหมาะพอกัน → เลือก 1 ที่ strategy=Skyrocket/Expand ก่อน
 """
 
         # Chemical-group query hint — tell LLM that RAC field answers IRAC/FRAC/HRAC/MoA
