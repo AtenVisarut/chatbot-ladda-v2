@@ -1287,11 +1287,13 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
                 ]
                 if any(p in cached_answer for p in _CACHE_NO_DATA):
                     logger.info(f"⏭️ Cache hit contains no-data phrase, replying with NO_DATA_REPLY: '{message[:40]}'")
-                    if _emb_task: _emb_task.cancel()
+                    if _emb_task:
+                        _emb_task.cancel()
                     return NO_DATA_REPLY
                 logger.info(f"✓ Response cache hit: '{message[:40]}'")
                 await add_to_memory(user_id, "assistant", cached_answer)
-                if _emb_task: _emb_task.cancel()
+                if _emb_task:
+                    _emb_task.cancel()
                 return cached_answer
 
             # Await embedding (was running in parallel with cache check)

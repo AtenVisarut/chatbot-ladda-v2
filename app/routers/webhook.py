@@ -260,7 +260,7 @@ async def _process_webhook_events(events: list):
                 # WebSocket: notify admin dashboard of new message
                 try:
                     from app.routers.ws import emit_new_message
-                    asyncio.create_task(emit_new_message(user_id, display_name or user_id, "LINE", text))
+                    asyncio.create_task(emit_new_message(user_id, user_id, "LINE", text))
                 except Exception:
                     pass
 

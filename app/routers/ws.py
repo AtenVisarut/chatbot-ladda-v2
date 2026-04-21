@@ -30,7 +30,7 @@ async def broadcast(event: str, data: dict):
                 await ws.send_text(message)
             except Exception:
                 disconnected.add(ws)
-        _connections -= disconnected
+        _connections.difference_update(disconnected)
 
 
 async def emit_new_message(user_id: str, display_name: str, platform: str, content: str):
