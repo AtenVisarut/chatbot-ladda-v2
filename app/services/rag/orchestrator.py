@@ -600,15 +600,20 @@ class AgenticRAG:
                         _has_reference = any(p in query for p in _REFERENCING_PATTERNS)
 
                         # Keep if short follow-up about usage ("ใช้ยังไง", "ผสมกี่")
+                        # or about the product's properties ("กำจัดอะไร", "MoA", "สารออกฤทธิ์")
                         _FOLLOWUP_USAGE = [
                             'ใช้ยังไง', 'ใช้เท่าไหร่', 'ผสมกี่', 'ฉีดกี่', 'พ่นกี่',
                             'ผสมเท่าไหร่', 'อัตราเท่าไหร่', 'ใช้กี่', 'ราดกี่',
                             'ใช้ช่วงไหน', 'ใช้ตอนไหน', 'ใช้ได้กี่', 'ได้ผลไหม',
                             'ได้ช่วงไหน', 'ช่วงไหนได้', 'ใช้ได้ไหม', 'ใช้กับ',
-                            'กลุ่มสาร', 'กลุ่มเคมี', 'irac', 'frac', 'hrac', 'rac',
+                            'กลุ่มสาร', 'กลุ่มเคมี', 'irac', 'frac', 'hrac', 'rac', 'moa',
                             'ขนาดบรรจุ', 'กี่ลิตร', 'กี่กรัม', 'ขนาดไหน',
+                            # Product capability / mechanism follow-ups
+                            # "ไบเตอร์กำจัดอะไรได้บ้าง" / "อยู่กลุ่ม moa อะไร" / "สารออกฤทธิ์คืออะไร"
+                            'กำจัดอะไร', 'ฆ่าอะไร', 'กำจัดได้', 'ฆ่าได้',
+                            'ออกฤทธิ์', 'สารออกฤทธิ์', 'สารสำคัญ', 'active ingredient',
                         ]
-                        _is_usage_followup = len(query.strip()) < 40 and any(p in query for p in _FOLLOWUP_USAGE)
+                        _is_usage_followup = len(query.strip()) < 60 and any(p in query.lower() for p in _FOLLOWUP_USAGE)
 
                         # Keep if comparison follow-up ("ต่างกันยังไง", "แตกต่างกัน")
                         # User comparing previous products — product context MUST be preserved

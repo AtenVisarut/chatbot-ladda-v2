@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-22 (diagnostic-intent path + greeting false-positive fix) — `test-dev` branch
+> Last updated: 2026-04-22 (diagnostic path + greeting + capability follow-up fixes) — `test-dev` branch
 
 ---
 
@@ -978,3 +978,33 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 **File:** [tests/test_greeting_detection.py](tests/test_greeting_detection.py) — new, 20 assertions (10 false-positive regressions + 8 true-positive preservation + agri-guard + long-message guard)
 
 **Test results:** 1825 passed (1805 + 20), ruff clean
+
+---
+
+### 2026-04-22 (late 2) — Capability/MoA follow-up not dropping product context (`test-dev`)
+
+**Problem (from Railway log):** User asked `"กำจัดอะไรได้บ้าง และ อยู่กลุ่ม moaอะไรคับ"` after bot recommended `ไบเตอร์`. Bot replied *"สำหรับผลิตภัณฑ์ 'ไบเตอร์' ขออภัยค่ะ ไม่มีข้อมูลในระบบ"* — "ยิ่งคุยยิ่งแย่" pattern.
+
+**Root cause — two layers:**
+
+1. **Orchestrator dropped the product.** [orchestrator.py:603](app/services/rag/orchestrator.py#L603) `_FOLLOWUP_USAGE` covered usage/dose questions (`"ใช้ยังไง"`, `"ผสมกี่"`) and RAC codes (`irac/frac/hrac/rac`) — but missed capability/MoA phrasing: `"กำจัดอะไร"`, `"moa"`, `"ออกฤทธิ์"`, `"สารออกฤทธิ์"`. So the query was classified as "vague, no specific entity" → product dropped + conversation state cleared.
+
+2. **Response generator over-filtered by stale context disease.** [response_generator_agent.py:616](app/services/rag/response_generator_agent.py#L616) `_skip_disease_context` only skipped WEED/PEST/NUTRIENT/USAGE intents and comparison phrasing. Capability queries classified as `PRODUCT_INQUIRY` still ran the context-disease filter → the previous turn's `แอนแทรคโนส` narrowed 23 docs → 1 doc → Agent 3 saw nothing relevant → "ไม่มีข้อมูล".
+
+**Fix:**
+
+- [orchestrator.py](app/services/rag/orchestrator.py): Added capability/MoA keywords (`'กำจัดอะไร', 'ฆ่าอะไร', 'ออกฤทธิ์', 'สารออกฤทธิ์', 'สารสำคัญ', 'moa'`) to `_FOLLOWUP_USAGE`. Raised length cap 40→60 (longer natural queries like the log example). Switched to `.lower()` for case-insensitive MoA/IRAC.
+- [response_generator_agent.py](app/services/rag/response_generator_agent.py): New `_CAPABILITY_PAT` skip-trigger — if query contains any of those patterns, skip context-disease filtering. Stale carried-over disease no longer narrows the doc pool when user is asking about product spectrum/mechanism.
+
+**Trace through the log example after fix:**
+
+| Layer | Before | After |
+|-------|--------|-------|
+| Orchestrator product drop | `Drop product: 'ไบเตอร์' (vague/generic)` | product kept (matched `"กำจัดอะไร"`, `"moa"`) |
+| Conversation state | cleared | preserved |
+| Response gen filter | 23 → 1 doc (by `แอนแทรคโนส`) | 23 docs kept |
+| Final answer | "ไม่มีข้อมูล" | full answer about ไบเตอร์ capability + MoA |
+
+**File:** [tests/test_followup_capability.py](tests/test_followup_capability.py) — new, 18 assertions covering the capability-followup recognition (10 cases) and capability-context-skip behavior (8 cases incl. negatives).
+
+**Test results:** 1843 passed (1825 + 18), ruff clean

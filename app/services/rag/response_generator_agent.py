@@ -618,6 +618,21 @@ class ResponseGeneratorAgent:
             _COMPARE_PAT = ['ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ', 'อันไหน', 'ตัวไหน', 'ใช้ต่าง']
             if any(p in query_analysis.original_query for p in _COMPARE_PAT):
                 _skip_disease_context = True
+        if not _skip_disease_context:
+            # Product-centric follow-ups (capability / mechanism / RAC group)
+            # are about the previous PRODUCT, not about any carried-over disease.
+            # Filtering docs by stale context disease here would narrow the pool
+            # too aggressively — e.g. "ไบเตอร์ กำจัดอะไรได้บ้าง และ อยู่กลุ่ม moa อะไร"
+            # would lose all non-anthracnose docs even though the user is
+            # asking about ไบเตอร์'s overall spectrum.
+            _CAPABILITY_PAT = [
+                'กำจัดอะไร', 'ฆ่าอะไร', 'กำจัดได้', 'ฆ่าได้',
+                'ออกฤทธิ์', 'สารออกฤทธิ์', 'สารสำคัญ',
+                'กลุ่มสาร', 'กลุ่มเคมี', 'moa', 'irac', 'frac', 'hrac',
+            ]
+            _ql = query_analysis.original_query.lower()
+            if any(p in _ql for p in _CAPABILITY_PAT):
+                _skip_disease_context = True
         if context and not query_analysis.entities.get('disease_name', '') and not _skip_disease_context:
             from app.utils.text_processing import diacritics_match as _dm_early
             from app.services.disease.constants import DISEASE_PATTERNS_SORTED as _DP_EARLY, get_canonical as _gc_early
