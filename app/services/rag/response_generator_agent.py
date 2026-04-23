@@ -629,9 +629,18 @@ class ResponseGeneratorAgent:
                 'กำจัดอะไร', 'ฆ่าอะไร', 'กำจัดได้', 'ฆ่าได้',
                 'ออกฤทธิ์', 'สารออกฤทธิ์', 'สารสำคัญ',
                 'กลุ่มสาร', 'กลุ่มเคมี', 'moa', 'irac', 'frac', 'hrac',
+                'ทำอะไร', 'ใช้ทำอะไร', 'คืออะไร', 'ใช้ยังไง', 'สรรพคุณ',
             ]
             _ql = query_analysis.original_query.lower()
             if any(p in _ql for p in _CAPABILITY_PAT):
+                _skip_disease_context = True
+        if not _skip_disease_context:
+            # Query names a specific product (e.g. "โมเดินใช้ทำอะไร") — user is
+            # asking about THAT product, not about a disease carried from context.
+            # Applying context disease filter here hides direct-lookup matches
+            # and blocks the product-inquiry answer.
+            from app.services.chat.handler import extract_product_name_from_question
+            if extract_product_name_from_question(query_analysis.original_query):
                 _skip_disease_context = True
         if context and not query_analysis.entities.get('disease_name', '') and not _skip_disease_context:
             from app.utils.text_processing import diacritics_match as _dm_early
@@ -933,9 +942,14 @@ class ResponseGeneratorAgent:
                 logger.info(f"  - Specific variant in query: '{exact_variant_in_query}' → Mode ข")
 
         # Broad query with multiple products → hint LLM to show all (Mode ก)
-        # Exception: if user asks for comparison → use Mode ข (detailed) instead
-        _COMPARISON_KEYWORDS = ['ต่างกันยังไง', 'ต่างกันอย่างไร', 'เปรียบเทียบ', 'ใช้ต่างกัน', 'แตกต่าง', 'เทียบกัน']
-        _is_comparison = any(kw in query_analysis.original_query for kw in _COMPARISON_KEYWORDS)
+        # Exception: if user asks for comparison → use Mode ข (detailed) instead.
+        # Pattern list is shared with orchestrator via followup_patterns — see
+        # 2026-04-23 bug where divergent lists let Mode ก fire on "ตัวไหนดี".
+        from app.services.rag.followup_patterns import is_comparison_followup
+        _is_comparison = (
+            query_analysis.entities.get('_comparison_followup') is True
+            or is_comparison_followup(query_analysis.original_query)
+        )
         if not multi_variant_note and not product_name_query and len(docs_to_use) >= 3:
             unique_names = list(dict.fromkeys(
                 d.metadata.get('product_name', '') for d in docs_to_use if d.metadata.get('product_name')

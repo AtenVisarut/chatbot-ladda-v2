@@ -92,6 +92,8 @@ class QueryUnderstandingAgent:
             hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อพืช: \"{hints['plant_type']}\" — ใช้ชื่อนี้ใน entities.plant_type"
         if hints.get('pest_name'):
             hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อแมลง/ศัตรูพืช: \"{hints['pest_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.pest_name เท่านั้น"
+        if hints.get('weed_name'):
+            hint_section += f"\n[CONSTRAINT] ระบบตรวจพบชื่อวัชพืช: \"{hints['weed_name']}\" — ห้ามเปลี่ยนชื่อ ต้องใช้ชื่อนี้ใน entities.weed_type เท่านั้น"
         if hints.get('problem_type') and hints['problem_type'] != 'unknown':
             problem_map = {'disease': 'โรคพืช', 'insect': 'แมลง', 'nutrient': 'ธาตุอาหาร/บำรุง', 'weed': 'วัชพืช'}
             if hints['problem_type'] == 'nutrient':
@@ -269,6 +271,9 @@ required_sources:
             if hints.get('pest_name') and entities.get('pest_name') != hints['pest_name']:
                 logger.info(f"  - Override pest: LLM='{entities.get('pest_name')}' → pre-extracted='{hints['pest_name']}'")
                 entities['pest_name'] = hints['pest_name']
+            if hints.get('weed_name') and entities.get('weed_type') != hints['weed_name']:
+                logger.info(f"  - Override weed: LLM='{entities.get('weed_type')}' → pre-extracted='{hints['weed_name']}'")
+                entities['weed_type'] = hints['weed_name']
             if hints.get('product_name') and entities.get('product_name') != hints['product_name']:
                 # If LLM says None + intent is recommendation → respect LLM's None
                 # (user is asking for NEW recommendations, not follow-up about existing product)
@@ -366,6 +371,19 @@ required_sources:
                     search_q = f"{synonym} {plant_type}".strip() if plant_type else synonym
                     if search_q not in expanded_queries:
                         expanded_queries.append(search_q)
+
+            # Comparison follow-up: user is choosing among previously-shown products
+            # (e.g. "ตัวไหนดี" after bot listed 5 items). Clamp expanded_queries to
+            # the product names only — prevents LLM from hallucinating unrelated
+            # search terms (observed: "ตัวไหนดี" expanded to "ยากำจัดวัชพืชในอ้อย"
+            # which polluted retrieval with cross-category products).
+            if hints.get('_comparison_followup') and hints.get('product_names'):
+                expanded_queries = list(hints['product_names'])
+                entities['_comparison_followup'] = True
+                logger.info(
+                    f"  - Comparison follow-up: clamped expanded_queries to "
+                    f"{len(expanded_queries)} product names (skip LLM fanout)"
+                )
 
             # Force products-only source (products table is the sole data source)
             required_sources = ["products"]

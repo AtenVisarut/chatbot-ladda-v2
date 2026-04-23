@@ -124,6 +124,19 @@ class TestSourceGuards:
             "response_generator skip list missing NUTRIENT_SUPPLEMENT/USAGE_INSTRUCTION"
         )
 
+    def test_response_generator_skips_disease_when_query_names_product(self):
+        """#4 (2026-04-22 bug): 'โมเดินใช้ทำอะไร' after disease context —
+        must skip context_disease so product-inquiry answer isn't blocked."""
+        from app.services.rag import response_generator_agent
+        src = inspect.getsource(response_generator_agent)
+        # Must invoke product-name extraction as part of skip logic
+        assert "extract_product_name_from_question" in src, (
+            "response_generator doesn't skip context_disease when query names a product"
+        )
+        # Capability patterns must also include product-info phrasings
+        for pat in ['ทำอะไร', 'คืออะไร', 'สรรพคุณ']:
+            assert f"'{pat}'" in src, f"_CAPABILITY_PAT missing {pat!r}"
+
 
 # =============================================================================
 # 2. Extraction coverage across all product categories

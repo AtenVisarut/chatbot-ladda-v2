@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Tuple
 from app.dependencies import openai_client, supabase_client
 from app.utils.async_db import aexecute
 from app.services.memory import add_to_memory, get_recommended_products, get_enhanced_context
-from app.services.cache import get_from_cache, set_to_cache, save_conversation_state, clear_conversation_state
+from app.services.cache import get_from_cache, set_to_cache, save_conversation_state, clear_conversation_state, get_conversation_state
 from app.utils.text_processing import extract_keywords_from_question, post_process_answer
 from app.services.product.recommendation import hybrid_search_products, filter_products_by_category
 from app.config import (
@@ -1106,6 +1106,81 @@ async def _save_conv_state_from_answer(
         logger.error(f"Error saving conversation state: {e}")
 
 
+_SALES_POPULARITY_PATTERNS = (
+    'ขายดี', 'ขายเยอะ', 'ขายได้ดี', 'ขายดีที่สุด',
+    'ยอดนิยม', 'ที่นิยม', 'นิยมที่สุด',
+    'เบสต์เซลเลอร์', 'bestseller', 'best seller',
+    'ฮิต', 'ฮอต', 'popular', 'hot seller',
+)
+
+
+def _is_sales_popularity_query(message: str) -> bool:
+    low = message.lower()
+    return any(p in low for p in _SALES_POPULARITY_PATTERNS)
+
+
+async def _handle_sales_popularity_followup(user_id: str, message: str) -> Optional[str]:
+    """Follow-up 'ขายดี/นิยม/ฮิต' → reuse previous products (preserve category
+    context) and filter to Skyrocket/Expand strategy. ICP has no true sales data,
+    so we disclose that + surface the push-priority subset of the prior list.
+
+    Returns None → fall through to RAG (when pattern absent OR no prior state).
+    """
+    if not _is_sales_popularity_query(message):
+        return None
+
+    state = await get_conversation_state(user_id)
+    active = (state or {}).get('active_products') or []
+    if not active:
+        return None
+
+    try:
+        result = (
+            supabase_client.table(PRODUCT_TABLE)
+            .select('product_name, strategy, common_name_th, selling_point')
+            .in_('product_name', list(active)[:10])
+            .execute()
+        )
+        docs = result.data or []
+    except Exception as e:
+        logger.error(f"[sales_popularity] DB fetch failed: {e}")
+        return None
+
+    _PRIORITY = {'Skyrocket', 'Expand'}
+    name_to_doc = {d['product_name']: d for d in docs}
+    filtered = [
+        name_to_doc[n] for n in active
+        if n in name_to_doc and name_to_doc[n].get('strategy') in _PRIORITY
+    ]
+
+    if not filtered:
+        return (
+            "น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ 🙏\n\n"
+            "จากสินค้าที่แนะนำก่อนหน้านี้ ยังไม่มีตัวที่อยู่ในกลุ่มสินค้าหลัก "
+            "(Skyrocket/Expand) ของ ICP Ladda ค่ะ\n\n"
+            "ถ้าอยากได้รายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ 😊"
+        )
+
+    lines = [
+        "น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ 🙏",
+        "",
+        "แต่จากสินค้าที่แนะนำก่อนหน้า ตัวที่อยู่ในกลุ่มสินค้าหลักของ ICP Ladda "
+        "(Skyrocket/Expand) มีดังนี้ค่ะ:",
+        "",
+    ]
+    for i, d in enumerate(filtered, 1):
+        name = (d.get('product_name') or '').strip()
+        ai = (d.get('common_name_th') or '').strip()
+        sp = (d.get('selling_point') or '').strip()
+        header = f"{i}. {name}" + (f" ({ai})" if ai else "")
+        lines.append(header)
+        if sp:
+            lines.append(f"   {sp}")
+    lines.append("")
+    lines.append("อยากทราบรายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ 😊")
+    return "\n".join(lines)
+
+
 def _check_unsupported_question(message: str) -> str | None:
     """Return a safe response for questions we cannot answer accurately yet.
     Returns None if the question is fine to pass through to RAG.
@@ -1181,6 +1256,17 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
         if _safety_reply:
             await add_to_memory(user_id, "assistant", _safety_reply)
             return _safety_reply
+
+        # 2.6 Sales-popularity follow-up — inherit previous products (preserve
+        # category context) and filter to Skyrocket/Expand strategy. Fixes
+        # cross-category answer when user asks "ขายดี/นิยม" after a category list.
+        _sales_reply = await _handle_sales_popularity_followup(user_id, message)
+        if _sales_reply:
+            await add_to_memory(
+                user_id, "assistant", _sales_reply,
+                metadata={"type": "sales_popularity_followup"},
+            )
+            return _sales_reply
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
         #    For short ambiguous messages, only route if conversation context involves products

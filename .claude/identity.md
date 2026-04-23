@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-22 (diagnostic path + greeting + capability follow-up + open-category clarify) — `test-dev` branch
+> Last updated: 2026-04-23 (diagnostic path + greeting + capability follow-up + open-category clarify + weed-name precision + context-disease leakage fix + sales-popularity follow-up + comparison follow-up cross-category guard + shared followup_patterns + plant-restate guard + typo/space/diacritic normalizer) — `test-dev` branch
 
 ---
 
@@ -1038,3 +1038,112 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 **Fix:**
 - [app/utils/line/text_messages.py:48](app/utils/line/text_messages.py#L48): Removed the `"📖 คู่มือการใช้งานน้องลัดดา"` header + separator line from `get_usage_guide_text()`. The content now opens directly with `"💬 ถามข้อมูลสินค้า ICP กับน้องลัดดาได้นะคะ:"` and the bullet list.
 - [app/prompts.py:309](app/prompts.py#L309): Rewrote `WELCOME_MESSAGE` with 5 concrete example questions covering the 4 categories + product-lookup: pest (`เพลี้ยไฟทุเรียน`), disease (`ข้าวใบจุดสีน้ำตาล`), herbicide (`ยาฆ่าหญ้าในข้าวโพด`), fertilizer (`ปุ๋ยบำรุงทุเรียนช่วงออกดอก`), product spec (`อาร์ดอนใช้กับพืชอะไร`). Keeps `"ช่วยเหลือ"` escape hatch.
+
+---
+
+### 2026-04-22 (late 5) — Weed-name precision fix (`test-dev`)
+
+**Problem:** Query `"ข้าวดีดตัวไหนจัดการได้"` returned 6 herbicides but only #1 (ทูโฟพอส — 2,4-D + อะนิโลฟอส) actually targets ข้าวดีด (weedy rice). #2–6 were generic rice herbicides for other weeds (ข้าวนก, ใบแคบ/ใบกว้าง, pre-emergents). Root cause: no specific weed-name extraction in Stage 0 — `_WEED_SYNONYM_MAP` only caught generic `"หญ้า"`/`"กำจัดหญ้า"`, so retrieval fell back to broad rice-herbicide search without any precision filter.
+
+**Fix (Option A — minimal, parallel to existing insecticide pipeline):**
+
+- [app/services/rag/orchestrator.py:519-537](app/services/rag/orchestrator.py#L519-L537): Added `_WEED_PATTERNS_STAGE0` (18 entries: ข้าวดีด, หญ้าข้าวนก, หญ้าดอกขาว, หญ้าหนวดแมว, หญ้าตีนกา, กกทราย, ใบแคบ, ใบกว้าง, ...) with longest-first ordering. On match, sets `hints['weed_name']`.
+- [app/services/rag/query_understanding_agent.py:95-96, 273-275](app/services/rag/query_understanding_agent.py#L95): Added `weed_name` `[CONSTRAINT]` hint + post-LLM override into `entities['weed_type']` (reuses existing entity field — no new schema).
+- [app/services/rag/retrieval_agent.py](app/services/rag/retrieval_agent.py): Added `_weed_column_fallback_search()` (parallel to `_pest_column_fallback_search`) + Stage 1.965 trigger when `weed_match_count < 3` + Stage 3.545 precision filter that prunes Herbicide docs whose `herbicides` column doesn't mention the specific weed (keeps non-Herbicide docs untouched so complementary products still surface).
+- Broad terms (`หญ้า`, `วัชพืช`, `ใบแคบ`, `ใบกว้าง`) bypass the prune to avoid over-filtering when user genuinely wants generic recommendations.
+
+**Tests:** [tests/test_weed_precision.py](tests/test_weed_precision.py) — 20 new assertions (extraction, generic/unrelated negatives, longest-match, prune simulation for `ข้าวดีด` bug repro, non-herbicide preservation, ordering, whitelist parity with orchestrator source).
+
+**Results:** 1903 passed (1883 + 20), ruff clean. Bug from screenshot fixed in simulation — only docs whose herbicides column contains `"ข้าวดีด"` remain for that query.
+
+### 2026-04-22 (late 6) — Context-disease leakage blocking product-inquiry (`test-dev`)
+
+**Problem:** Dealer queried `"โมเดินใช้ทำอะไร"` after a previous turn had mentioned `แอนแทรคโนส`. Bot answered `"สำหรับ 'โมเดิน' น้องลัดดาไม่มีข้อมูลในระบบค่ะ..."` **even though direct lookup successfully found โมเดิน** (log: `Direct lookup: 1 docs for 'โมเดิน'`). Root cause: [response_generator_agent.py:602-645](app/services/rag/response_generator_agent.py#L602) extracted `context_disease = 'แอนแทรคโนส'` from memory → fired `disease_mismatch_note` because แอนแทรคโนส isn't in โมเดิน's pest columns → LLM produced "ไม่มีข้อมูล" + then recommended unrelated thrips products from pest-expanded queries.
+
+**Fix ([response_generator_agent.py:628-645](app/services/rag/response_generator_agent.py#L628)):**
+
+- Expanded `_CAPABILITY_PAT` with `'ทำอะไร', 'ใช้ทำอะไร', 'คืออะไร', 'ใช้ยังไง', 'สรรพคุณ'` — product-info phrasings that the prior list (`กำจัดอะไร`/`ฆ่าอะไร`/`moa`/`irac`) missed.
+- Added 4th skip branch: if `extract_product_name_from_question(original_query)` returns a known product name, set `_skip_disease_context = True`. When user names a specific product, context disease from prior turn must not filter/block the product-inquiry answer. Flag covers both the early doc-filter block (line 647) AND the late mismatch-note block (line 802) via same variable.
+
+**Tests:** [tests/test_context_following.py](tests/test_context_following.py) — new source-level guard `test_response_generator_skips_disease_when_query_names_product` asserting `extract_product_name_from_question` is wired into skip logic + the 5 new capability patterns are present.
+
+**Results:** 1904 passed (1903 + 1), ruff clean. Reproduction confirmed: when reproduced with empty context the bot answered correctly — bug was context-carryover, not a retrieval failure.
+
+### 2026-04-22 (late 7) — Sales-popularity follow-up cross-category leakage (`test-dev`)
+
+**Problem:** Dealer screenshot showed Turn 1 listed 9 herbicides, Turn 2 (`"ขอสินค้าขายดี"`) returned a cross-category mix (fungicide/insecticide/biostim) with hallucinated "best seller" framing. Two failures: (1) **Lost context** — RAG pipeline didn't reuse the previous herbicide list so retrieval surfaced unrelated products; (2) **No real sales data** — ICP has no live sales-rank source, so any "best seller" reply is made up.
+
+**Fix ([app/services/chat/handler.py:1109-1183](app/services/chat/handler.py#L1109) + wire-up at [L1260](app/services/chat/handler.py#L1260)):**
+
+- New pattern table `_SALES_POPULARITY_PATTERNS` (ขายดี / ยอดนิยม / ฮิต / popular / best seller / …) + helper `_is_sales_popularity_query`.
+- New handler `_handle_sales_popularity_followup(user_id, message)`:
+  - Pattern miss → `None` (fall through to RAG).
+  - No `active_products` in conversation state → `None`.
+  - Fetch `product_name, strategy, common_name_th, selling_point` from `products3` via `in_` filter on prior list (cap 10).
+  - Filter to `{'Skyrocket', 'Expand'}` (ICP push-priority groups); preserve prior order.
+  - Response always leads with explicit disclaimer **"น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ"** — no hallucinated rank.
+  - If filtered list is empty → dedicated "ยังไม่มีตัวที่อยู่ในกลุ่มสินค้าหลัก" reply.
+- Wired into `handle_natural_conversation` as step 2.6 (after safety intercept, before usage/RAG routing); memoized as `sales_popularity_followup` message type.
+- Added `get_conversation_state` import from `app.services.cache`.
+
+**Tests:** [tests/test_sales_popularity_followup.py](tests/test_sales_popularity_followup.py) — 21 cases: pattern detection (Thai + English), no-state/empty-state/no-match fall-through, Skyrocket/Expand filter with Standard/Natural exclusion + order preservation, disclaimer-only branch for all-non-priority lists, cross-category leakage regression (forbidden list from dealer screenshot), source-level guards on wire-up + filter constants.
+
+**Results:** 1925 passed (1904 + 21), ruff clean. Preserves category context without touching RAG retrieval path — follow-up is intercepted before pipeline.
+
+### 2026-04-23 — Comparison follow-up cross-category guard (`test-dev`)
+
+**Problem:** Dealer LINE session — bot listed 9 nutrient products in turn 1 (บอมส์ มิกซ์, ไฮจิพ 5%, ไฮจิพ 20, …); user replied `"ตัวไหนดี"` in turn 2. Bot responded asking about **weed stage + durian age** — totally unrelated category.
+
+**Root cause (traced from log):** 3 compounding bugs in the RAG pipeline:
+
+1. **`orchestrator.py:278`** correctly detected comparison follow-up (pattern `ตัวไหนดี` in `_COMPARE_PATTERNS`) and set `hints['product_names']` = 5 active nutrients — but did **not propagate a flag** to downstream agents.
+2. **`query_understanding_agent.py:332-373`** — LLM generated `expanded_queries = ['แนะนำยากำจัดวัชพืชในอ้อย', 'ยากำจัดวัชพืชในอ้อย ตัวไหนดี', 'ยากำจัดวัชพืชในไร่อ้อย …']` (hallucinated category from earlier conversation turns). Agent appended variants to expansion but never **clamped** the LLM output even though `product_names` was definitive.
+3. **`retrieval_agent.py:708`** fanned out over hallucinated queries → 60 cross-category docs → 38 after dedup, polluting the context.
+4. **`response_generator_agent.py:946`** — `_COMPARISON_KEYWORDS = ['ต่างกันยังไง', 'เปรียบเทียบ', ...]` **missing `ตัวไหนดี`/`อันไหนดี`** (out of sync with orchestrator's list) → Mode ก (clarify) fired instead of Mode ข (compare) → LLM generated clarifying question from polluted docs.
+
+**Fix (4 files):**
+
+- [orchestrator.py:278](app/services/rag/orchestrator.py#L278) — propagate `hints['_comparison_followup'] = True` alongside `product_names`.
+- [query_understanding_agent.py](app/services/rag/query_understanding_agent.py) — after expansion build, if `hints['_comparison_followup']` + `product_names` → **replace** (not extend) `expanded_queries = list(hints['product_names'])` and set `entities['_comparison_followup'] = True`. Prevents LLM hallucination from reaching retrieval.
+- [retrieval_agent.py:707-722](app/services/rag/retrieval_agent.py#L707) — gate `_comparison_followup = entities.get('_comparison_followup') and direct_lookup_ids`. When true: skip `_multi_source_retrieval`, skip Stage 1.2 disease fallback, Stage 1.3 symptom fallback, Stage 1.5 keyword fallback. Only direct-lookup docs proceed downstream.
+- [response_generator_agent.py:946](app/services/rag/response_generator_agent.py#L946) — sync `_COMPARISON_KEYWORDS` with orchestrator's list (add `ตัวไหนดี`, `อันไหนดี`, `ตัวไหนเหมาะ`, `อันไหนเหมาะ`, `ต่างกัน`, `ใช้ต่าง`); `_is_comparison` also honors `entities['_comparison_followup']` → Mode ข wins over Mode ก.
+
+**Tests:** [tests/test_comparison_followup.py](tests/test_comparison_followup.py) — 6 source-level guards: orchestrator propagates flag + has `ตัวไหนดี` pattern; query-understanding clamps via `expanded_queries = list(hints['product_names'])`; retrieval gates on `_comparison_followup + direct_lookup_ids`; response generator syncs patterns + honors entity flag.
+
+**Results:** 1931 passed (1925 + 6), ruff clean. Comparison follow-ups short-circuit to direct-lookup-only retrieval → category context preserved, no LLM hallucination leakage.
+
+### 2026-04-23 (late) — Shared follow-up patterns + plant-restate guard + cross-plant/phrasing coverage (`test-dev`)
+
+**Motivation:** The previous comparison fix shipped with three brittle spots: (1) orchestrator and response generator each kept their own pattern list, so drift would re-introduce the bug; (2) patterns were narrow — only `ตัวไหนดี`/`อันไหนดี` — missing `ตัวไหนเหมาะ`, `แบบไหนดี`, `รุ่นไหนดี`, `ตัวไหนได้ผล`, English variants; (3) "`ตัวไหนดีสำหรับข้าว`" when state already tracked rice would be misclassified as a new topic by the `_plant_in_q_s and not _is_app` branch, dropping the comparison follow-up.
+
+**Fix (3 files + 1 new module):**
+
+- **New: [app/services/rag/followup_patterns.py](app/services/rag/followup_patterns.py)** — single source of truth. Exports `COMPARISON_FOLLOWUP_PATTERNS` (Thai `ตัวไหน…` / `อันไหน…` / `แบบไหน…` / `รุ่นไหน…` families + explicit compare verbs + English) and `is_comparison_followup(query)` helper.
+- **[orchestrator.py](app/services/rag/orchestrator.py)** — import and use `is_comparison_followup`; replace inline `_COMPARE_PATTERNS` list. Plant-restate guard: `_plant_would_be_new = _plant_in_q_s and not _is_app and not (_is_compare and not _different_plant)` — same-plant re-statement on a compare phrasing stays in follow-up mode; different-plant correctly routes as new topic.
+- **[response_generator_agent.py](app/services/rag/response_generator_agent.py)** — delete private `_COMPARISON_KEYWORDS` list; use shared `is_comparison_followup`.
+
+**Tests:**
+
+- [tests/test_comparison_followup.py](tests/test_comparison_followup.py) — 43 tests: 33 pattern unit tests (parametrized matches + non-matches: `ตัวไหนดี/เหมาะ/เด็ด/เวิร์ค/ได้ผล/น่าใช้/เจ๋ง/เด่น/คุ้ม`, `อันไหน…`, `แบบไหน…`, `รุ่นไหน…`, `ใช้ต่างกัน`, `เปรียบเทียบ`, `which is good`, `best one`, `compare them`) + 10 source-level guards (orchestrator uses shared module + has plant-restate guard; response generator uses shared module).
+- [tests/test_comparison_followup_e2e.py](tests/test_comparison_followup_e2e.py) — 15 end-to-end tests (real Supabase + OpenAI):
+  - 2 rice-nutrient scenarios (2-turn flow + pre-seeded direct turn 2)
+  - **4 cross-plant × cross-category** (rice/herbicide, durian/fungicide, mango/PGR, rice/insecticide) — each seeds `active_products`, sends `ตัวไหนดี`, asserts answer stays on seeded products and doesn't leak other-category clarifying questions.
+  - **7 phrasing variations** (`ตัวไหนดี`, `ตัวไหนเหมาะ`, `ตัวไหนได้ผล`, `อันไหนดี`, `แบบไหนดี`, `ใช้ต่างกันยังไง`, `เปรียบเทียบให้หน่อย`) — each must route to the comparison path with rice-nutrient seed.
+  - 2 plant-restate cases: same-plant re-statement keeps context; different-plant correctly switches topic.
+
+**Results:** Full suite 1983 passed (1931 + 37 new unit + 15 e2e), ruff clean. Integration tests hit real APIs — 2m 35s for 15 e2e cases; full suite 3m 19s end-to-end.
+
+### 2026-04-23 (late 2) — Typo/space/diacritic normalizer for follow-up patterns (`test-dev`)
+
+**Motivation:** Substring-only matching missed 3 classes of real-user edge cases: (1) typos where the short vowel ั is omitted (`ตวไหนดี`); (2) internal whitespace (`ตัวไหน ดี`, `ตัว ไหน ดี`); (3) tone-mark variations. Honorifics (ครับ/คับ/ค่ะ/คะ/…) and most suffixes already worked because they're pure appends.
+
+**Fix — Phase 1 only (scope-controlled):** [app/services/rag/followup_patterns.py](app/services/rag/followup_patterns.py) — added `_normalize(text)` that applies in order: (a) lowercase, (b) strip all whitespace (Thai has no word spaces), (c) reuse `strip_thai_diacritics` (tone marks + thanthakhat + mai taikhu), (d) strip `ั` (common typo omission). Pre-compute normalized patterns once at import time (constant pattern list, hot path). `is_comparison_followup` now compares normalized query against normalized patterns.
+
+**Phase 2 (LLM-assisted fallback) deliberately deferred** — recorded in [problem.md](../problem.md). YAGNI: no real-world evidence that keyword + normalizer misses legitimate follow-ups, and LLM fallback adds non-determinism + test flakiness. Revisit if log shows ≥3 production cases of miss.
+
+**Tests:** 12 new in [tests/test_comparison_followup.py](tests/test_comparison_followup.py) `TestSharedPatterns`:
+- `test_tolerant_matches` (parametrized, 23 cases): honorifics, missing `ั`, internal whitespace, combined
+- `test_normalizer_no_false_positive` (6 cases): aggressive normalization must not false-match `ซื้อที่ไหนดี`, `ขายดีครับ`, `ใช้ยังไงครับ`, etc.
+
+**Results:** 1995 passed (1983 + 12 new unit), ruff clean. Excluded e2e from this run — no pipeline change, only pattern matching layer; prior 15 e2e cases remain valid.
+

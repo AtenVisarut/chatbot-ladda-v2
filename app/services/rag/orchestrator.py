@@ -265,18 +265,21 @@ class AgenticRAG:
                             # ถ้าพืชใน query ต่างจากพืชใน state → new topic ทันที
                             _state_plant = conv_state.get('active_plant', '')
                             _different_plant = _plant_in_q_s and _state_plant and _plant_in_q_s != _state_plant
-                            _new_topic = _different_plant or (_plant_in_q_s and not _is_app) or (_has_dp and not _subjectless) or _is_asking_new
+                            # Comparison follow-up re-stating the same plant ("ตัวไหนดีสำหรับข้าว"
+                            # while state.active_plant=ข้าว) is narrowing-down, not a topic switch.
+                            from app.services.rag.followup_patterns import is_comparison_followup
+                            _is_compare = is_comparison_followup(query)
+                            _plant_would_be_new = _plant_in_q_s and not _is_app and not (_is_compare and not _different_plant)
+                            _new_topic = _different_plant or _plant_would_be_new or (_has_dp and not _subjectless) or _is_asking_new
                             if not _new_topic:
                                 detected_product = conv_state['active_product']
                                 logger.info(f"  - Product from conversation state: {detected_product}")
                                 # Fix #1: Comparison follow-up → use ALL last-turn products (not just 1)
                                 # so "ใช้แตกต่างกันยังไง" after bot showed 2 variants retrieves both
-                                _COMPARE_PATTERNS = ['ต่างกัน', 'แตกต่าง', 'เปรียบเทียบ',
-                                                     'อันไหนดี', 'ตัวไหนดี', 'ใช้ต่าง']
-                                _is_compare = any(p in query for p in _COMPARE_PATTERNS)
                                 _active_products = conv_state.get('active_products') or []
                                 if _is_compare and len(_active_products) >= 2:
                                     hints['product_names'] = list(_active_products)
+                                    hints['_comparison_followup'] = True
                                     all_detected_products = list(_active_products)
                                     logger.info(f"  - Comparison follow-up: using all {len(_active_products)} products from state: {_active_products}")
                             else:
@@ -515,6 +518,26 @@ class AgenticRAG:
                         weed_synonyms = {'วัชพืช', 'กำจัดวัชพืช'}
                     hints['weed_synonyms'] = list(weed_synonyms)
                     logger.info(f"  - Weed synonyms injected: {hints['weed_synonyms']}")
+
+                # --- Specific Weed Name Extraction (Stage 0) ---
+                # Parallel to _PEST_PATTERNS_STAGE0: catches weeds with proper names
+                # so retrieval can verify products actually target them.
+                # Without this, "ข้าวดีด" just becomes generic "หญ้า" and any
+                # rice herbicide matches, even those targeting ข้าวนก instead.
+                _WEED_PATTERNS_STAGE0 = [
+                    # Specific before generic (longest-first matching)
+                    'หญ้าข้าวนก', 'ข้าวดีด', 'ข้าวตีด', 'ข้าวนก',
+                    'หญ้าดอกขาว', 'หญ้าหนวดแมว', 'หญ้าแห้วหมู',
+                    'หญ้าตีนกา', 'หญ้าตีนนก', 'หญ้าปากควาย',
+                    'หญ้านกสีชมพู', 'หญ้าไม้กวาด', 'หญ้าขจรจบ',
+                    'กกทราย', 'กกขนาก', 'ผักปราบ', 'ผักบุ้งนา',
+                    'ใบแคบ', 'ใบกว้าง',
+                ]
+                for pattern in _WEED_PATTERNS_STAGE0:
+                    if diacritics_match(query, pattern):
+                        hints['weed_name'] = pattern
+                        logger.info(f"  - Pre-extracted weed: '{pattern}'")
+                        break
 
                 # --- Nutrient Synonym Injection ---
                 # "เร่งดอก" is PGR/Biostimulant, not "ปุ๋ย" in embeddings

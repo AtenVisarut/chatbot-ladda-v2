@@ -32,6 +32,10 @@ DEFAULT_RERANK_THRESHOLD = 0.50
 DEFAULT_TOP_K = 10
 MIN_RELEVANT_DOCS = 3
 
+# Generic weed terms — skip specific-weed fallback/prune to avoid over-filtering
+# when user just wants broad herbicide recommendations.
+_BROAD_WEED_TERMS = {'หญ้า', 'วัชพืช', 'ใบแคบ', 'ใบกว้าง'}
+
 # Columns used by _build_doc_from_row — excludes embedding (1536 floats), row_hash, timestamps
 _PRODUCT_COLUMNS = (
     "id, product_name, common_name_th, active_ingredient, "
@@ -500,6 +504,62 @@ class RetrievalAgent:
             logger.error(f"Weed category fallback search error: {e}")
             return []
 
+    async def _weed_column_fallback_search(
+        self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 10
+    ) -> List[RetrievedDocument]:
+        """Search Herbicide products by weed_type in herbicides column.
+
+        Triggered when query has a specific weed_type (e.g. "ข้าวดีด") but
+        retrieved docs don't mention it in their herbicides text. Catches
+        products that vector search missed because "ข้าวดีด" != "วัชพืช".
+        """
+        if not self.supabase:
+            return []
+
+        weed_name = query_analysis.entities.get('weed_type', '')
+        if not weed_name or weed_name in _BROAD_WEED_TERMS:
+            return []
+
+        try:
+            from app.utils.pest_columns import build_pest_or_conditions
+            or_conditions = build_pest_or_conditions(weed_name)
+            if not or_conditions:
+                return []
+            or_filter = ",".join(or_conditions)
+
+            existing_ids = {d.id for d in existing_docs}
+
+            result = await aexecute(self.supabase.table(PRODUCT_TABLE) \
+                .select(_PRODUCT_COLUMNS) \
+                .ilike('product_category', '%Herbicide%') \
+                .or_(or_filter) \
+                .limit(top_k))
+
+            if not result.data:
+                return []
+
+            docs = []
+            for item in result.data:
+                doc_id = str(item.get('id', ''))
+                if doc_id in existing_ids:
+                    continue
+                # OR-filter matches any of the 5 pest columns — narrow to
+                # herbicides column so we don't accept hits from insecticides/etc
+                herb_text = (item.get('herbicides') or '').lower()
+                if weed_name.lower() not in herb_text:
+                    continue
+                selling_extra = f"จุดเด่น: {(item.get('selling_point') or '')[:200]}"
+                doc = self._build_doc_from_row(item, similarity=0.35, content_extra=selling_extra)
+                docs.append(doc)
+
+            if docs:
+                logger.info(f"    Weed column fallback: {len(docs)} Herbicide docs matching '{weed_name}'")
+            return docs
+
+        except Exception as e:
+            logger.error(f"Weed column fallback search error: {e}")
+            return []
+
     async def _pest_column_fallback_search(
         self, query_analysis: QueryAnalysis, existing_docs: List[RetrievedDocument], top_k: int = 10
     ) -> List[RetrievedDocument]:
@@ -644,15 +704,28 @@ class RetrievalAgent:
             if direct_lookup_ids:
                 logger.info(f"  - Direct lookup found: {len(direct_lookup_ids)} docs for {product_names_list}")
 
-            # Stage 1: Parallel retrieval from multiple sources
-            multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
+            # Comparison follow-up short-circuit: user is choosing among previously-
+            # shown products (e.g. "ตัวไหนดี" after a list). Direct lookup already
+            # has the exact set — skip vector fanout + disease/pest fallbacks to
+            # prevent cross-category pollution (observed: sugarcane herbicides
+            # polluting a nutrient-product comparison).
+            _comparison_followup = (
+                query_analysis.entities.get('_comparison_followup') is True
+                and bool(direct_lookup_ids)
+            )
+            if _comparison_followup:
+                logger.info(f"  - Comparison follow-up: short-circuit retrieval (direct lookup only)")
+                multi_docs = []
+            else:
+                # Stage 1: Parallel retrieval from multiple sources
+                multi_docs = await self._multi_source_retrieval(query_analysis, top_k)
             all_docs.extend(multi_docs)
 
             # Stage 1.2: Consolidated disease fallback (runs ONCE after all vector searches)
             # Checks if disease is in any retrieved doc's target_pest
             # If not, does a single direct DB lookup instead of per-query fallbacks
             disease_fallback_ids = set()
-            if query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
+            if not _comparison_followup and query_analysis.intent in (IntentType.DISEASE_TREATMENT, IntentType.PRODUCT_RECOMMENDATION):
                 from app.utils.text_processing import generate_thai_disease_variants
 
                 # Collect all disease names to check (entity + original query)
@@ -714,7 +787,7 @@ class RetrievalAgent:
 
             # Stage 1.3: Symptom-based pest columns fallback
             # Matches symptom phrases (ไม่โต, ไม่กินปุ๋ย, เหลือง, etc.) against DB pest columns
-            if query_analysis.intent in (
+            if not _comparison_followup and query_analysis.intent in (
                 IntentType.NUTRIENT_SUPPLEMENT, IntentType.PRODUCT_RECOMMENDATION,
                 IntentType.GENERAL_AGRICULTURE, IntentType.UNKNOWN,
             ):
@@ -730,7 +803,7 @@ class RetrievalAgent:
                         logger.info(f"  - Symptom fallback found: {len(new_docs)} new docs via pest columns")
 
             # Stage 1.5: Fallback keyword search if insufficient results
-            if len(all_docs) < MIN_RELEVANT_DOCS:
+            if not _comparison_followup and len(all_docs) < MIN_RELEVANT_DOCS:
                 fallback_docs = await self._fallback_keyword_search(query_analysis.original_query, top_k)
                 existing_ids = {d.id for d in all_docs}
                 new_fallback = [d for d in fallback_docs if d.id not in existing_ids]
@@ -776,6 +849,24 @@ class RetrievalAgent:
                         pest_fallback_ids = {d.id for d in pest_fallback_docs}
                         all_docs.extend(pest_fallback_docs)
                         logger.info(f"  - Pest column fallback added: {len(pest_fallback_docs)} docs for '{pest_name}'")
+
+            # Stage 1.965: Weed column fallback — search herbicides column for specific weed_type
+            # Triggered when vector search missed products that DO target the queried weed
+            # (e.g. "ข้าวดีด" only matches ทูโฟพอส, not generic rice herbicides)
+            weed_name = query_analysis.entities.get('weed_type', '')
+            if (weed_name and weed_name not in _BROAD_WEED_TERMS
+                    and query_analysis.intent in (IntentType.WEED_CONTROL, IntentType.PRODUCT_RECOMMENDATION)):
+                _weed_lc = weed_name.lower()
+                _weed_match_count = sum(
+                    1 for d in all_docs
+                    if _weed_lc in (d.metadata.get('herbicides') or '').lower()
+                )
+                if _weed_match_count < 3:
+                    logger.info(f"  - Stage 1.965: weed_match_count={_weed_match_count} < 3, triggering fallback for '{weed_name}'")
+                    weed_fallback_docs = await self._weed_column_fallback_search(query_analysis, all_docs)
+                    if weed_fallback_docs:
+                        all_docs.extend(weed_fallback_docs)
+                        logger.info(f"  - Weed column fallback added: {len(weed_fallback_docs)} docs for '{weed_name}'")
 
             # Stage 1.97: Fertilizer form-specific fallback
             # "ปุ๋ยเกล็ด" → fetch Fertilizer + physical_form=ผง/เกล็ด (NPK)
@@ -874,6 +965,30 @@ class RetrievalAgent:
                 reranked_docs = boosted + others
                 if boosted:
                     logger.info(f"  - Boosted {len(boosted)} pest fallback docs to top")
+
+            # Stage 3.545: Weed precision — boost matching herbicides + prune non-matching
+            # When query names a specific weed ("ข้าวดีด"), only keep Herbicide products
+            # whose herbicides column actually mentions it. Non-Herbicide docs pass through
+            # untouched (adjuvants, fertilizers may still be relevant complements).
+            _q_weed = query_analysis.entities.get('weed_type', '')
+            if _q_weed and _q_weed not in _BROAD_WEED_TERMS:
+                _weed_lower = _q_weed.lower()
+                matching, non_herb, pruned = [], [], 0
+                for d in reranked_docs:
+                    mentions = _weed_lower in (d.metadata.get('herbicides') or '').lower()
+                    is_herb = 'herbicide' in str(d.metadata.get('category') or '').lower()
+                    if mentions:
+                        matching.append(d)
+                    elif not is_herb:
+                        non_herb.append(d)
+                    else:
+                        pruned += 1
+                if matching:
+                    reranked_docs = matching + non_herb
+                    logger.info(
+                        f"  - Weed precision: kept {len(matching)} herbicides matching '{_q_weed}', "
+                        f"pruned {pruned} non-matching herbicides"
+                    )
 
             # Category-Intent mapping (used in Stages 3.55, 3.65, 3.7)
             expected_categories = self.INTENT_CATEGORY_VARIANTS.get(query_analysis.intent)
