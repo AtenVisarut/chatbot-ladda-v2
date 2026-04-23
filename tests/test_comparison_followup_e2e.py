@@ -102,8 +102,10 @@ class TestRiceNutrientComparisonFollowup:
 
         # Must still be on-topic: answer should at least reference one of
         # the products from turn 1 OR the rice/nutrient topic.
+        # (Internal strategy names like Skyrocket/Expand must NEVER reach
+        # user-facing copy — they're confidential business classification.)
         _on_topic_signals = active_products + [
-            "ข้าว", "บำรุง", "ธาตุอาหาร", "Skyrocket", "Expand",
+            "ข้าว", "บำรุง", "ธาตุอาหาร",
         ]
         on_topic_hits = [s for s in _on_topic_signals if s in turn2]
         assert on_topic_hits, (

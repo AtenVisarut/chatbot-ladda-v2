@@ -1,7 +1,7 @@
 # Identity — Chatbot น้องลัดดา (ICP Ladda)
 
 > Project identity สำหรับ AI assistant ที่จะเข้ามาทำงานต่อ
-> Last updated: 2026-04-23 (diagnostic path + greeting + capability follow-up + open-category clarify + weed-name precision + context-disease leakage fix + sales-popularity follow-up + comparison follow-up cross-category guard + shared followup_patterns + plant-restate guard + typo/space/diacritic normalizer) — `test-dev` branch
+> Last updated: 2026-04-23 (diagnostic path + greeting + capability follow-up + open-category clarify + weed-name precision + context-disease leakage fix + sales-popularity follow-up + comparison follow-up cross-category guard + shared followup_patterns + plant-restate guard + typo/space/diacritic normalizer + strategy-leak guard) — `test-dev` branch
 
 ---
 
@@ -1146,4 +1146,26 @@ _known_stage = any(kw in _user_ctx for kw in _known_stage_keywords)
 - `test_normalizer_no_false_positive` (6 cases): aggressive normalization must not false-match `ซื้อที่ไหนดี`, `ขายดีครับ`, `ใช้ยังไงครับ`, etc.
 
 **Results:** 1995 passed (1983 + 12 new unit), ruff clean. Excluded e2e from this run — no pipeline change, only pattern matching layer; prior 15 e2e cases remain valid.
+
+### 2026-04-23 (late 3) — Strategy-group name leak fix + admin-handoff for sales-popularity (`test-dev`)
+
+**Problem:** Dealer screenshot showed user-facing leak of internal strategy classification: reply read *"จากสินค้าที่แนะนำก่อนหน้านี้ ยังไม่มีตัวที่อยู่ในกลุ่มสินค้าหลัก **(Skyrocket/Expand)** ของ ICP Ladda ค่ะ"*. `Skyrocket` / `Expand` / `Natural` / `Standard` / `Cosmic-star` are confidential internal business classifications — they must never reach a user-visible reply or an LLM prompt that the model could paraphrase.
+
+**Fix:**
+
+- [app/services/chat/handler.py](app/services/chat/handler.py) — rewrite `_handle_sales_popularity_followup` reply copy:
+  - **Success branch** (priority match exists): lead with disclaimer *"น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ"*, list priority products by name with active-ingredient + selling point, close with *"ถ้าอยากได้รายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ"* — **no mention of the strategy group at all**.
+  - **No-priority-match branch**: return short marker `"ไม่มีข้อมูลยอดขายในระบบ"` that passes `webhook._is_no_data_answer` — triggers silent drop + `fire_no_data_alert` so admin answers manually. Better than fabricating a best-seller answer.
+  - Wire-up: gate `add_to_memory` on `_is_no_data_answer(reply)` — the admin-handoff marker must not pollute conversation memory since the user never sees it.
+- [app/services/rag/response_generator_agent.py:1165](app/services/rag/response_generator_agent.py#L1165) — remove `strategy=Skyrocket/Expand` from `best_pick_note` LLM prompt body; replaced with neutral *"เลือกตัวที่อยู่ลำดับต้น…(ระบบจัดเรียงไว้แล้ว)"*.
+- [app/services/rag/retrieval_agent.py:1596](app/services/rag/retrieval_agent.py#L1596) — remove `Strategy Skyrocket/Expand ให้ลำดับสูงกว่า Natural/Standard` from rerank prompt; replaced with *"ใช้ลำดับใน metadata เป็น tiebreaker (ระบบจัดลำดับความสำคัญไว้แล้ว)"*. Reranker output is only integers so low leak risk, but defense-in-depth.
+- Pattern: added `ตัวไหนนิยม`, `อันไหนนิยม`, `แบบไหนนิยม`, `รุ่นไหนนิยม` to `_SALES_POPULARITY_PATTERNS` — natural Thai construction missed by prior `ที่นิยม` / `ยอดนิยม` / `นิยมที่สุด` list.
+
+**Tests:**
+
+- New: [tests/test_no_strategy_leak.py](tests/test_no_strategy_leak.py) — static AST scanner across 5 files (`handler`, `orchestrator`, `response_generator_agent`, `retrieval_agent`, `query_understanding_agent`). For each file, collect every sentence-length string literal (excluding docstrings and `logger.*()` call arguments — those are internal), and assert no strategy name appears via word-boundary match. Includes end-to-end check exercising both handler branches (success + admin-handoff) with mocked state. Guards the `prompts.py` rule 15 still names all 5 strategy values so the LLM knows what to suppress (defense-in-depth).
+- [tests/test_sales_popularity_followup.py](tests/test_sales_popularity_followup.py) — rewritten: split `test_filters_to_priority_products` (priority subset, order preserved, disclaimer present, **no strategy name in reply**) + `test_no_priority_match_returns_admin_handoff_marker` (asserts reply passes `webhook._is_no_data_answer` → silent drop + admin alert).
+- Source guards: `test_admin_handoff_skips_memory_save` checks wire-up consults `_is_no_data_answer` before `add_to_memory`.
+
+**Results:** 2004 passed (1995 + 9 new), ruff clean. Excluded e2e from this run — reply copy is the only user-visible surface that changed; prior e2e cases remain valid.
 

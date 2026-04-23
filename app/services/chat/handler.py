@@ -1109,6 +1109,7 @@ async def _save_conv_state_from_answer(
 _SALES_POPULARITY_PATTERNS = (
     'ขายดี', 'ขายเยอะ', 'ขายได้ดี', 'ขายดีที่สุด',
     'ยอดนิยม', 'ที่นิยม', 'นิยมที่สุด',
+    'ตัวไหนนิยม', 'อันไหนนิยม', 'แบบไหนนิยม', 'รุ่นไหนนิยม',
     'เบสต์เซลเลอร์', 'bestseller', 'best seller',
     'ฮิต', 'ฮอต', 'popular', 'hot seller',
 )
@@ -1120,11 +1121,20 @@ def _is_sales_popularity_query(message: str) -> bool:
 
 
 async def _handle_sales_popularity_followup(user_id: str, message: str) -> Optional[str]:
-    """Follow-up 'ขายดี/นิยม/ฮิต' → reuse previous products (preserve category
-    context) and filter to Skyrocket/Expand strategy. ICP has no true sales data,
-    so we disclose that + surface the push-priority subset of the prior list.
+    """Follow-up 'ขายดี/นิยม/ฮิต' → reuse previously-listed products and surface
+    the priority subset. ICP has no real sales data, so we lead with a clear
+    disclaimer + show the priority products from the prior turn.
 
-    Returns None → fall through to RAG (when pattern absent OR no prior state).
+    Returns None when:
+      - pattern doesn't match (fall through to RAG), OR
+      - no prior conversation state (fall through to RAG).
+
+    Returns a short admin-handoff marker (caught by webhook._is_no_data_answer)
+    when prior products exist but none are priority — better to let admin
+    answer than to fabricate a "best seller" claim.
+
+    Internal classification names (Skyrocket/Expand/…) MUST NOT appear in any
+    string returned to the user.
     """
     if not _is_sales_popularity_query(message):
         return None
@@ -1154,18 +1164,12 @@ async def _handle_sales_popularity_followup(user_id: str, message: str) -> Optio
     ]
 
     if not filtered:
-        return (
-            "น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ 🙏\n\n"
-            "จากสินค้าที่แนะนำก่อนหน้านี้ ยังไม่มีตัวที่อยู่ในกลุ่มสินค้าหลัก "
-            "(Skyrocket/Expand) ของ ICP Ladda ค่ะ\n\n"
-            "ถ้าอยากได้รายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ 😊"
-        )
+        # No priority match → silent admin-handoff (short marker triggers
+        # webhook._is_no_data_answer + fire_no_data_alert flow).
+        return "ไม่มีข้อมูลยอดขายในระบบ"
 
     lines = [
         "น้องลัดดายังไม่มีข้อมูลยอดขายในระบบค่ะ 🙏",
-        "",
-        "แต่จากสินค้าที่แนะนำก่อนหน้า ตัวที่อยู่ในกลุ่มสินค้าหลักของ ICP Ladda "
-        "(Skyrocket/Expand) มีดังนี้ค่ะ:",
         "",
     ]
     for i, d in enumerate(filtered, 1):
@@ -1177,7 +1181,7 @@ async def _handle_sales_popularity_followup(user_id: str, message: str) -> Optio
         if sp:
             lines.append(f"   {sp}")
     lines.append("")
-    lines.append("อยากทราบรายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ 😊")
+    lines.append("ถ้าอยากได้รายละเอียดตัวไหนเพิ่มเติม บอกน้องลัดดาได้เลยค่ะ 😊")
     return "\n".join(lines)
 
 
@@ -1257,15 +1261,17 @@ async def handle_natural_conversation(user_id: str, message: str) -> str:
             await add_to_memory(user_id, "assistant", _safety_reply)
             return _safety_reply
 
-        # 2.6 Sales-popularity follow-up — inherit previous products (preserve
-        # category context) and filter to Skyrocket/Expand strategy. Fixes
-        # cross-category answer when user asks "ขายดี/นิยม" after a category list.
+        # 2.6 Sales-popularity follow-up — reuse prior products + priority
+        # filter, OR hand off to admin if no priority match. Don't save the
+        # admin-handoff marker to memory — user never sees it.
         _sales_reply = await _handle_sales_popularity_followup(user_id, message)
-        if _sales_reply:
-            await add_to_memory(
-                user_id, "assistant", _sales_reply,
-                metadata={"type": "sales_popularity_followup"},
-            )
+        if _sales_reply is not None:
+            from app.routers.webhook import _is_no_data_answer
+            if not _is_no_data_answer(_sales_reply):
+                await add_to_memory(
+                    user_id, "assistant", _sales_reply,
+                    metadata={"type": "sales_popularity_followup"},
+                )
             return _sales_reply
 
         # 3. Check if this is a usage/application question (วิธีใช้/พ่น/ฉีด)
